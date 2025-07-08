@@ -3,6 +3,9 @@ __pycache__/
 *.py[codz]
 *$py.class
 
+# Ignore JetBrains IDE settings
+.idea/
+
 # C extensions
 *.so
 
