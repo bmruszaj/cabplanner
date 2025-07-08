@@ -1,0 +1,11 @@
+Copyright © 2025 Bartłomiej Ruszaj (bmruszaj)
+
+All rights reserved.
+
+This source code is provided for personal evaluation and educational review only.
+
+You may not use, copy, modify, distribute, sublicense, or sell any part of this codebase without explicit written permission from the author.
+
+This repository is intended to demonstrate coding skills and architecture only.
+Commercial versions are licensed separately.
+For business inquiries: bmruszaj@gmail.com
