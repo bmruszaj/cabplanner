@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Optional
 
 from sqlalchemy import select
@@ -11,7 +11,9 @@ class CabinetTypeService:
     def __init__(self, db_session: Session):
         self.db = db_session
 
-    def list_cabinet_types(self, kitchen_type: Optional[str] = None) -> List[CabinetType]:
+    def list_cabinet_types(
+        self, kitchen_type: Optional[str] = None
+    ) -> List[CabinetType]:
         stmt = select(CabinetType)
         if kitchen_type is not None:
             stmt = stmt.filter_by(kitchen_type=kitchen_type)
@@ -74,7 +76,7 @@ class CabinetTypeService:
             return None
         for attr, val in fields.items():
             setattr(ctype, attr, val)
-        ctype.updated_at = datetime.utcnow()
+        ctype.updated_at = datetime.now(timezone.utc)
         self.db.commit()
         self.db.refresh(ctype)
         return ctype

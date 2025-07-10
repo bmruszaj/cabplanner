@@ -4,7 +4,7 @@ from datetime import datetime
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-from src.db_schema.orm_models import Base, CabinetType
+from src.db_schema.orm_models import Base
 from src.services.cabinet_type_service import CabinetTypeService
 
 
