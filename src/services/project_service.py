@@ -29,9 +29,12 @@ class ProjectService:
         project = self.get_project(project_id)
         if not project:
             return None
+
         for attr, val in fields.items():
             setattr(project, attr, val)
+
         project.updated_at = datetime.now(timezone.utc)
+
         self.db.commit()
         self.db.refresh(project)
         return project
@@ -111,10 +114,10 @@ class ProjectService:
 
     def get_next_cabinet_sequence(self, project_id: int) -> int:
         current_max = (
-            self.db
-            .scalar(
-                select(func.max(ProjectCabinet.sequence_number))
-                .filter_by(project_id=project_id)
+            self.db.scalar(
+                select(func.max(ProjectCabinet.sequence_number)).filter_by(
+                    project_id=project_id
+                )
             )
             or 0
         )
