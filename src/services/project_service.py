@@ -4,7 +4,7 @@ from typing import List, Optional
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from db_schema.orm_models import Project, ProjectCabinet
+from src.db_schema.orm_models import Project, ProjectCabinet
 
 
 class ProjectService:
