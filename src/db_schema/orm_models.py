@@ -26,8 +26,11 @@ class Project(Base):
     client_phone = Column(String, nullable=True)
     client_email = Column(String, nullable=True)
     blaty = Column(Boolean, nullable=False, default=False)
+    blaty_note = Column(Text, nullable=True)
     cokoly = Column(Boolean, nullable=False, default=False)
+    cokoly_note = Column(Text, nullable=True)
     uwagi = Column(Boolean, nullable=False, default=False)
+    uwagi_note = Column(Text, nullable=True)
     flag_notes = Column(Text, nullable=True)
     created_at = Column(
         DateTime(timezone=True),
