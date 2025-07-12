@@ -1,9 +1,10 @@
 import os
 import sys
 import subprocess
+import logging
 from pathlib import Path
 from datetime import date
-from typing import List, Tuple, Optional, Any
+from typing import List, Tuple, Optional, Any, Dict
 from types import SimpleNamespace
 
 from docx import Document
@@ -14,23 +15,35 @@ from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.oxml import OxmlElement
 from docx.oxml.shared import qn
 
-from src.db_schema.orm_models import Project, Accessory
+from src.db_schema.orm_models import Project
+from src.services.project_service import ProjectService
+from sqlalchemy.orm import Session
+
+# Configure logging
+logger = logging.getLogger(__name__)
 
 
 class ReportGenerator:
     """
-    Generates a .docx report for a Cabplanner project entirely via code.
-    Supports optional program and company logos, repeating headers/footers with page numbers.
-    Automatically derives parts from SQLAlchemy ORM instances.
+    Generates a .docx report for a Cabplanner project.
+
+    This class is responsible only for document generation and formatting.
+    All data access and business logic is delegated to service classes.
     """
 
     def __init__(
         self,
         program_logo_path: Optional[Path] = None,
         company_logo_path: Optional[Path] = None,
+        db_session: Optional[Session] = None,
     ) -> None:
-        self.program_logo_path: Optional[Path] = program_logo_path
-        self.company_logo_path: Optional[Path] = company_logo_path
+        # Make sure paths are either None or proper Path objects
+        self.program_logo_path = program_logo_path if program_logo_path and not isinstance(program_logo_path, Session) else None
+        self.company_logo_path = company_logo_path if company_logo_path and not isinstance(company_logo_path, Session) else None
+        self.db_session = db_session
+
+        # Initialize ProjectService if session is provided
+        self.project_service = ProjectService(db_session) if db_session else None
 
     def generate(
         self,
@@ -41,44 +54,61 @@ class ReportGenerator:
         """
         Generate the .docx report and return its file path.
         """
-        doc: DocxDocument = Document()
-        section: Section = doc.sections[0]
-        section.different_first_page_header_footer = False
+        try:
+            logger.info(f"Generating report for project: {project.name} (ID: {project.id})")
+            doc = Document()
+            section = doc.sections[0]
+            section.different_first_page_header_footer = False
 
-        # Header and footer on every page
-        self._add_header(section, project)
-        self._add_footer(section)
+            # Header and footer on every page
+            self._add_header(section, project)
+            self._add_footer(section)
 
-        # Derive parts either from ORM or from attributes
-        if hasattr(project, "cabinets"):
-            formatki, fronty, hdf, akcesoria = self._derive_from_orm(project)
-        else:
-            formatki = getattr(project, "formatki", []) or []
-            fronty = getattr(project, "fronty", []) or []
-            hdf = getattr(project, "hdf", []) or []
-            akcesoria = getattr(project, "akcesoria", []) or []
+            # Get data for report
+            if self.project_service and project.id:
+                # Get aggregated elements from service
+                logger.debug("Using project service to get aggregated elements")
+                elements = self.project_service.get_aggregated_project_elements(project.id)
+                formatki = self._dict_to_namespace_list(elements["formatki"])
+                fronty = self._dict_to_namespace_list(elements["fronty"])
+                hdf = self._dict_to_namespace_list(elements["hdf"])
+                akcesoria = self._dict_to_namespace_list(elements["akcesoria"])
+            else:
+                # Fallback to direct data extraction if service not available
+                logger.warning("Project service not available, using direct data extraction")
+                formatki, fronty, hdf, akcesoria = self._extract_elements_directly(project)
 
-        # Add sections
-        self._add_parts_section(doc, "FORMATKI", formatki)
-        self._add_parts_section(doc, "FRONTY", fronty)
-        self._add_parts_section(doc, "HDF", hdf)
-        self._add_parts_section(doc, "AKCESORIA", akcesoria, accessory=True)
+            # Add sections
+            self._add_parts_section(doc, "FORMATKI", formatki)
+            self._add_parts_section(doc, "FRONTY", fronty)
+            self._add_parts_section(doc, "HDF", hdf)
+            self._add_parts_section(doc, "AKCESORIA", akcesoria, accessory=True)
 
-        # Optional notes
-        self._add_notes(doc, project)
+            # Optional notes
+            self._add_notes(doc, project)
 
-        # Save
-        out_dir: Path = Path(output_dir)
-        out_dir.mkdir(parents=True, exist_ok=True)
-        file_name: str = f"projekt_{project.order_number}.docx"
-        output_path: Path = out_dir / file_name
-        doc.save(str(output_path))
+            # Save
+            out_dir = Path(output_dir)
+            out_dir.mkdir(parents=True, exist_ok=True)
+            file_name = f"projekt_{project.order_number}.docx"
+            output_path = out_dir / file_name
+            doc.save(str(output_path))
+            logger.info(f"Report saved to: {output_path}")
 
-        if auto_open:
-            self._open_file(output_path)
-        return str(output_path)
+            if auto_open:
+                self._open_file(output_path)
 
-    def _derive_from_orm(
+            return str(output_path)
+
+        except Exception as e:
+            logger.error(f"Error generating report: {str(e)}", exc_info=True)
+            raise ReportGenerationError(f"Failed to generate report: {str(e)}")
+
+    def _dict_to_namespace_list(self, dict_list: List[Dict]) -> List[SimpleNamespace]:
+        """Convert a list of dictionaries to a list of SimpleNamespace objects"""
+        return [SimpleNamespace(**item) for item in dict_list]
+
+    def _extract_elements_directly(
         self, project: Project
     ) -> Tuple[
         List[SimpleNamespace],
@@ -87,81 +117,199 @@ class ReportGenerator:
         List[SimpleNamespace],
     ]:
         """
-        Extract parts lists from SQLAlchemy project.cabinets relationship.
+        Extract parts lists directly from project object.
+        This is a fallback method when ProjectService is not available.
         """
-        formatki: List[SimpleNamespace] = []
-        fronty: List[SimpleNamespace] = []
-        hdf: List[SimpleNamespace] = []
-        akcesoria: List[SimpleNamespace] = []
+        formatki = []
+        fronty = []
+        hdf = []
+        akcesoria = []
+
+        # This is a minimal implementation - ideally this logic should be in the service layer
+        if not hasattr(project, "cabinets"):
+            logger.warning("Project has no cabinets, returning empty lists")
+            return formatki, fronty, hdf, akcesoria
 
         for cab in project.cabinets:
             ct = cab.cabinet_type
             qty = cab.quantity
 
-            # Main panels
-            for attr, name in [
-                ("bok", "Bok"),
-                ("wieniec", "Wieniec"),
-                ("polka", "Półka"),
-                ("listwa", "Listwa"),
-            ]:
-                count = getattr(ct, f"{attr}_count", 0) or 0
-                width = getattr(ct, f"{attr}_w_mm", None)
-                height = getattr(ct, f"{attr}_h_mm", None)
-                if count > 0 and width and height:
-                    formatki.append(
-                        SimpleNamespace(
-                            name=name,
-                            quantity=count * qty,
-                            width=int(width),
-                            height=int(height),
-                            color=cab.body_color,
-                            notes="",
-                        )
-                    )
+            # Handle standard catalog cabinets
+            if ct:
+                self._process_catalog_cabinet(cab, ct, qty, formatki, fronty, hdf)
+            # Handle ad-hoc cabinets
+            elif cab.adhoc_width_mm and cab.adhoc_height_mm and cab.adhoc_depth_mm:
+                self._process_adhoc_cabinet(cab, qty, formatki, fronty, hdf)
 
-            # Fronts
-            fcount = getattr(ct, "front_count", 0) or 0
-            fw = getattr(ct, "front_w_mm", None)
-            fh = getattr(ct, "front_h_mm", None)
-            if fcount > 0 and fw and fh:
-                fronty.append(
-                    SimpleNamespace(
-                        name="Front",
-                        quantity=fcount * qty,
-                        width=int(fw),
-                        height=int(fh),
-                        color=cab.front_color,
-                        notes=f"Handle: {cab.handle_type}",
-                    )
-                )
+            # Process accessories for all cabinet types
+            self._process_accessories(cab, qty, akcesoria)
 
-            # HDF backs
-            if getattr(ct, "hdf_plecy", False):
-                bw = cab.adhoc_width_mm or getattr(ct, "bok_w_mm", 0)
-                bh = cab.adhoc_height_mm or getattr(ct, "bok_h_mm", 0)
-                hdf.append(
+        return formatki, fronty, hdf, akcesoria
+
+    def _process_catalog_cabinet(
+        self, cab, ct, qty, formatki, fronty, hdf
+    ):
+        """Process a catalog cabinet and add its elements to the appropriate lists"""
+        # Get the sequence number for this cabinet
+        seq_num = getattr(cab, "sequence_number", 0)
+        from src.services.project_service import get_circled_number
+        seq_symbol = get_circled_number(seq_num)
+
+        # Process panels (formatki)
+        for attr, name in [
+            ("bok", "Bok"),
+            ("wieniec", "Wieniec"),
+            ("polka", "Półka"),
+            ("listwa", "Listwa"),
+        ]:
+            count = getattr(ct, f"{attr}_count", 0) or 0
+            width = getattr(ct, f"{attr}_w_mm", None)
+            height = getattr(ct, f"{attr}_h_mm", None)
+            if count > 0 and width and height:
+                formatki.append(
                     SimpleNamespace(
-                        name="HDF Plecy",
-                        quantity=qty,
-                        width=int(bw or 0),
-                        height=int(bh or 0),
-                        color="",
+                        seq=seq_symbol,
+                        name=name,
+                        quantity=count * qty,
+                        width=int(width),
+                        height=int(height),
+                        color=cab.body_color,
                         notes="",
                     )
                 )
 
-            # Accessories
-            for link in getattr(cab, "accessories", []):
-                acc: Accessory = link.accessory
-                total: int = link.count * qty
-                akcesoria.append(
-                    SimpleNamespace(
-                        name=acc.name, sku=acc.sku, quantity=total, notes=""
-                    )
+        # Process fronts
+        fcount = getattr(ct, "front_count", 0) or 0
+        fw = getattr(ct, "front_w_mm", None)
+        fh = getattr(ct, "front_h_mm", None)
+        if fcount > 0 and fw and fh:
+            fronty.append(
+                SimpleNamespace(
+                    seq=seq_symbol,
+                    name="Front",
+                    quantity=fcount * qty,
+                    width=int(fw),
+                    height=int(fh),
+                    color=cab.front_color,
+                    notes=f"Handle: {cab.handle_type}",
                 )
+            )
 
-        return formatki, fronty, hdf, akcesoria
+        # Process HDF backs
+        if getattr(ct, "hdf_plecy", False):
+            bw = getattr(ct, "bok_w_mm", 0)
+            bh = getattr(ct, "bok_h_mm", 0)
+            hdf.append(
+                SimpleNamespace(
+                    seq=seq_symbol,
+                    name="HDF Plecy",
+                    quantity=qty,
+                    width=int(bw or 0),
+                    height=int(bh or 0),
+                    color="",
+                    notes="",
+                )
+            )
+
+    def _process_adhoc_cabinet(
+        self, cab, qty, formatki, fronty, hdf
+    ):
+        """Process an ad-hoc cabinet and add its elements to the appropriate lists"""
+        # Get the sequence number for this cabinet
+        seq_num = getattr(cab, "sequence_number", 0)
+        from src.services.project_service import get_circled_number
+        seq_symbol = get_circled_number(seq_num)
+
+        width = cab.adhoc_width_mm
+        height = cab.adhoc_height_mm
+        depth = cab.adhoc_depth_mm
+
+        # Sides (boki)
+        formatki.append(
+            SimpleNamespace(
+                seq=seq_symbol,
+                name="Bok",
+                quantity=2 * qty,
+                width=int(depth),
+                height=int(height),
+                color=cab.body_color,
+                notes="Ad-hoc",
+            )
+        )
+
+        # Top/bottom (wieńce)
+        formatki.append(
+            SimpleNamespace(
+                seq=seq_symbol,
+                name="Wieniec",
+                quantity=2 * qty,
+                width=int(width),
+                height=int(depth),
+                color=cab.body_color,
+                notes="Ad-hoc",
+            )
+        )
+
+        # Shelf (półka)
+        formatki.append(
+            SimpleNamespace(
+                seq=seq_symbol,
+                name="Półka",
+                quantity=qty,
+                width=int(width - 36),  # Account for sides
+                height=int(depth - 20),  # Account for back clearance
+                color=cab.body_color,
+                notes="Ad-hoc",
+            )
+        )
+
+        # Front
+        fronty.append(
+            SimpleNamespace(
+                seq=seq_symbol,
+                name="Front",
+                quantity=qty,
+                width=int(width),
+                height=int(height),
+                color=cab.front_color,
+                notes=f"Handle: {cab.handle_type} (Ad-hoc)",
+            )
+        )
+
+        # HDF back
+        hdf.append(
+            SimpleNamespace(
+                seq=seq_symbol,
+                name="HDF Plecy",
+                quantity=qty,
+                width=int(width - 6),  # Slight adjustment
+                height=int(height - 6),  # Slight adjustment
+                color="",
+                notes="Ad-hoc",
+            )
+        )
+
+    def _process_accessories(
+        self, cab, qty, akcesoria
+    ):
+        """Process accessories for a cabinet and add them to the accessories list"""
+        # Get the sequence number for this cabinet
+        seq_num = getattr(cab, "sequence_number", 0)
+        from src.services.project_service import get_circled_number
+        seq_symbol = get_circled_number(seq_num)
+
+        for link in getattr(cab, "accessories", []):
+            acc = link.accessory
+            total = link.count * qty
+            akcesoria.append(
+                SimpleNamespace(
+                    seq=seq_symbol,
+                    name=acc.name,
+                    sku=acc.sku,
+                    quantity=total,
+                    notes=""
+                )
+            )
 
     def _add_header(self, section: Section, project: Project) -> None:
         header = section.header
@@ -229,9 +377,9 @@ class ReportGenerator:
             return
 
         cols = (
-            ["Nazwa akcesorium", "SKU/Kod", "Ilość", "Uwagi"]
+            ["Lp.", "Nazwa akcesorium", "SKU/Kod", "Ilość", "Uwagi"]
             if accessory
-            else ["Nazwa", "Ilość", "Wymiary (mm)", "Kolor/Materiał", "Uwagi"]
+            else ["Lp.", "Nazwa", "Ilość", "Wymiary (mm)", "Kolor/Materiał", "Uwagi"]
         )
         table = doc.add_table(rows=1, cols=len(cols))
         hdr = table.rows[0].cells
@@ -240,17 +388,20 @@ class ReportGenerator:
 
         for part in parts:
             cells = table.add_row().cells
+            # Add sequence number as the first column
+            cells[0].text = getattr(part, "seq", "")
+
             if accessory:
-                cells[0].text = part.name
-                cells[1].text = getattr(part, "sku", "") or ""
-                cells[2].text = str(part.quantity)
-                cells[3].text = getattr(part, "notes", "") or ""
-            else:
-                cells[0].text = part.name
-                cells[1].text = str(part.quantity)
-                cells[2].text = f"{part.width} x {part.height}"
-                cells[3].text = getattr(part, "color", "") or ""
+                cells[1].text = part.name
+                cells[2].text = getattr(part, "sku", "") or ""
+                cells[3].text = str(part.quantity)
                 cells[4].text = getattr(part, "notes", "") or ""
+            else:
+                cells[1].text = part.name
+                cells[2].text = str(part.quantity)
+                cells[3].text = f"{part.width} x {part.height}"
+                cells[4].text = getattr(part, "color", "") or ""
+                cells[5].text = getattr(part, "notes", "") or ""
 
     def _add_notes(self, doc: DocxDocument, project: Project) -> None:
         if getattr(project, "blaty_note", None):
@@ -267,9 +418,19 @@ class ReportGenerator:
             p.add_run(project.uwagi_note)
 
     def _open_file(self, path: Path) -> None:
-        if os.name == "nt":
-            os.startfile(path)
-        elif sys.platform == "darwin":
-            subprocess.call(["open", path])
-        else:
-            subprocess.call(["xdg-open", path])
+        try:
+            if os.name == "nt":
+                os.startfile(path)
+            elif sys.platform == "darwin":
+                subprocess.call(["open", path])
+            else:
+                subprocess.call(["xdg-open", path])
+            logger.debug(f"Successfully opened file: {path}")
+        except Exception as e:
+            logger.error(f"Error opening file {path}: {str(e)}")
+            # Don't raise - this is a non-critical operation
+
+
+class ReportGenerationError(Exception):
+    """Exception raised when report generation fails"""
+    pass
