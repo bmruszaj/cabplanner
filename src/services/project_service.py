@@ -129,19 +129,16 @@ class ProjectService:
         )
         return current_max + 1
 
-    def get_aggregated_project_elements(self, project_id: int) -> Dict[str, List[Dict[str, Any]]]:
+    def get_aggregated_project_elements(
+        self, project_id: int
+    ) -> Dict[str, List[Dict[str, Any]]]:
         """
         Get all elements in a project, preserving each individual cabinet and its sequence number.
         Returns a dictionary with lists for formatki, fronty, hdf, and akcesoria.
         """
         project = self.get_project(project_id)
         if not project:
-            return {
-                "formatki": [],
-                "fronty": [],
-                "hdf": [],
-                "akcesoria": []
-            }
+            return {"formatki": [], "fronty": [], "hdf": [], "akcesoria": []}
 
         formatki = []
         fronty = []
@@ -156,10 +153,14 @@ class ProjectService:
 
             # Handle standard catalog cabinets
             if ct:
-                self._process_catalog_cabinet(cab, ct, qty, seq, seq_symbol, formatki, fronty, hdf)
+                self._process_catalog_cabinet(
+                    cab, ct, qty, seq, seq_symbol, formatki, fronty, hdf
+                )
             # Handle ad-hoc cabinets
             elif cab.adhoc_width_mm and cab.adhoc_height_mm and cab.adhoc_depth_mm:
-                self._process_adhoc_cabinet(cab, qty, seq, seq_symbol, formatki, fronty, hdf)
+                self._process_adhoc_cabinet(
+                    cab, qty, seq, seq_symbol, formatki, fronty, hdf
+                )
 
             # Process accessories for all cabinet types
             self._process_accessories(cab, qty, seq, seq_symbol, akcesoria)
@@ -168,7 +169,7 @@ class ProjectService:
             "formatki": formatki,
             "fronty": fronty,
             "hdf": hdf,
-            "akcesoria": akcesoria
+            "akcesoria": akcesoria,
         }
 
     def _process_catalog_cabinet(
@@ -186,120 +187,134 @@ class ProjectService:
             width = getattr(ct, f"{attr}_w_mm", None)
             height = getattr(ct, f"{attr}_h_mm", None)
             if count > 0 and width and height:
-                formatki.append({
-                    "seq": seq_symbol,
-                    "name": name,
-                    "quantity": count * qty,
-                    "width": int(width),
-                    "height": int(height),
-                    "color": cab.body_color,
-                    "notes": ""
-                })
+                formatki.append(
+                    {
+                        "seq": seq_symbol,
+                        "name": name,
+                        "quantity": count * qty,
+                        "width": int(width),
+                        "height": int(height),
+                        "color": cab.body_color,
+                        "notes": "",
+                    }
+                )
 
         # Process fronts
         fcount = getattr(ct, "front_count", 0) or 0
         fw = getattr(ct, "front_w_mm", None)
         fh = getattr(ct, "front_h_mm", None)
         if fcount > 0 and fw and fh:
-            fronty.append({
-                "seq": seq_symbol,
-                "name": "Front",
-                "quantity": fcount * qty,
-                "width": int(fw),
-                "height": int(fh),
-                "color": cab.front_color,
-                "notes": f"Handle: {cab.handle_type}"
-            })
+            fronty.append(
+                {
+                    "seq": seq_symbol,
+                    "name": "Front",
+                    "quantity": fcount * qty,
+                    "width": int(fw),
+                    "height": int(fh),
+                    "color": cab.front_color,
+                    "notes": f"Handle: {cab.handle_type}",
+                }
+            )
 
         # Process HDF backs
         if getattr(ct, "hdf_plecy", False):
             bw = getattr(ct, "bok_w_mm", 0)
             bh = getattr(ct, "bok_h_mm", 0)
-            hdf.append({
-                "seq": seq_symbol,
-                "name": "HDF Plecy",
-                "quantity": qty,
-                "width": int(bw or 0),
-                "height": int(bh or 0),
-                "color": "",
-                "notes": ""
-            })
+            hdf.append(
+                {
+                    "seq": seq_symbol,
+                    "name": "HDF Plecy",
+                    "quantity": qty,
+                    "width": int(bw or 0),
+                    "height": int(bh or 0),
+                    "color": "",
+                    "notes": "",
+                }
+            )
 
-    def _process_adhoc_cabinet(
-        self, cab, qty, seq, seq_symbol, formatki, fronty, hdf
-    ):
+    def _process_adhoc_cabinet(self, cab, qty, seq, seq_symbol, formatki, fronty, hdf):
         """Process elements from an ad-hoc cabinet, preserving individual cabinet identity"""
         width = cab.adhoc_width_mm
         height = cab.adhoc_height_mm
         depth = cab.adhoc_depth_mm
 
         # Sides (boki)
-        formatki.append({
-            "seq": seq_symbol,
-            "name": "Bok",
-            "quantity": 2 * qty,
-            "width": int(depth),
-            "height": int(height),
-            "color": cab.body_color,
-            "notes": "Ad-hoc"
-        })
+        formatki.append(
+            {
+                "seq": seq_symbol,
+                "name": "Bok",
+                "quantity": 2 * qty,
+                "width": int(depth),
+                "height": int(height),
+                "color": cab.body_color,
+                "notes": "Ad-hoc",
+            }
+        )
 
         # Top/bottom (wieńce)
-        formatki.append({
-            "seq": seq_symbol,
-            "name": "Wieniec",
-            "quantity": 2 * qty,
-            "width": int(width),
-            "height": int(depth),
-            "color": cab.body_color,
-            "notes": "Ad-hoc"
-        })
+        formatki.append(
+            {
+                "seq": seq_symbol,
+                "name": "Wieniec",
+                "quantity": 2 * qty,
+                "width": int(width),
+                "height": int(depth),
+                "color": cab.body_color,
+                "notes": "Ad-hoc",
+            }
+        )
 
         # Shelf (półka)
-        formatki.append({
-            "seq": seq_symbol,
-            "name": "Półka",
-            "quantity": qty,
-            "width": int(width - 36),  # Account for sides
-            "height": int(depth - 20),  # Account for back clearance
-            "color": cab.body_color,
-            "notes": "Ad-hoc"
-        })
+        formatki.append(
+            {
+                "seq": seq_symbol,
+                "name": "Półka",
+                "quantity": qty,
+                "width": int(width - 36),  # Account for sides
+                "height": int(depth - 20),  # Account for back clearance
+                "color": cab.body_color,
+                "notes": "Ad-hoc",
+            }
+        )
 
         # Front
-        fronty.append({
-            "seq": seq_symbol,
-            "name": "Front",
-            "quantity": qty,
-            "width": int(width),
-            "height": int(height),
-            "color": cab.front_color,
-            "notes": f"Handle: {cab.handle_type} (Ad-hoc)"
-        })
+        fronty.append(
+            {
+                "seq": seq_symbol,
+                "name": "Front",
+                "quantity": qty,
+                "width": int(width),
+                "height": int(height),
+                "color": cab.front_color,
+                "notes": f"Handle: {cab.handle_type} (Ad-hoc)",
+            }
+        )
 
         # HDF back
-        hdf.append({
-            "seq": seq_symbol,
-            "name": "HDF Plecy",
-            "quantity": qty,
-            "width": int(width - 6),  # Slight adjustment
-            "height": int(height - 6),  # Slight adjustment
-            "color": "",
-            "notes": "Ad-hoc"
-        })
+        hdf.append(
+            {
+                "seq": seq_symbol,
+                "name": "HDF Plecy",
+                "quantity": qty,
+                "width": int(width - 6),  # Slight adjustment
+                "height": int(height - 6),  # Slight adjustment
+                "color": "",
+                "notes": "Ad-hoc",
+            }
+        )
 
-    def _process_accessories(
-        self, cab, qty, seq, seq_symbol, akcesoria
-    ):
+    def _process_accessories(self, cab, qty, seq, seq_symbol, akcesoria):
         """Process accessories for a cabinet, preserving individual cabinet identity"""
         seq_label = f"Lp. {seq}"
         for link in getattr(cab, "accessories", []):
             acc = link.accessory
             total = link.count * qty
-            akcesoria.append({
-                "name": acc.name,
-                "sku": acc.sku,
-                "quantity": total,
-                "notes": seq_label,
-                "sequence": seq
-            })
+            akcesoria.append(
+                {
+                    "name": acc.name,
+                    "sku": acc.sku,
+                    "quantity": total,
+                    "notes": seq_label,
+                    "sequence": seq,
+                }
+            )

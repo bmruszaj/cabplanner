@@ -178,13 +178,23 @@ class ProjectCabinetAccessory(Base):
 
 
 class Setting(Base):
+    """Application settings stored in the database"""
+
     __tablename__ = "settings"
 
     id = Column(Integer, primary_key=True)
-    base_formula_offset_mm = Column(Float, nullable=False, default=-2.0)
-    advanced_script = Column(Text, nullable=True)
-    theme_accent_rgb = Column(String, nullable=True)
-    autoupdate_interval = Column(
-        String, nullable=False, default="weekly"
-    )  # 'on_start', 'daily', 'weekly'
-    current_version = Column(String, nullable=False, default="0.1.0")
+    key = Column(String, unique=True, nullable=False)
+    value = Column(String, nullable=True)
+    value_type = Column(String, nullable=False, default="str")  # str, int, float, bool
+    description = Column(String, nullable=True)
+    created_at = Column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        nullable=False,
+    )
+    updated_at = Column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+        nullable=False,
+    )

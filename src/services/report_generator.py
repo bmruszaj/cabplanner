@@ -38,8 +38,16 @@ class ReportGenerator:
         db_session: Optional[Session] = None,
     ) -> None:
         # Make sure paths are either None or proper Path objects
-        self.program_logo_path = program_logo_path if program_logo_path and not isinstance(program_logo_path, Session) else None
-        self.company_logo_path = company_logo_path if company_logo_path and not isinstance(company_logo_path, Session) else None
+        self.program_logo_path = (
+            program_logo_path
+            if program_logo_path and not isinstance(program_logo_path, Session)
+            else None
+        )
+        self.company_logo_path = (
+            company_logo_path
+            if company_logo_path and not isinstance(company_logo_path, Session)
+            else None
+        )
         self.db_session = db_session
 
         # Initialize ProjectService if session is provided
@@ -55,7 +63,9 @@ class ReportGenerator:
         Generate the .docx report and return its file path.
         """
         try:
-            logger.info(f"Generating report for project: {project.name} (ID: {project.id})")
+            logger.info(
+                f"Generating report for project: {project.name} (ID: {project.id})"
+            )
             doc = Document()
             section = doc.sections[0]
             section.different_first_page_header_footer = False
@@ -68,15 +78,21 @@ class ReportGenerator:
             if self.project_service and project.id:
                 # Get aggregated elements from service
                 logger.debug("Using project service to get aggregated elements")
-                elements = self.project_service.get_aggregated_project_elements(project.id)
+                elements = self.project_service.get_aggregated_project_elements(
+                    project.id
+                )
                 formatki = self._dict_to_namespace_list(elements["formatki"])
                 fronty = self._dict_to_namespace_list(elements["fronty"])
                 hdf = self._dict_to_namespace_list(elements["hdf"])
                 akcesoria = self._dict_to_namespace_list(elements["akcesoria"])
             else:
                 # Fallback to direct data extraction if service not available
-                logger.warning("Project service not available, using direct data extraction")
-                formatki, fronty, hdf, akcesoria = self._extract_elements_directly(project)
+                logger.warning(
+                    "Project service not available, using direct data extraction"
+                )
+                formatki, fronty, hdf, akcesoria = self._extract_elements_directly(
+                    project
+                )
 
             # Add sections
             self._add_parts_section(doc, "FORMATKI", formatki)
@@ -146,13 +162,12 @@ class ReportGenerator:
 
         return formatki, fronty, hdf, akcesoria
 
-    def _process_catalog_cabinet(
-        self, cab, ct, qty, formatki, fronty, hdf
-    ):
+    def _process_catalog_cabinet(self, cab, ct, qty, formatki, fronty, hdf):
         """Process a catalog cabinet and add its elements to the appropriate lists"""
         # Get the sequence number for this cabinet
         seq_num = getattr(cab, "sequence_number", 0)
         from src.services.project_service import get_circled_number
+
         seq_symbol = get_circled_number(seq_num)
 
         # Process panels (formatki)
@@ -211,13 +226,12 @@ class ReportGenerator:
                 )
             )
 
-    def _process_adhoc_cabinet(
-        self, cab, qty, formatki, fronty, hdf
-    ):
+    def _process_adhoc_cabinet(self, cab, qty, formatki, fronty, hdf):
         """Process an ad-hoc cabinet and add its elements to the appropriate lists"""
         # Get the sequence number for this cabinet
         seq_num = getattr(cab, "sequence_number", 0)
         from src.services.project_service import get_circled_number
+
         seq_symbol = get_circled_number(seq_num)
 
         width = cab.adhoc_width_mm
@@ -289,13 +303,12 @@ class ReportGenerator:
             )
         )
 
-    def _process_accessories(
-        self, cab, qty, akcesoria
-    ):
+    def _process_accessories(self, cab, qty, akcesoria):
         """Process accessories for a cabinet and add them to the accessories list"""
         # Get the sequence number for this cabinet
         seq_num = getattr(cab, "sequence_number", 0)
         from src.services.project_service import get_circled_number
+
         seq_symbol = get_circled_number(seq_num)
 
         for link in getattr(cab, "accessories", []):
@@ -303,11 +316,7 @@ class ReportGenerator:
             total = link.count * qty
             akcesoria.append(
                 SimpleNamespace(
-                    seq=seq_symbol,
-                    name=acc.name,
-                    sku=acc.sku,
-                    quantity=total,
-                    notes=""
+                    seq=seq_symbol, name=acc.name, sku=acc.sku, quantity=total, notes=""
                 )
             )
 
@@ -433,4 +442,5 @@ class ReportGenerator:
 
 class ReportGenerationError(Exception):
     """Exception raised when report generation fails"""
+
     pass

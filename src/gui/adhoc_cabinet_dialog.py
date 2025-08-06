@@ -16,7 +16,7 @@ import logging
 
 from sqlalchemy.orm import Session
 
-from src.db_schema.orm_models import Project, ProjectCabinet
+from src.db_schema.orm_models import Project
 from src.services.project_service import ProjectService
 from src.services.formula_engine import FormulaEngine
 
@@ -82,9 +82,7 @@ class AdhocCabinetDialog(QDialog):
         except Exception as e:
             logger.error(f"Error loading cabinet: {str(e)}")
             QMessageBox.critical(
-                self,
-                "Błąd",
-                f"Wystąpił błąd podczas wczytywania szafki: {str(e)}"
+                self, "Błąd", f"Wystąpił błąd podczas wczytywania szafki: {str(e)}"
             )
             self.reject()  # Close dialog on error
 
@@ -182,7 +180,9 @@ class AdhocCabinetDialog(QDialog):
         main_layout.addLayout(form_layout)
 
         # Button box
-        self.button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        self.button_box = QDialogButtonBox(
+            QDialogButtonBox.Ok | QDialogButtonBox.Cancel
+        )
         self.button_box.accepted.connect(self.accept)
         self.button_box.rejected.connect(self.reject)
         main_layout.addWidget(self.button_box)
@@ -225,7 +225,7 @@ class AdhocCabinetDialog(QDialog):
             QMessageBox.warning(
                 self,
                 "Błąd",
-                f"Nie wszystkie dane szafki zostały wczytane prawidłowo: {str(e)}"
+                f"Nie wszystkie dane szafki zostały wczytane prawidłowo: {str(e)}",
             )
 
     def on_offset_changed(self, value):
@@ -244,14 +244,16 @@ class AdhocCabinetDialog(QDialog):
             depth = self.depth_spin.value()
             offset = self.offset_slider.value()
 
-            logger.debug(f"Updating preview with dimensions: {width}x{height}x{depth}, offset: {offset}")
+            logger.debug(
+                f"Updating preview with dimensions: {width}x{height}x{depth}, offset: {offset}"
+            )
 
             # Calculate dimensions using FormulaEngine
             result = self.formula_engine.compute(
                 width_mm=width,
                 height_mm=height,
                 depth_mm=depth,
-                formula_offset_mm=offset
+                formula_offset_mm=offset,
             )
 
             # Format preview text
@@ -262,10 +264,10 @@ class AdhocCabinetDialog(QDialog):
                 f"Plecy: 1x {result.get('plyta_tylna_w_mm', 0):.1f} x {result.get('plyta_tylna_h_mm', 0):.1f} mm<br>"
             )
 
-            if 'polka_w_mm' in result and 'polka_h_mm' in result:
+            if "polka_w_mm" in result and "polka_h_mm" in result:
                 preview_text += f"Półki: 2x {result.get('polka_w_mm', 0):.1f} x {result.get('polka_h_mm', 0):.1f} mm<br>"
 
-            if 'front_w_mm' in result and 'front_h_mm' in result:
+            if "front_w_mm" in result and "front_h_mm" in result:
                 preview_text += f"Front: 1x {result.get('front_w_mm', 0):.1f} x {result.get('front_h_mm', 0):.1f} mm<br>"
 
             self.preview_label.setText(preview_text)
@@ -313,7 +315,7 @@ class AdhocCabinetDialog(QDialog):
             "adhoc_width_mm": self.width_spin.value(),
             "adhoc_height_mm": self.height_spin.value(),
             "adhoc_depth_mm": self.depth_spin.value(),
-            "formula_offset_mm": float(self.offset_slider.value())
+            "formula_offset_mm": float(self.offset_slider.value()),
         }
 
     def accept(self):
@@ -336,14 +338,20 @@ class AdhocCabinetDialog(QDialog):
                 # Update existing cabinet
                 logger.info(f"Updating existing ad-hoc cabinet ID: {self.cabinet.id}")
                 self.project_service.update_cabinet(self.cabinet.id, **cabinet_data)
-                logger.info(f"Ad-hoc cabinet ID: {self.cabinet.id} updated successfully")
+                logger.info(
+                    f"Ad-hoc cabinet ID: {self.cabinet.id} updated successfully"
+                )
             else:
                 # Create new cabinet
                 sequence_number = self.sequence_number_spin.value()
                 cabinet_data["sequence_number"] = sequence_number
 
-                logger.info(f"Creating new ad-hoc cabinet in project ID: {self.project.id}")
-                new_cabinet = self.project_service.add_cabinet(self.project.id, **cabinet_data)
+                logger.info(
+                    f"Creating new ad-hoc cabinet in project ID: {self.project.id}"
+                )
+                new_cabinet = self.project_service.add_cabinet(
+                    self.project.id, **cabinet_data
+                )
                 logger.info(f"New ad-hoc cabinet created with ID: {new_cabinet.id}")
 
             super().accept()  # Close the dialog with accept status

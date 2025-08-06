@@ -17,7 +17,7 @@ import logging
 
 from sqlalchemy.orm import Session
 
-from src.db_schema.orm_models import Project, CabinetType, ProjectCabinet
+from src.db_schema.orm_models import Project
 from src.services.cabinet_type_service import CabinetTypeService
 from src.services.project_service import ProjectService
 
@@ -99,7 +99,9 @@ class AddCabinetDialog(QDialog):
     and delegates business logic to CabinetTypeService and ProjectService.
     """
 
-    def __init__(self, db_session: Session, project: Project, cabinet_id=None, parent=None):
+    def __init__(
+        self, db_session: Session, project: Project, cabinet_id=None, parent=None
+    ):
         super().__init__(parent)
         logger.debug(f"Initializing AddCabinetDialog with cabinet_id: {cabinet_id}")
 
@@ -151,9 +153,7 @@ class AddCabinetDialog(QDialog):
         except Exception as e:
             logger.error(f"Error loading cabinet: {str(e)}")
             QMessageBox.critical(
-                self,
-                "Błąd",
-                f"Wystąpił błąd podczas wczytywania szafki: {str(e)}"
+                self, "Błąd", f"Wystąpił błąd podczas wczytywania szafki: {str(e)}"
             )
             self.reject()  # Close dialog on error
 
@@ -174,7 +174,9 @@ class AddCabinetDialog(QDialog):
         self.cabinet_types_table = QTableView()
         self.cabinet_types_table.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.cabinet_types_table.setSelectionMode(QAbstractItemView.SingleSelection)
-        self.cabinet_types_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
+        self.cabinet_types_table.horizontalHeader().setSectionResizeMode(
+            0, QHeaderView.Stretch
+        )
         left_layout.addWidget(self.cabinet_types_table)
 
         pane_layout.addLayout(left_layout, 2)  # 2:1 ratio
@@ -226,7 +228,9 @@ class AddCabinetDialog(QDialog):
         main_layout.addLayout(pane_layout)
 
         # Button box
-        self.button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        self.button_box = QDialogButtonBox(
+            QDialogButtonBox.Ok | QDialogButtonBox.Cancel
+        )
         self.button_box.accepted.connect(self.accept)
         self.button_box.rejected.connect(self.reject)
         main_layout.addWidget(self.button_box)
@@ -238,7 +242,9 @@ class AddCabinetDialog(QDialog):
     def load_cabinet_types(self):
         """Load cabinet types filtered by project's kitchen type"""
         try:
-            logger.debug(f"Loading cabinet types for kitchen type: {self.project.kitchen_type}")
+            logger.debug(
+                f"Loading cabinet types for kitchen type: {self.project.kitchen_type}"
+            )
             cabinet_types = self.cabinet_type_service.list_cabinet_types(
                 kitchen_type=self.project.kitchen_type
             )
@@ -249,14 +255,14 @@ class AddCabinetDialog(QDialog):
             self.cabinet_types_table.setModel(self.cabinet_type_model)
 
             # Now connect the selection signal after the model is set
-            self.cabinet_types_table.selectionModel().selectionChanged.connect(self.on_cabinet_type_selected)
+            self.cabinet_types_table.selectionModel().selectionChanged.connect(
+                self.on_cabinet_type_selected
+            )
 
         except Exception as e:
             logger.error(f"Error loading cabinet types: {str(e)}")
             QMessageBox.warning(
-                self,
-                "Błąd",
-                f"Nie udało się załadować typów szafek: {str(e)}"
+                self, "Błąd", f"Nie udało się załadować typów szafek: {str(e)}"
             )
 
     def load_cabinet_data(self):
@@ -287,7 +293,7 @@ class AddCabinetDialog(QDialog):
             QMessageBox.warning(
                 self,
                 "Błąd",
-                f"Nie wszystkie dane szafki zostały wczytane prawidłowo: {str(e)}"
+                f"Nie wszystkie dane szafki zostały wczytane prawidłowo: {str(e)}",
             )
 
     def select_cabinet_type_row(self, type_id):
@@ -318,7 +324,9 @@ class AddCabinetDialog(QDialog):
 
             if cabinet_type:
                 logger.debug(f"Selected cabinet type: {cabinet_type.nazwa}")
-                self.selected_type_label.setText(f"{cabinet_type.nazwa} ({cabinet_type.kitchen_type})")
+                self.selected_type_label.setText(
+                    f"{cabinet_type.nazwa} ({cabinet_type.kitchen_type})"
+                )
                 self.button_box.button(QDialogButtonBox.Ok).setEnabled(True)
         except Exception as e:
             logger.error(f"Error handling cabinet type selection: {str(e)}")
@@ -342,7 +350,9 @@ class AddCabinetDialog(QDialog):
 
         row = selected_indexes[0].row()
         cabinet_type = self.cabinet_type_model.get_cabinet_type_at_row(row)
-        logger.debug(f"Selected cabinet type ID: {cabinet_type.id if cabinet_type else None}")
+        logger.debug(
+            f"Selected cabinet type ID: {cabinet_type.id if cabinet_type else None}"
+        )
         return cabinet_type
 
     def validate_inputs(self) -> tuple[bool, str]:
@@ -381,7 +391,7 @@ class AddCabinetDialog(QDialog):
             "handle_type": self.handle_type_edit.text().strip(),
             "quantity": self.quantity_spin.value(),
             "formula_offset_mm": float(self.offset_spin.value()),
-            "type_id": cabinet_type.id
+            "type_id": cabinet_type.id,
         }
 
     def accept(self):
@@ -410,8 +420,12 @@ class AddCabinetDialog(QDialog):
                 sequence_number = self.sequence_number_spin.value()
                 cabinet_data["sequence_number"] = sequence_number
 
-                logger.info(f"Creating new catalog cabinet in project ID: {self.project.id}")
-                new_cabinet = self.project_service.add_cabinet(self.project.id, **cabinet_data)
+                logger.info(
+                    f"Creating new catalog cabinet in project ID: {self.project.id}"
+                )
+                new_cabinet = self.project_service.add_cabinet(
+                    self.project.id, **cabinet_data
+                )
                 logger.info(f"New catalog cabinet created with ID: {new_cabinet.id}")
 
             super().accept()  # Close dialog with accept status

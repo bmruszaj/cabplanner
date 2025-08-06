@@ -1,8 +1,8 @@
 """initial schema
 
-Revision ID: d0732d295bd8
+Revision ID: 73bcd758f17d
 Revises:
-Create Date: 2025-07-10 07:49:27.074827
+Create Date: 2025-08-06 18:24:02.526015
 
 """
 
@@ -13,7 +13,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision: str = "d0732d295bd8"
+revision: str = "73bcd758f17d"
 down_revision: Union[str, Sequence[str], None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
@@ -67,8 +67,11 @@ def upgrade() -> None:
         sa.Column("client_phone", sa.String(), nullable=True),
         sa.Column("client_email", sa.String(), nullable=True),
         sa.Column("blaty", sa.Boolean(), nullable=False),
+        sa.Column("blaty_note", sa.Text(), nullable=True),
         sa.Column("cokoly", sa.Boolean(), nullable=False),
+        sa.Column("cokoly_note", sa.Text(), nullable=True),
         sa.Column("uwagi", sa.Boolean(), nullable=False),
+        sa.Column("uwagi_note", sa.Text(), nullable=True),
         sa.Column("flag_notes", sa.Text(), nullable=True),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
@@ -77,12 +80,14 @@ def upgrade() -> None:
     op.create_table(
         "settings",
         sa.Column("id", sa.Integer(), nullable=False),
-        sa.Column("base_formula_offset_mm", sa.Float(), nullable=False),
-        sa.Column("advanced_script", sa.Text(), nullable=True),
-        sa.Column("theme_accent_rgb", sa.String(), nullable=True),
-        sa.Column("autoupdate_interval", sa.String(), nullable=False),
-        sa.Column("current_version", sa.String(), nullable=False),
+        sa.Column("key", sa.String(), nullable=False),
+        sa.Column("value", sa.String(), nullable=True),
+        sa.Column("value_type", sa.String(), nullable=False),
+        sa.Column("description", sa.String(), nullable=True),
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
+        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
         sa.PrimaryKeyConstraint("id"),
+        sa.UniqueConstraint("key"),
     )
     op.create_table(
         "project_cabinets",

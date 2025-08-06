@@ -1,0 +1,1 @@
+KITCHEN_TYPES = ["LOFT", "PARIS", "WINO"]
