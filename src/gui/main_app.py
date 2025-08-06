@@ -30,8 +30,13 @@ class CabplannerApp:
         self.app.setApplicationName("Cabplanner")
         self.app.setOrganizationName("Cabplanner")
 
-        # Setup database connection
-        db_path = Path(__file__).resolve().parents[2] / "cabplanner.db"
+        if getattr(sys, 'frozen', False):
+            base_path = Path(sys.executable).parent
+        else:
+            base_path = Path(__file__).resolve().parents[2]
+
+        db_path = base_path / "cabplanner.db"
+
         db_path.parent.mkdir(parents=True, exist_ok=True)
         logger.info(f"Using database at: {db_path}")
 
