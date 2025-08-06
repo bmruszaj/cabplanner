@@ -30,7 +30,7 @@ class CabplannerApp:
         self.app.setApplicationName("Cabplanner")
         self.app.setOrganizationName("Cabplanner")
 
-        if getattr(sys, 'frozen', False):
+        if getattr(sys, "frozen", False):
             base_path = Path(sys.executable).parent
         else:
             base_path = Path(__file__).resolve().parents[2]
