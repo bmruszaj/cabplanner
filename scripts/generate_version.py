@@ -1,12 +1,3 @@
-#!/usr/bin/env python
-"""
-Script for generating version number based on Git tags.
-Saves the version to .version file in the project root directory.
-
-Usage:
-    python scripts/generate_version.py
-"""
-
 import os
 import re
 import subprocess
