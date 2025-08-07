@@ -29,6 +29,9 @@ from PySide6.QtGui import QPixmap
 from sqlalchemy.orm import Session
 
 from src.services.settings_service import SettingsService
+from src.services.updater_service import UpdaterService
+from src.gui.update_dialog import UpdateDialog
+from src.version import VERSION
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -108,7 +111,7 @@ class SettingsDialog(QDialog):
 
         self.autoupdate_freq = QComboBox()
         self.autoupdate_freq.addItems(
-            ["Codziennie", "Co tydzień", "Co miesiąc", "Nigdy"]
+            ["Przy uruchomieniu", "Codziennie", "Co tydzień", "Co miesiąc", "Nigdy"]
         )
         db_layout.addRow("Częstotliwość sprawdzania:", self.autoupdate_freq)
 
@@ -123,6 +126,12 @@ class SettingsDialog(QDialog):
         build_date_label = QLabel(f"Data kompilacji: {BUILD_DATE}")
         build_date_label.setAlignment(Qt.AlignRight)
         db_layout.addRow("", build_date_label)
+
+        # Add check for updates button
+        update_btn = QPushButton("Sprawdź aktualizacje")
+        update_btn.clicked.connect(self.check_for_updates)
+        update_btn.setProperty("class", "primary")
+        db_layout.addRow("", update_btn)
 
         layout.addWidget(db_group)
 
@@ -562,7 +571,7 @@ class SettingsDialog(QDialog):
             # Set default values for core settings
             default_settings = {
                 "auto_update_enabled": True,
-                "auto_update_frequency": "Co tydzień",
+                "auto_update_frequency": "Przy uruchomieniu",
                 "auto_numbering": True,
                 "default_kitchen_type": "LOFT",
                 "dark_mode": False,
@@ -614,3 +623,69 @@ class SettingsDialog(QDialog):
             QMessageBox.critical(
                 self, "Błąd", f"Wystąpił błąd podczas resetowania ustawień: {str(e)}"
             )
+
+    def check_for_updates(self):
+        """Check for application updates and show the update dialog if available"""
+        try:
+            # Create updater service
+            updater_service = UpdaterService(self)
+
+            # Show the update dialog with current version
+            update_dialog = UpdateDialog(VERSION, parent=self)
+
+            # Connect signals directly to avoid the intermediate function
+            print("DEBUG: Connecting signals directly in check_for_updates")
+
+            # IMPORTANT: Connect the update service signal directly to the dialog methods
+            updater_service.update_check_complete.connect(
+                lambda available, current, latest: self._direct_handle_update_result(
+                    update_dialog, available, current, latest
+                )
+            )
+
+            updater_service.update_progress.connect(update_dialog.update_progress)
+            updater_service.update_complete.connect(update_dialog.update_completed)
+            updater_service.update_failed.connect(update_dialog.update_failed)
+
+            # Connect the dialog buttons to actions
+            update_dialog.perform_update.connect(
+                lambda: self._perform_update(updater_service, update_dialog)
+            )
+
+            # Show dialog before checking for updates
+            update_dialog.show()
+
+            # Start update check directly
+            print("DEBUG: Directly calling updater_service.check_for_updates()")
+            updater_service.check_for_updates()
+
+        except Exception as e:
+            logger.exception(f"Error in update process: {e}")
+            print(f"DEBUG ERROR in check_for_updates: {e}")
+            QMessageBox.critical(
+                self,
+                "Błąd aktualizacji",
+                f"Wystąpił błąd podczas procesu aktualizacji: {str(e)}",
+            )
+
+    def _direct_handle_update_result(
+        self, dialog, update_available, current_version, latest_version
+    ):
+        """Directly handle update check result and update dialog UI"""
+        print(
+            f"DEBUG: Direct update check result handler called: available={update_available}, current={current_version}, latest={latest_version}"
+        )
+
+        if update_available:
+            dialog.update_available(current_version, latest_version)
+        else:
+            dialog.no_update_available()
+
+    def _perform_update(self, updater_service, dialog):
+        """Perform the update process"""
+        try:
+            dialog.update_started()
+            updater_service.perform_update()
+        except Exception as e:
+            logger.exception(f"Error during update: {e}")
+            dialog.update_failed(str(e))
