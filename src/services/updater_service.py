@@ -3,18 +3,81 @@ import sys
 import shutil
 import logging
 import zipfile
-import requests
-from pathlib import Path
 from tempfile import TemporaryDirectory
-from PySide6.QtCore import QObject, Signal
+
+import requests
+import subprocess
+from pathlib import Path
+from datetime import datetime, timezone
+from enum import Enum, auto
+from typing import Callable
+from PySide6.QtCore import QObject, Signal, QTimer
+from PySide6.QtWidgets import QMessageBox
+
+logger = logging.getLogger(__name__)
+
+
+def is_running_in_development_mode() -> bool:
+    """
+    Detect if the application is running in development mode.
+    Returns True if running as Python script (e.g., from PyCharm), False if running as compiled executable.
+    """
+    # Check if running as frozen executable (PyInstaller, cx_Freeze, etc.)
+    if getattr(sys, "frozen", False):
+        logger.debug("Application is running as compiled executable")
+        return False
+
+    # Check if running from PyCharm specifically
+    if "pycharm" in os.environ.get("_", "").lower():
+        logger.debug("Application is running from PyCharm IDE")
+        return True
+
+    # Check for PyCharm environment variables
+    pycharm_vars = ["PYCHARM_HOSTED", "PYCHARM_DISPLAY_PORT", "JETBRAINS_IDE"]
+    if any(var in os.environ for var in pycharm_vars):
+        logger.debug(
+            "Application is running in PyCharm (environment variables detected)"
+        )
+        return True
+
+    # Check if sys.executable is python.exe (indicating script mode)
+    if sys.executable.endswith(("python.exe", "python3.exe", "python")):
+        logger.debug("Application is running as Python script")
+        return True
+
+    # Check if __file__ exists and points to a .py file
+    try:
+        main_file = sys.modules["__main__"].__file__
+        if main_file and main_file.endswith(".py"):
+            logger.debug("Application is running from .py file: %s", main_file)
+            return True
+    except (AttributeError, KeyError):
+        pass
+
+    logger.debug("Application appears to be running as compiled executable")
+    return False
+
+
+class UpdateFrequency(Enum):
+    ON_LAUNCH = auto()
+    DAILY = auto()
+    WEEKLY = auto()
+    MONTHLY = auto()
+    NEVER = auto()
+
+
+LABEL_TO_FREQ = {
+    "Przy uruchomieniu": UpdateFrequency.ON_LAUNCH,
+    "Codziennie": UpdateFrequency.DAILY,
+    "Co tydzień": UpdateFrequency.WEEKLY,
+    "Co miesiąc": UpdateFrequency.MONTHLY,
+    "Nigdy": UpdateFrequency.NEVER,
+}
+
 
 GITHUB_REPO = "bmruszaj/cabplanner"
 RELEASE_API_URL = f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest"
 
-# Configure a more detailed logger for this module
-logger = logging.getLogger(__name__)
-
-# Log module initialization
 logger.info("Updater service module initialized with repository: %s", GITHUB_REPO)
 
 
@@ -24,359 +87,367 @@ def get_current_version() -> str:
     try:
         from src.version import VERSION
 
-        logger.debug(f"Successfully retrieved version from version module: {VERSION}")
+        logger.debug("Successfully retrieved version: %s", VERSION)
         return VERSION
     except Exception as e:
-        logger.warning(f"Could not get current version: {e}")
-        logger.debug("Using fallback version 0.0.0")
+        logger.warning("Could not get current version: %s", e)
         return "0.0.0"
 
 
 def get_latest_release_info() -> dict:
-    """Get information about the latest GitHub release."""
-    logger.debug(f"Fetching latest release info from: {RELEASE_API_URL}")
+    """Fetch information about the latest GitHub release."""
+    logger.debug("Fetching latest release info from: %s", RELEASE_API_URL)
     try:
-        print(f"DEBUG: Requesting GitHub release info from {RELEASE_API_URL}")
-        # Set a shorter timeout to avoid hanging for too long
         response = requests.get(RELEASE_API_URL, timeout=5)
         response.raise_for_status()
         release_info = response.json()
-        logger.debug(
-            f"Successfully fetched release info. Latest release: {release_info.get('tag_name', 'unknown')}"
-        )
-        print(
-            f"DEBUG: GitHub API response successful, release tag: {release_info.get('tag_name', 'unknown')}"
-        )
+        tag = release_info.get("tag_name", "unknown")
+        logger.debug("GitHub API response successful, release tag: %s", tag)
         return release_info
-    except requests.exceptions.ConnectionError as e:
-        error_msg = f"Connection error when contacting GitHub API: {e}"
-        logger.error(error_msg)
-        print(f"DEBUG ERROR: {error_msg}")
-        raise
-    except requests.exceptions.Timeout as e:
-        error_msg = f"Timeout when contacting GitHub API: {e}"
-        logger.error(error_msg)
-        print(f"DEBUG ERROR: {error_msg}")
-        raise
     except requests.exceptions.RequestException as e:
-        error_msg = f"Failed to fetch release info: {e}"
-        logger.error(error_msg)
-        print(f"DEBUG ERROR: {error_msg}")
+        logger.error("Failed to fetch release info: %s", e)
         raise
 
 
-def download_file_with_progress(url: str, dest_path: Path, progress_callback=None):
+def download_file_with_progress(
+    url: str, dest_path: Path, progress_callback=None
+) -> bool:
     """Download a file with progress reporting."""
-    logger.debug(f"Starting download from URL: {url} to path: {dest_path}")
-    headers = {"Accept": "application/octet-stream"}
-
+    logger.debug("Starting download from URL: %s to path: %s", url, dest_path)
     try:
-        response = requests.get(url, headers=headers, stream=True, timeout=30)
+        response = requests.get(url, stream=True, timeout=30)
         response.raise_for_status()
-
         total_size = int(response.headers.get("content-length", 0))
-        logger.debug(f"Download started, total file size: {total_size / 1024:.2f} KB")
-
-        block_size = 1024  # 1 Kibibyte
+        block_size = 1024
         downloaded = 0
         last_log_percent = 0
 
         with open(dest_path, "wb") as f:
-            for data in response.iter_content(block_size):
-                downloaded += len(data)
-                f.write(data)
-
+            for chunk in response.iter_content(block_size):
+                downloaded += len(chunk)
+                f.write(chunk)
                 if progress_callback and total_size:
-                    progress = int(downloaded * 100 / total_size)
-                    progress_callback(progress)
-
-                    # Log progress at 10% intervals to avoid excessive logging
-                    current_log_percent = progress // 10 * 10
-                    if current_log_percent > last_log_percent:
+                    percent = int(downloaded * 100 / total_size)
+                    progress_callback(percent)
+                    current_log = (percent // 10) * 10
+                    if current_log > last_log_percent:
                         logger.debug(
-                            f"Download progress: {progress}% ({downloaded / 1024:.2f} KB / {total_size / 1024:.2f} KB)"
+                            "Download progress: %d%% (%0.2f KB/%0.2f KB)",
+                            percent,
+                            downloaded / 1024,
+                            total_size / 1024,
                         )
-                        last_log_percent = current_log_percent
+                        last_log_percent = current_log
 
-        logger.debug(f"Download completed: {dest_path}")
+        logger.debug("Download completed: %s", dest_path)
         return True
-    except Exception as e:
-        logger.error(f"Download failed: {str(e)}")
-        raise
+    except requests.exceptions.Timeout as e:
+        logger.error("Timeout downloading %s: %s", url, e)
+        return False
+    except Exception:
+        logger.exception("Unexpected error downloading %s", url)
+        return False
+
+
+def safe_extract(zip_ref: zipfile.ZipFile, extract_path: Path):
+    """Safely extract zip to prevent zip-slip vulnerabilities."""
+    for member in zip_ref.namelist():
+        member_path = extract_path / member
+        if not str(member_path.resolve()).startswith(str(extract_path.resolve())):
+            raise RuntimeError(f"Illegal path in zip: {member}")
+    zip_ref.extractall(path=extract_path)
+
+
+def _find_extracted_app_root(extract_dir: Path) -> Path | None:
+    """Find the extracted app root by locating cabplanner.exe."""
+    exe = next(extract_dir.rglob("cabplanner.exe"), None)
+    return exe.parent if exe else None
+
+
+def _create_shortcut_if_missing(install_dir: Path):
+    """Create desktop shortcut if it doesn't exist (first run only)."""
+    shortcut_path = install_dir / "Cabplanner.lnk"
+    exe_path = install_dir / "cabplanner.exe"
+
+    # Only create if both exe exists and shortcut doesn't exist
+    if exe_path.exists() and not shortcut_path.exists():
+        try:
+            # Use PowerShell to create shortcut with icon
+            ps_script = f"""
+$WScriptShell = New-Object -ComObject WScript.Shell
+$Shortcut = $WScriptShell.CreateShortcut("{shortcut_path}")
+$Shortcut.TargetPath = "{exe_path}"
+$Shortcut.WorkingDirectory = "{install_dir}"
+$Shortcut.IconLocation = "{exe_path},0"
+$Shortcut.Description = "Cabplanner Application"
+$Shortcut.Save()
+"""
+
+            import tempfile
+
+            ps_path = Path(tempfile.gettempdir()) / "create_shortcut.ps1"
+            ps_path.write_text(ps_script, encoding="utf-8")
+
+            result = subprocess.run(
+                [
+                    "powershell.exe",
+                    "-ExecutionPolicy",
+                    "Bypass",
+                    "-File",
+                    str(ps_path),
+                ],
+                capture_output=True,
+                text=True,
+            )
+
+            if result.returncode == 0:
+                logger.info(f"Created shortcut: {shortcut_path}")
+            else:
+                logger.warning(f"Failed to create shortcut: {result.stderr}")
+
+            # Clean up temp script
+            ps_path.unlink(missing_ok=True)
+
+        except Exception as e:
+            logger.warning(f"Could not create shortcut: {e}")
 
 
 class UpdaterService(QObject):
     """Service for checking updates and performing application updates."""
 
-    # Signal to report progress during update process
     update_progress = Signal(int)
-    # Signal when update is complete
     update_complete = Signal()
-    # Signal when update fails
     update_failed = Signal(str)
-    # Signal when update check is complete
-    update_check_complete = Signal(
-        bool, str, str
-    )  # update_available, current_version, latest_version
+    update_check_complete = Signal(bool, str, str)
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self.current_version = get_current_version()
-        logger.info(f"Current application version: {self.current_version}")
+        logger.info("Current application version: %s", self.current_version)
 
-    def should_check_for_updates(self, settings_service):
-        """
-        Check if we should check for updates based on settings.
+    def _write_and_run_inplace_update(self, install_dir: Path, new_dir: Path):
+        """Write and execute PowerShell script for in-place folder update."""
+        import tempfile
 
-        Args:
-            settings_service: SettingsService instance
+        try:
+            from scripts.update import get_update_script
 
-        Returns:
-            bool: True if should check for updates
-        """
-        # Check if auto-update is enabled
-        auto_update_enabled = settings_service.get_setting_value(
-            "auto_update_enabled", True
+            script_content = get_update_script()
+        except ImportError:
+            logger.error("Could not import update script")
+            self.update_failed.emit("Nie można załadować skryptu aktualizacji")
+            return
+
+        ps_path = Path(tempfile.gettempdir()) / "cabplanner_inplace_update.ps1"
+        ps_path.write_text(script_content, encoding="utf-8")
+
+        logger.info(f"Created PowerShell update script: {ps_path}")
+        logger.info(f"Install directory: {install_dir}")
+        logger.info(f"New package directory: {new_dir}")
+
+        subprocess.Popen(
+            [
+                "powershell.exe",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-WindowStyle",
+                "Hidden",
+                "-File",
+                str(ps_path),
+                str(install_dir),
+                str(new_dir),
+            ],
+            creationflags=getattr(subprocess, "CREATE_NEW_CONSOLE", 0),
         )
-        if not auto_update_enabled:
-            logger.info("Automatic update check is disabled")
+
+        from PySide6.QtCore import QCoreApplication
+
+        QCoreApplication.quit()
+
+    def should_check_for_updates(self, settings_service) -> bool:
+        """Decide whether to check for updates based on user settings."""
+        enabled = settings_service.get_setting_value("auto_update_enabled", True)
+        if not enabled:
+            logger.info("Automatic updates disabled in settings")
             return False
 
-        # Get update frequency setting
-        frequency = settings_service.get_setting_value(
-            "auto_update_frequency", "Co tydzień"
-        )
+        freq_label = settings_service.get_setting_value("auto_update_frequency", "Co tydzień")
+        freq = LABEL_TO_FREQ.get(freq_label, UpdateFrequency.WEEKLY)
+        last_iso = settings_service.get_setting_value("last_update_check", "")
+        if not last_iso:
+            return True
 
-        # Get last check timestamp
-        last_check = settings_service.get_setting_value("last_update_check", "")
+        try:
+            last_dt = datetime.fromisoformat(last_iso)
+            if last_dt.tzinfo is None:
+                last_dt = last_dt.replace(tzinfo=timezone.utc)
+            now = datetime.now(timezone.utc)
+        except Exception:
+            logger.warning("Invalid last_update_check format: %s", last_iso)
+            return True
 
-        # Determine if we should check now based on frequency
-        if last_check:
-            try:
-                import datetime
-
-                last_check_date = datetime.datetime.fromisoformat(last_check)
-                today = datetime.datetime.now()
-                if frequency == "Przy uruchomieniu":
-                    should_check = True
-                if frequency == "Codziennie":
-                    should_check = (today - last_check_date).days >= 1
-                elif frequency == "Co tydzień":
-                    should_check = (today - last_check_date).days >= 7
-                elif frequency == "Co miesiąc":
-                    should_check = (today - last_check_date).days >= 30
-                elif frequency == "Nigdy":
-                    should_check = False
-            except ValueError:
-                # Invalid date format, proceed with check
-                logger.warning(f"Invalid last update check date: {last_check}")
-                should_check = True
-
-        if not should_check:
-            logger.info(
-                f"Skipping update check (frequency: {frequency}, last check: {last_check})"
-            )
-
-        return should_check
+        delta = (now - last_dt).days
+        if freq is UpdateFrequency.ON_LAUNCH:
+            return True
+        if freq is UpdateFrequency.DAILY:
+            return delta >= 1
+        if freq is UpdateFrequency.WEEKLY:
+            return delta >= 7
+        if freq is UpdateFrequency.MONTHLY:
+            return delta >= 30
+        return False  # NEVER
 
     def check_for_updates(self) -> tuple[bool, str, str]:
-        """
-        Check if an update is available.
-
-        Returns:
-            tuple[bool, str, str]: (update_available, current_version, latest_version)
-        """
+        """Check GitHub for a newer release."""
         try:
             logger.info("Checking for application updates...")
-            release_info = get_latest_release_info()
-            latest_tag = release_info["tag_name"]
+            info = get_latest_release_info()
+            tag = info.get("tag_name", "").lstrip("v").replace("cabplanner-", "")
+            logger.info("Latest version available: %s", tag)
 
-            # Remove prefix from tag name (v1.0.0 -> 1.0.0)
-            if latest_tag.startswith("v"):
-                latest_tag = latest_tag[1:]
+            curr_tup = self._version_to_tuple(self.current_version)
+            new_tup  = self._version_to_tuple(tag)
+            avail    = new_tup > curr_tup
 
-            # Handle cabplanner- prefix if present
-            latest_tag = latest_tag.replace("cabplanner-", "")
-
-            logger.info(f"Latest version available: {latest_tag}")
-
-            # Convert versions to tuples for proper comparison
-            current_parts = self._version_to_tuple(self.current_version)
-            latest_parts = self._version_to_tuple(latest_tag)
-
-            update_available = latest_parts > current_parts
-
-            # Emit signal with results
-            self.update_check_complete.emit(
-                update_available, self.current_version, latest_tag
-            )
-
-            return update_available, self.current_version, latest_tag
+            self.update_check_complete.emit(avail, self.current_version, tag)
+            return avail, self.current_version, tag
         except Exception:
             logger.exception("Failed to check for updates")
             self.update_check_complete.emit(False, self.current_version, "")
             return False, self.current_version, ""
 
     def _version_to_tuple(self, version: str) -> tuple:
-        """Convert version string to tuple for comparison."""
-        logger.debug(f"Converting version string to tuple for comparison: '{version}'")
-        try:
-            # Check for empty string first
-            if not version:
-                logger.warning("Empty version string provided")
-                return tuple()
-
-            # First handle prerelease versions with hyphens (e.g., 1.0.0-beta.1)
-            prerelease_separator = None
-            for sep in ["-", "+"]:
-                if sep in version:
-                    prerelease_separator = sep
-                    logger.debug(f"Found prerelease separator '{sep}' in version")
-                    break
-
-            if prerelease_separator:
-                main_version, prerelease = version.split(prerelease_separator, 1)
-                logger.debug(
-                    f"Split version into main '{main_version}' and prerelease '{prerelease}'"
-                )
-
-                # Process main version part
-                main_parts = []
-                for part in main_version.split("."):
-                    try:
-                        main_parts.append(int(part))
-                    except ValueError:
-                        main_parts.append(part)
-                        logger.debug(f"Non-numeric version component found: '{part}'")
-
-                # Add prerelease part with separator
-                result = tuple(main_parts) + (f"{prerelease_separator}{prerelease}",)
-                logger.debug(f"Converted version to tuple: {result}")
-                return result
-
-            # Standard version without prerelease
-            parts = []
-            for part in version.split("."):
-                try:
-                    parts.append(int(part))
-                except ValueError:
-                    parts.append(part)
-                    logger.debug(f"Non-numeric version component found: '{part}'")
-
-            result = tuple(parts)
-            logger.debug(f"Converted version to tuple: {result}")
-            return result
-        except Exception as e:
-            logger.error(f"Error converting version to tuple: {e}")
-            # Return a safe default value for completely invalid format
-            if not version:
-                return tuple()
-            return (version,)
+        """Convert a version string into a comparable tuple."""
+        if not version:
+            return ()
+        for sep in ("-", "+"):
+            if sep in version:
+                main, pre = version.split(sep, 1)
+                parts = [int(p) if p.isdigit() else p for p in main.split(".")]
+                return tuple(parts) + (f"{sep}{pre}",)
+        parts = [int(p) if p.isdigit() else p for p in version.split(".")]
+        return tuple(parts)
 
     def perform_update(self):
-        """
-        Download and install the latest version of the application.
-        Emits progress and completion signals.
-        """
+        """Download, install, and restart the application with folder-based updates."""
         try:
-            release_info = get_latest_release_info()
-            zip_asset = next(
-                (a for a in release_info["assets"] if a["name"].endswith(".zip")),
-                None,
-            )
-
-            if not zip_asset:
-                logger.warning("No ZIP asset found in the latest release.")
-                self.update_failed.emit("Nie znaleziono pakietu aktualizacji")
+            # Skip update in development mode
+            if is_running_in_development_mode():
+                logger.warning("Cannot perform update in development mode")
+                self.update_failed.emit("Aktualizacja nie jest dostępna w trybie deweloperskim")
                 return
 
-            zip_url = zip_asset["browser_download_url"]
+            # Get current executable path and install directory
+            if getattr(sys, 'frozen', False):
+                current_exe_path = Path(sys.executable)
+                install_dir = current_exe_path.parent
+            else:
+                self.update_failed.emit("Nie można zaktualizować: aplikacja nie jest skompilowana")
+                return
 
-            with TemporaryDirectory() as tmpdir:
-                tmp_path = Path(tmpdir)
-                zip_path = tmp_path / "update.zip"
+            logger.info(f"Current install directory: {install_dir}")
 
-                # Download with progress updates
-                logger.info(f"Downloading update from: {zip_url}")
-                self.update_progress.emit(10)
+            # Get latest release info
+            release_info = get_latest_release_info()
 
-                try:
-                    download_file_with_progress(
-                        zip_url,
-                        zip_path,
-                        progress_callback=lambda p: self.update_progress.emit(
-                            10 + int(p * 0.5)
-                        ),
-                    )
-                except Exception as e:
-                    logger.error(f"Download failed: {e}")
-                    self.update_failed.emit(f"Błąd pobierania: {str(e)}")
-                    return
+            # Find download URL - look for .zip file (onedir package)
+            download_url = None
+            asset_name = None
 
-                # Extract ZIP
-                logger.info("Extracting update package...")
-                self.update_progress.emit(60)
+            for asset in release_info.get("assets", []):
+                if asset["name"].endswith(".zip"):
+                    download_url = asset["browser_download_url"]
+                    asset_name = asset["name"]
+                    logger.info(f"Found ZIP asset: {asset_name}")
+                    break
 
-                try:
-                    with zipfile.ZipFile(zip_path, "r") as zip_ref:
-                        zip_ref.extractall(tmp_path)
-                except Exception as e:
-                    logger.error(f"Extraction failed: {e}")
-                    self.update_failed.emit(f"Błąd rozpakowywania: {str(e)}")
-                    return
+            if not download_url:
+                logger.error("No ZIP assets found in release")
+                available_assets = [asset["name"] for asset in release_info.get("assets", [])]
+                logger.error(f"Available assets: {available_assets}")
+                self.update_failed.emit("Nie znaleziono pakietu aktualizacji (ZIP) dla Windows")
+                return
 
-                # Find new executable
-                self.update_progress.emit(70)
-                exe_files = list(tmp_path.glob("*.exe"))
-                new_exe_path = next(iter(exe_files), None)
-                if not new_exe_path:
-                    logger.error("No .exe file found in the update package")
-                    self.update_failed.emit(
-                        "Pakiet aktualizacji nie zawiera pliku wykonywalnego"
-                    )
-                    return
+            # Create temporary directory for update
+            import tempfile
+            temp_dir = Path(tempfile.mkdtemp(prefix="cabplanner_update_"))
+            extract_dir = temp_dir / "extracted"
+            extract_dir.mkdir()
 
-                # Replace current executable
-                logger.info("Installing update...")
-                self.update_progress.emit(80)
+            logger.info(f"Downloading update from: {download_url}")
+            logger.info(f"Temporary directory: {temp_dir}")
 
-                current_exe = Path(sys.executable)
-                backup_path = current_exe.with_suffix(".bak")
+            # Download zip file (0-70% progress)
+            zip_path = temp_dir / "update.zip"
+            success = download_file_with_progress(
+                download_url,
+                zip_path,
+                progress_callback=lambda p: self.update_progress.emit(min(int(p * 0.7), 70))
+            )
 
-                try:
-                    # Create backup of current executable
-                    shutil.move(str(current_exe), str(backup_path))
-                    # Install new executable
-                    shutil.move(str(new_exe_path), str(current_exe))
-                    self.update_progress.emit(90)
-                except Exception as e:
-                    # If installation fails, restore from backup
-                    logger.error(f"Installation failed: {e}")
-                    if backup_path.exists():
-                        shutil.move(str(backup_path), str(current_exe))
-                    self.update_failed.emit(f"Błąd instalacji: {str(e)}")
-                    return
+            if not success:
+                shutil.rmtree(temp_dir, ignore_errors=True)
+                self.update_failed.emit("Nie udało się pobrać aktualizacji")
+                return
 
-                # Update complete
-                logger.info("Update completed successfully")
-                self.update_progress.emit(100)
-                self.update_complete.emit()
+            # Extract the zip file (70-80% progress)
+            self.update_progress.emit(75)
+            try:
+                with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+                    safe_extract(zip_ref, extract_dir)
+                logger.info(f"Extracted update to: {extract_dir}")
+            except Exception as e:
+                logger.error(f"Failed to extract zip: {e}")
+                shutil.rmtree(temp_dir, ignore_errors=True)
+                self.update_failed.emit(f"Nie udało się rozpakować aktualizacji: {e}")
+                return
 
-                # Schedule application restart
-                logger.info("Restarting application...")
+            # Find the extracted app root by locating cabplanner.exe
+            new_dir = _find_extracted_app_root(extract_dir)
+            if not new_dir or not new_dir.exists():
+                logger.error("No app root found in extracted files")
+                shutil.rmtree(temp_dir, ignore_errors=True)
+                self.update_failed.emit("Nie znaleziono aplikacji w pakiecie aktualizacji")
+                return
 
-                # Wait a moment before restarting to allow UI to update
-                from PySide6.QtCore import QTimer
+            logger.info(f"Found app root: {new_dir}")
 
-                # For tests, immediately call the restart function instead of using a timer
-                # This ensures the test can verify the execv call
-                if "pytest" in sys.modules:
-                    os.execv(str(current_exe), [str(current_exe)])
-                else:
-                    QTimer.singleShot(
-                        1500, lambda: os.execv(str(current_exe), [str(current_exe)])
-                    )
+            # Safety: remove packaged database if present (preserve user data)
+            db_in_pkg = new_dir / "cabplanner.db"
+            if db_in_pkg.exists():
+                logger.info("Removing packaged database to preserve user data")
+                db_in_pkg.unlink()
+
+            # Verify the new executable exists and is not empty
+            new_exe = new_dir / "cabplanner.exe"
+            if not new_exe.exists() or new_exe.stat().st_size == 0:
+                shutil.rmtree(temp_dir, ignore_errors=True)
+                self.update_failed.emit("Pobrany plik aktualizacji jest uszkodzony")
+                return
+
+            logger.info(f"Update package ready: {new_exe} ({new_exe.stat().st_size} bytes)")
+
+            # Update progress (80-100%)
+            self.update_progress.emit(90)
+
+            logger.info("Preparing to restart application for update...")
+
+            # Final progress update
+            self.update_progress.emit(100)
+
+            # Signal that update is complete and restart
+            self.update_complete.emit()
+
+            # Use a short delay to ensure UI updates, then restart using in-place update
+            QTimer.singleShot(1000, lambda: self._write_and_run_inplace_update(install_dir, new_dir))
 
         except Exception as e:
-            logger.exception("Update process failed")
-            self.update_failed.emit(f"Błąd aktualizacji: {str(e)}")
+            logger.exception(f"Error during update process: {e}")
+            self.update_failed.emit(f"Błąd podczas aktualizacji: {e}")
+
+    def create_shortcut_on_first_run(self):
+        """Create shortcut on first application run."""
+        if getattr(sys, 'frozen', False):
+            current_exe_path = Path(sys.executable)
+            install_dir = current_exe_path.parent
+            _create_shortcut_if_missing(install_dir)

@@ -115,6 +115,10 @@ class SettingsDialog(QDialog):
         )
         db_layout.addRow("Częstotliwość sprawdzania:", self.autoupdate_freq)
 
+        # Shortcut creation setting
+        self.create_shortcut_check = QCheckBox("Twórz skrót przy uruchomieniu aplikacji")
+        db_layout.addRow(self.create_shortcut_check)
+
         # Add version information
         from src.version import get_version_string, BUILD_DATE
 
@@ -311,12 +315,36 @@ class SettingsDialog(QDialog):
                 self.settings_service.get_setting_value("auto_update_enabled", True)
             )
 
+            # Make sure dropdown is properly populated first
+            self.autoupdate_freq.clear()
+            self.autoupdate_freq.addItems(
+                ["Przy uruchomieniu", "Codziennie", "Co tydzień", "Co miesiąc", "Nigdy"]
+            )
+
+            # Then set the current value
             autoupdate_freq = self.settings_service.get_setting_value(
                 "auto_update_frequency", "Co tydzień"
             )
+            logger.debug("Loading auto_update_frequency setting: %s", autoupdate_freq)
+
             index = self.autoupdate_freq.findText(autoupdate_freq)
+            logger.debug("Found index for frequency %s: %s", autoupdate_freq, index)
+
             if index >= 0:
                 self.autoupdate_freq.setCurrentIndex(index)
+            else:
+                # Default to weekly if the saved value isn't found
+                default_index = self.autoupdate_freq.findText("Co tydzień")
+                self.autoupdate_freq.setCurrentIndex(default_index)
+                logger.warning(
+                    "Invalid auto_update_frequency: %s, defaulting to weekly",
+                    autoupdate_freq,
+                )
+
+            # Shortcut creation setting
+            self.create_shortcut_check.setChecked(
+                self.settings_service.get_setting_value("create_shortcut_on_start", True)
+            )
 
             # Project settings
             self.auto_numbering_check.setChecked(
@@ -424,6 +452,11 @@ class SettingsDialog(QDialog):
 
             self.settings_service.set_setting(
                 "auto_update_frequency", self.autoupdate_freq.currentText()
+            )
+
+            # Shortcut creation setting
+            self.settings_service.set_setting(
+                "create_shortcut_on_start", self.create_shortcut_check.isChecked()
             )
 
             # Project settings
@@ -572,6 +605,7 @@ class SettingsDialog(QDialog):
             default_settings = {
                 "auto_update_enabled": True,
                 "auto_update_frequency": "Przy uruchomieniu",
+                "create_shortcut_on_start": True,
                 "auto_numbering": True,
                 "default_kitchen_type": "LOFT",
                 "dark_mode": False,
@@ -625,47 +659,41 @@ class SettingsDialog(QDialog):
             )
 
     def check_for_updates(self):
-        """Check for application updates and show the update dialog if available"""
+        """Open update dialog and automatically trigger update check."""
         try:
-            # Create updater service
-            updater_service = UpdaterService(self)
+            updater = UpdaterService(self)
+            dialog = UpdateDialog(VERSION, parent=self)
 
-            # Show the update dialog with current version
-            update_dialog = UpdateDialog(VERSION, parent=self)
+            # Connect signals
+            dialog.check_for_updates.connect(updater.check_for_updates)
+            dialog.perform_update.connect(lambda: dialog.on_update_started())
+            dialog.perform_update.connect(updater.perform_update)
 
-            # Connect signals directly to avoid the intermediate function
-            print("DEBUG: Connecting signals directly in check_for_updates")
-
-            # IMPORTANT: Connect the update service signal directly to the dialog methods
-            updater_service.update_check_complete.connect(
-                lambda available, current, latest: self._direct_handle_update_result(
-                    update_dialog, available, current, latest
+            # Handle update check results
+            updater.update_check_complete.connect(
+                lambda avail, cur, lat: (
+                    dialog.update_available(cur, lat)
+                    if avail
+                    else dialog.no_update_available()
                 )
             )
 
-            updater_service.update_progress.connect(update_dialog.update_progress)
-            updater_service.update_complete.connect(update_dialog.update_completed)
-            updater_service.update_failed.connect(update_dialog.update_failed)
+            # Handle update progress and completion
+            updater.update_progress.connect(dialog.on_update_progress)
+            updater.update_complete.connect(dialog.on_update_completed)
+            updater.update_failed.connect(dialog.on_update_failed)
 
-            # Connect the dialog buttons to actions
-            update_dialog.perform_update.connect(
-                lambda: self._perform_update(updater_service, update_dialog)
-            )
+            # Handle cancellation
+            dialog.cancel_update.connect(dialog.reject)
 
-            # Show dialog before checking for updates
-            update_dialog.show()
-
-            # Start update check directly
-            print("DEBUG: Directly calling updater_service.check_for_updates()")
-            updater_service.check_for_updates()
+            # Show dialog and immediately trigger update check
+            dialog.show()
+            updater.check_for_updates()
 
         except Exception as e:
-            logger.exception(f"Error in update process: {e}")
-            print(f"DEBUG ERROR in check_for_updates: {e}")
+            logger.exception("Error in update process: %s", e)
             QMessageBox.critical(
-                self,
-                "Błąd aktualizacji",
-                f"Wystąpił błąd podczas procesu aktualizacji: {str(e)}",
+                self, self.tr("Błąd aktualizacji"), self.tr(f"Wystąpił błąd: {e}")
             )
 
     def _direct_handle_update_result(

@@ -1,28 +1,20 @@
-# src/gui/main_app.py
-
+import os
 import sys
 import logging
 from pathlib import Path
-from datetime import datetime
 
-from PySide6.QtCore import QTimer, QSharedMemory
+from PySide6.QtCore import QSharedMemory, QTimer
 from PySide6.QtWidgets import QApplication, QMessageBox
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from src.gui.main_window import MainWindow
 from src.gui.resources.styles import get_theme
+from src.gui.update_dialog import UpdateDialog
 from src.services.settings_service import SettingsService
 from src.services.updater_service import UpdaterService
 from src.db_migration import upgrade_database
-
-# Debug override: when True, always run update check at startup regardless of settings
-DEBUG_ALWAYS_RUN_UPDATES = True
-
-# Enable DEBUG logging for the updater service
-logging.getLogger("src.services.updater_service").setLevel(logging.DEBUG)
-updater_logger = logging.getLogger("src.services.updater_service")
-updater_logger.propagate = True
+from src.version import VERSION
 
 # Configure root logger
 logging.basicConfig(
@@ -35,12 +27,49 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# Detect auto-restart loop
+if os.environ.get("CABPLANNER_RESTARTING") == "1":
+    logger.critical(
+        "Detected potential restart loop! Application was restarted recently."
+    )
+    if "--force-restart" not in sys.argv:
+        logger.critical("Exiting to prevent infinite restart loop.")
+        sys.exit(1)
+
+# Set environment variable to detect restart loops
+os.environ["CABPLANNER_RESTARTING"] = "1"
+
+# Create a file to track this instance
+instance_marker = Path(Path.home() / ".cabplanner_instance")
+try:
+    with open(instance_marker, "w") as f:
+        f.write(str(os.getpid()))
+except Exception as e:
+    logger.warning(f"Could not write instance marker: {e}")
+
+logger.debug("Application starting with PID: %s", os.getpid())
+logger.debug("Command line arguments: %s", sys.argv)
+
 
 class CabplannerApp:
     def __init__(self):
         self.app = QApplication(sys.argv)
         self.app.setApplicationName("Cabplanner")
         self.app.setOrganizationName("Cabplanner")
+
+        # Set application icon
+        if getattr(sys, "frozen", False):
+            # Running as executable - icon should be embedded
+            icon_path = Path(sys.executable).parent / "_internal/icon.ico"
+            if icon_path.exists():
+                from PySide6.QtGui import QIcon
+                self.app.setWindowIcon(QIcon(str(icon_path)))
+        else:
+            # Running in development - use icon from project root
+            icon_path = Path(__file__).resolve().parents[2] / "icon.ico"
+            if icon_path.exists():
+                from PySide6.QtGui import QIcon
+                self.app.setWindowIcon(QIcon(str(icon_path)))
 
         # Determine base path for frozen vs. dev mode
         if getattr(sys, "frozen", False):
@@ -51,7 +80,7 @@ class CabplannerApp:
         # Ensure database file exists
         db_path = base_path / "cabplanner.db"
         db_path.parent.mkdir(parents=True, exist_ok=True)
-        logger.info(f"Using database at: {db_path}")
+        logger.info("Using database at: %s", db_path)
 
         # Run migrations
         logger.info("Upgrading database schema (Alembic)...")
@@ -68,83 +97,141 @@ class CabplannerApp:
         is_dark_mode = self.settings_service.get_setting_value("dark_mode", False)
         self.app.setStyleSheet(get_theme(is_dark_mode))
 
-        # Create main window (but don't show yet)
+        # Create updater service
+        self.updater_service = UpdaterService()
+
+        # Create shortcut on first run
+        self.updater_service.create_shortcut_on_first_run()
+
+        # Create and show main window
         self.main_window = MainWindow(self.session)
 
-        # Prepare updater service with a QObject parent
-        self.updater_service = UpdaterService(self.main_window)
-
     def run(self) -> int:
-        """Show main window and schedule an update check once the event loop is running."""
-        # Queue the direct update check to fire immediately after exec() starts
-        QTimer.singleShot(0, self.direct_check_for_updates)
-
-        # Now show the main UI and enter Qt's event loop
+        """Show the main window and enter Qt's event loop."""
         self.main_window.show()
+
+        # Check for updates on startup after a short delay
+        QTimer.singleShot(2000, self._check_startup_updates)
+
         return self.app.exec()
 
-    def direct_check_for_updates(self):
-        """Perform an update check on startup, honoring settings unless debugging override is enabled."""
+    def _check_startup_updates(self):
+        """Check for updates on startup based on user settings."""
         try:
-            logger.debug("DIRECT CHECK: starting update check process")
+            # Check if app was just updated and show success message
+            self._check_and_show_update_success()
 
-            # Check user preferences unless debug override is set
-            should_run = self.updater_service.should_check_for_updates(
-                self.settings_service
-            )
-            if not should_run and not DEBUG_ALWAYS_RUN_UPDATES:
-                print("Skipping update check based on user preferences")
-                logger.info("Skipping update check based on user preferences")
+            # Create shortcut on every startup (if enabled in settings)
+            create_shortcut_enabled = self.settings_service.get_setting_value("create_shortcut_on_start", True)
+            if create_shortcut_enabled:
+                self.updater_service.create_shortcut_on_first_run()
+
+            # Update last check timestamp
+            from datetime import datetime, timezone
+
+            now = datetime.now(timezone.utc)
+            self.settings_service.set_setting("last_update_check", now.isoformat())
+
+            # Check if we should check for updates
+            if not self.updater_service.should_check_for_updates(self.settings_service):
+                logger.info("Skipping startup update check based on user settings")
                 return
 
-            if DEBUG_ALWAYS_RUN_UPDATES:
-                logger.info("Debug override: forcing update check at startup")
+            logger.info("Performing startup update check...")
 
-            # Record timestamp of this check
-            self.settings_service.set_setting(
-                "last_update_check", datetime.now().isoformat()
+            # Connect signals for handling update results
+            self.updater_service.update_check_complete.connect(
+                self._handle_startup_update_result
             )
 
-            # Show a brief status message
-            if hasattr(self.main_window, "status") and self.main_window.status:
-                self.main_window.status.showMessage(
-                    "DEBUG: Sprawdzanie aktualizacji…", 5000
-                )
-
-            # Use the main window (a QObject) as parent so signals fire properly
-            independent_updater = UpdaterService(self.main_window)
-
-            logger.debug("DIRECT CHECK: connecting update_check_complete signal")
-            independent_updater.update_check_complete.connect(
-                lambda available, current, latest: self._status_update_handler(
-                    available, current, latest
-                )
-            )
-
-            logger.debug("DIRECT CHECK: calling check_for_updates()")
-            independent_updater.check_for_updates()
-            logger.debug("DIRECT CHECK: check_for_updates() returned")
+            # Perform the check
+            self.updater_service.check_for_updates()
 
         except Exception as e:
-            logger.exception("DIRECT CHECK ERROR", exc_info=e)
-            if hasattr(self.main_window, "status") and self.main_window.status:
-                self.main_window.status.showMessage("DEBUG: Błąd aktualizacji", 5000)
+            logger.exception(f"Error during startup update check: {e}")
 
-    def _status_update_handler(self, update_available, current_version, latest_version):
-        """Update the main window's status bar with the result."""
+    def _check_and_show_update_success(self):
+        """Check if app was just updated and show success notification."""
+        try:
+            # Check for update success marker file
+            if getattr(sys, 'frozen', False):
+                current_exe_path = Path(sys.executable)
+                install_dir = current_exe_path.parent
+                success_marker = install_dir / ".update_success"
+
+                if success_marker.exists():
+                    # Show success message
+                    QTimer.singleShot(1500, self._show_update_success_message)
+
+                    # Remove the marker file
+                    try:
+                        success_marker.unlink()
+                        logger.info("Removed update success marker")
+                    except Exception as e:
+                        logger.warning(f"Could not remove update success marker: {e}")
+
+        except Exception as e:
+            logger.exception(f"Error checking update success: {e}")
+
+    def _show_update_success_message(self):
+        """Show update success message to user."""
+        try:
+            QMessageBox.information(
+                self.main_window,  # Use main_window instead of self
+                "Aktualizacja zakończona",
+                "Aplikacja została pomyślnie zaktualizowana do najnowszej wersji!\n\n"
+                "Wszystkie Twoje dane zostały zachowane."
+            )
+        except Exception as e:
+            logger.exception(f"Error showing update success message: {e}")
+
+    def _handle_startup_update_result(
+        self, update_available, current_version, latest_version
+    ):
+        """Handle the result of startup update check."""
         try:
             if update_available:
-                msg = f"Dostępna aktualizacja: {latest_version}"
-            else:
-                msg = "Masz najnowszą wersję programu"
+                logger.info(f"Update available: {current_version} -> {latest_version}")
 
-            if hasattr(self.main_window, "status") and self.main_window.status:
-                self.main_window.status.showMessage(msg, 5000)
+                # Show update dialog
+                dialog = UpdateDialog(VERSION, parent=self.main_window)
+
+                # Connect signals properly
+                dialog.check_for_updates.connect(self.updater_service.check_for_updates)
+
+                # Connect update button to start the update process
+                dialog.perform_update.connect(lambda: self._start_update_process(dialog))
+
+                # Handle update progress and completion
+                self.updater_service.update_progress.connect(dialog.on_update_progress)
+                self.updater_service.update_complete.connect(dialog.on_update_completed)
+                self.updater_service.update_failed.connect(dialog.on_update_failed)
+
+                # Handle cancellation
+                dialog.cancel_update.connect(dialog.reject)
+
+                # Show that update is available
+                dialog.update_available(current_version, latest_version)
+                dialog.show()
+
+            else:
+                logger.info("No updates available at startup")
 
         except Exception as e:
-            logger.exception(f"Error updating status bar: {e}")
+            logger.exception(f"Error handling startup update result: {e}")
 
-    # (other dialog-based methods omitted for brevity)
+    def _start_update_process(self, dialog):
+        """Start the update process with proper dialog state management."""
+        try:
+            # Show update started state
+            dialog.on_update_started()
+
+            # Start the actual update
+            self.updater_service.perform_update()
+
+        except Exception as e:
+            logger.exception(f"Error starting update process: {e}")
+            dialog.on_update_failed(str(e))
 
 
 def main():
@@ -158,8 +245,8 @@ def main():
         logger.info("Starting Cabplanner application")
         app = CabplannerApp()
         sys.exit(app.run())
-    except Exception as e:
-        logger.critical(f"Unhandled exception: {e}", exc_info=True)
+    except Exception:
+        logger.exception("Unhandled exception in main")
         raise
 
 

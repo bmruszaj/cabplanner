@@ -24,7 +24,7 @@ from PySide6.QtWidgets import (
     QScrollArea,
     QSizePolicy,
 )
-from PySide6.QtCore import Qt, Signal, QModelIndex, QSortFilterProxyModel, QSize
+from PySide6.QtCore import Qt, Signal, QModelIndex, QSortFilterProxyModel, QSize, QTimer
 from PySide6.QtGui import QAction
 
 from sqlalchemy.orm import Session
@@ -39,6 +39,7 @@ from src.gui.settings_dialog import SettingsDialog
 from src.gui.cabinet_catalog import CabinetCatalogWindow
 from src.gui.resources.styles import get_theme
 from src.gui.resources.resources import get_icon
+from src.services.updater_service import UpdaterService
 
 logger = logging.getLogger(__name__)
 
@@ -243,11 +244,15 @@ class MainWindow(QMainWindow):
         self.project_service = ProjectService(db_session)
         self.report_generator = ReportGenerator(db_session=db_session)
         self.settings_service = SettingsService(db_session)
+        self.updater_service = UpdaterService(parent=self)  # Initialize updater service
         self.is_dark_mode = self.settings_service.get_setting_value("dark_mode", False)
 
         self._build_main_window()
         self.setup_connections()
         self.load_projects()
+
+        # Setup auto-update check
+        self._setup_update_check()
 
     def _build_main_window(self):
         self.setWindowTitle(self.tr("Cabplanner"))
@@ -624,3 +629,53 @@ class MainWindow(QMainWindow):
 
     def _apply_theme(self):
         self.setStyleSheet(get_theme(self.is_dark_mode))
+
+    def _setup_update_check(self):
+        """Schedule update check right after startup in background."""
+        logger.debug("Setting up update check timer")
+        QTimer.singleShot(0, self._start_update_check)
+
+    def _start_update_check(self):
+        """Perform the update check and, if available, show the update dialog."""
+        try:
+            logger.debug("Starting update check process")
+            if not self.updater_service.should_check_for_updates(self.settings_service):
+                logger.debug("Update check skipped based on settings")
+                return
+
+            self.updater_service.update_check_complete.connect(
+                self._on_update_check_complete
+            )
+            # Pass settings_service to save the timestamp when check is performed
+            self.updater_service.check_for_updates(self.settings_service)
+        except Exception as e:
+            logger.exception("Error during startup update check: %s", e)
+
+    def _on_update_check_complete(self, available: bool, current: str, latest: str):
+        """Handle result of background update check."""
+        try:
+            logger.debug(
+                "Update check completed: available=%s, current=%s, latest=%s",
+                available,
+                current,
+                latest,
+            )
+
+            if not available:
+                logger.debug("No updates available, current version is latest")
+                return
+
+            from src.gui.update_dialog import UpdateDialog
+
+            logger.debug("New version available, showing update dialog")
+            dialog = UpdateDialog(current, parent=self)
+            dialog.update_available(current, latest)
+
+            dialog.perform_update.connect(self.updater_service.perform_update)
+            self.updater_service.update_progress.connect(dialog.on_update_progress)
+            self.updater_service.update_complete.connect(dialog.on_update_completed)
+            self.updater_service.update_failed.connect(dialog.on_update_failed)
+
+            dialog.exec()
+        except Exception as e:
+            logger.exception("Error showing update dialog: %s", e)
