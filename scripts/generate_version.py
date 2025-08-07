@@ -30,12 +30,42 @@ def get_version_from_tags():
     # Make sure to fetch all tags first
     run_git_command(["git", "fetch", "--tags", "--force"])
 
-    # Check if tags exist - use --tags to include lightweight tags
-    last_tag = run_git_command(["git", "describe", "--tags", "--abbrev=0"])
-
-    # Debug information
+    # Get all tags with git tag command
     all_tags = run_git_command(["git", "tag", "-l"])
     print(f"Available tags: {all_tags or 'None'}")
+
+    # Try to get the latest tag with git describe (this sometimes fails in CI)
+    last_tag = run_git_command(["git", "describe", "--tags", "--abbrev=0"])
+
+    # If git describe failed but we have tags, use manual selection
+    if not last_tag and all_tags:
+        print("git describe failed, using manual tag selection")
+        # Split the tags into a list and sort them
+        all_tags_list = all_tags.strip().split("\n")
+
+        # Filter for tags that follow versioning pattern (v1.2.3 or 1.2.3)
+        version_pattern = re.compile(r"^v?\d+\.\d+\.\d+.*$")
+        versioned_tags = [tag for tag in all_tags_list if version_pattern.match(tag)]
+
+        if versioned_tags:
+            # Sort tags by version number (remove v prefix for sorting)
+            def version_key(tag):
+                # Remove v prefix if present
+                clean_tag = re.sub(r"^v", "", tag)
+                # Split into version components
+                parts = clean_tag.split(".")
+                # Convert numeric parts to integers for proper sorting
+                return [int(p) if p.isdigit() else p for p in parts]
+
+            # Sort tags and get the latest one
+            versioned_tags.sort(key=version_key, reverse=True)
+            last_tag = versioned_tags[0]
+            print(f"Manually selected tag: {last_tag}")
+        else:
+            # If no versioned tags, use alphabetical sorting as fallback
+            all_tags_list.sort(reverse=True)
+            last_tag = all_tags_list[0]
+            print(f"Selected non-versioned tag: {last_tag}")
 
     if last_tag:
         print(f"Found tag: {last_tag}")
