@@ -33,10 +33,15 @@ jobs:
       - name: Generate version from tags
         shell: pwsh
         run: |
+          # Run version generation script
           python scripts/generate_version.py
           
+          # Read the generated version
           $VERSION = Get-Content .version
           echo "VERSION=$VERSION" >> $env:GITHUB_ENV
+          
+          # For release tag, ensure consistent format
+          echo "RELEASE_TAG=v$VERSION" >> $env:GITHUB_ENV
 
       - name: Run PyInstaller build script
         shell: pwsh
@@ -50,7 +55,7 @@ jobs:
       - name: Create GitHub release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: cabplanner-${{ env.VERSION }}
+          tag_name: ${{ env.RELEASE_TAG }}
           name: Cabplanner ${{ env.VERSION }}
           files: ${{ env.ZIP_NAME }}
         env:

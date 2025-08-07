@@ -36,12 +36,22 @@ def get_version_from_tags():
     2. If there are commits since the last tag, add commit counter
     3. If no tags, use base version 1.0.0 + commit count
     """
-    # Check if tags exist
+    # Make sure to fetch all tags first
+    run_git_command(["git", "fetch", "--tags", "--force"])
+
+    # Check if tags exist - use --tags to include lightweight tags
     last_tag = run_git_command(["git", "describe", "--tags", "--abbrev=0"])
 
+    # Debug information
+    all_tags = run_git_command(["git", "tag", "-l"])
+    print(f"Available tags: {all_tags or 'None'}")
+
     if last_tag:
-        # Remove 'v' prefix if present
-        base_version = re.sub(r"^v", "", last_tag)
+        print(f"Found tag: {last_tag}")
+
+        # Filter out repository/product prefixes from tag names
+        # Remove both 'v' prefix and 'cabplanner-' prefix if present
+        base_version = re.sub(r"^(v|cabplanner-)", "", last_tag)
 
         # Count commits since last tag
         commit_count = run_git_command(
@@ -50,12 +60,28 @@ def get_version_from_tags():
         if not commit_count:
             commit_count = "0"
 
-        # If there are commits since the last tag, add counter
+        print(f"Commits since tag: {commit_count}")
+
+        # If there are commits since the last tag, increment the version
         if int(commit_count) > 0:
-            version = f"{base_version}.{commit_count}"
+            # Check if base_version already has a fourth component (e.g., 1.0.0.1)
+            version_parts = base_version.split(".")
+
+            if len(version_parts) >= 4:
+                # Already has a fourth component, increment it
+                try:
+                    version_parts[3] = str(int(version_parts[3]) + 1)
+                    version = ".".join(version_parts)
+                except ValueError:
+                    # Non-numeric fourth component, just append commit count
+                    version = f"{base_version}.{commit_count}"
+            else:
+                # Standard version like 1.0.0, append fourth component
+                version = f"{base_version}.{commit_count}"
         else:
             version = base_version
     else:
+        print("No tags found, using fallback versioning")
         # No tags, use base version 1.0.0 + commit count
         commit_count = run_git_command(["git", "rev-list", "--count", "HEAD"])
         if not commit_count:
