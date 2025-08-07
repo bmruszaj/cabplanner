@@ -17,6 +17,7 @@ $piArgs = @(
   '--icon'; 'icon.ico'
   '--add-data'; 'alembic.ini;.'
   '--add-data'; 'src/db_alembic/migrations;src/db_alembic/migrations'
+  '--add-data'; '.version;.'
   '--add-data'; 'src/gui/resources;src/gui/resources'
   '--add-data'; 'src;src'
   '--hidden-import'; 'docx'
