@@ -9,6 +9,9 @@ src/db_alembic/migrations/versions/__pycache__/
 # SQLite database
 cabplanner.db
 
+# Version control
+.version
+
 # SQLite journal files
 *.db-journal
 

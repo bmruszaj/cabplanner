@@ -30,21 +30,46 @@ jobs:
           pip install -r requirements.txt
           pip install pyinstaller
 
+      - name: Generate version from tags
+        shell: bash
+        run: |
+          # Check for tags
+          if git describe --tags --abbrev=0 2>/dev/null; then
+            # Last tag found, extract version
+            BASE_VERSION=$(git describe --tags --abbrev=0)
+            BASE_VERSION=${BASE_VERSION#v}
+            COMMIT_COUNT=$(git rev-list --count ${BASE_VERSION}..HEAD)
+            
+            # If there are commits since the last tag, append the count
+            if [ "$COMMIT_COUNT" -gt "0" ]; then
+              VERSION="${BASE_VERSION}.${COMMIT_COUNT}"
+            else
+              VERSION="${BASE_VERSION}"
+            fi
+          else
+            # No tags found, use commit count as version
+            COMMIT_COUNT=$(git rev-list --count HEAD)
+            VERSION="1.0.0.${COMMIT_COUNT}"
+          fi
+          
+          echo "$VERSION" > .version
+          
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+
       - name: Run PyInstaller build script
         shell: pwsh
         run: ./scripts/build.ps1
 
       - name: Create ZIP with version
         run: |
-          $version = Get-Date -Format "yyyyMMdd-HHmmss"
-          Compress-Archive -Path dist/cabplanner.exe -DestinationPath "cabplanner-$version.zip"
-          echo "VERSION=$version" >> $env:GITHUB_ENV
+          Compress-Archive -Path dist/cabplanner.exe -DestinationPath "cabplanner-${env:VERSION}.zip"
+          echo "ZIP_NAME=cabplanner-${env:VERSION}.zip" >> $env:GITHUB_ENV
 
       - name: Create GitHub release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: cabplanner-${{ env.VERSION }}
           name: Cabplanner ${{ env.VERSION }}
-          files: cabplanner-${{ env.VERSION }}.zip
+          files: ${{ env.ZIP_NAME }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -108,7 +108,6 @@ def convert_svg_to_png(svg_path, output_path, size=64):
             try:
                 from PySide6.QtSvg import QSvgRenderer
                 from PySide6.QtGui import QImage, QPainter, qRgba
-                from PySide6.QtCore import QSize
 
                 renderer = QSvgRenderer(str(svg_path))
                 image = QImage(size, size, QImage.Format_ARGB32)

@@ -112,6 +112,18 @@ class SettingsDialog(QDialog):
         )
         db_layout.addRow("Częstotliwość sprawdzania:", self.autoupdate_freq)
 
+        # Add version information
+        from src.version import get_version_string, BUILD_DATE
+
+        version_label = QLabel(f"Wersja programu: {get_version_string()}")
+        version_label.setAlignment(Qt.AlignRight)
+        db_layout.addRow("", version_label)
+
+        # Add build date information
+        build_date_label = QLabel(f"Data kompilacji: {BUILD_DATE}")
+        build_date_label.setAlignment(Qt.AlignRight)
+        db_layout.addRow("", build_date_label)
+
         layout.addWidget(db_group)
 
         # Projects settings group

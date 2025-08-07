@@ -614,8 +614,12 @@ class MainWindow(QMainWindow):
         win.show()
 
     def on_show_about(self):
+        from src.version import get_full_version_info
+
         QMessageBox.about(
-            self, self.tr("O programie"), "<h1>Cabplanner</h1><p>© 2025 Cabplanner</p>"
+            self,
+            self.tr("O programie"),
+            f"<h1>Cabplanner</h1><p>{get_full_version_info()}</p><p>© 2025 Cabplanner</p>",
         )
 
     def _apply_theme(self):
