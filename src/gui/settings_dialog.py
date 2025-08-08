@@ -29,6 +29,9 @@ from PySide6.QtGui import QPixmap
 from sqlalchemy.orm import Session
 
 from src.services.settings_service import SettingsService
+from src.services.updater_service import UpdaterService
+from src.gui.update_dialog import UpdateDialog
+from src.version import VERSION
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -108,9 +111,15 @@ class SettingsDialog(QDialog):
 
         self.autoupdate_freq = QComboBox()
         self.autoupdate_freq.addItems(
-            ["Codziennie", "Co tydzień", "Co miesiąc", "Nigdy"]
+            ["Przy uruchomieniu", "Codziennie", "Co tydzień", "Co miesiąc", "Nigdy"]
         )
         db_layout.addRow("Częstotliwość sprawdzania:", self.autoupdate_freq)
+
+        # Shortcut creation setting
+        self.create_shortcut_check = QCheckBox(
+            "Twórz skrót przy uruchomieniu aplikacji"
+        )
+        db_layout.addRow(self.create_shortcut_check)
 
         # Add version information
         from src.version import get_version_string, BUILD_DATE
@@ -123,6 +132,12 @@ class SettingsDialog(QDialog):
         build_date_label = QLabel(f"Data kompilacji: {BUILD_DATE}")
         build_date_label.setAlignment(Qt.AlignRight)
         db_layout.addRow("", build_date_label)
+
+        # Add check for updates button
+        update_btn = QPushButton("Sprawdź aktualizacje")
+        update_btn.clicked.connect(self.check_for_updates)
+        update_btn.setProperty("class", "primary")
+        db_layout.addRow("", update_btn)
 
         layout.addWidget(db_group)
 
@@ -302,12 +317,38 @@ class SettingsDialog(QDialog):
                 self.settings_service.get_setting_value("auto_update_enabled", True)
             )
 
+            # Make sure dropdown is properly populated first
+            self.autoupdate_freq.clear()
+            self.autoupdate_freq.addItems(
+                ["Przy uruchomieniu", "Codziennie", "Co tydzień", "Co miesiąc", "Nigdy"]
+            )
+
+            # Then set the current value
             autoupdate_freq = self.settings_service.get_setting_value(
                 "auto_update_frequency", "Co tydzień"
             )
+            logger.debug("Loading auto_update_frequency setting: %s", autoupdate_freq)
+
             index = self.autoupdate_freq.findText(autoupdate_freq)
+            logger.debug("Found index for frequency %s: %s", autoupdate_freq, index)
+
             if index >= 0:
                 self.autoupdate_freq.setCurrentIndex(index)
+            else:
+                # Default to weekly if the saved value isn't found
+                default_index = self.autoupdate_freq.findText("Co tydzień")
+                self.autoupdate_freq.setCurrentIndex(default_index)
+                logger.warning(
+                    "Invalid auto_update_frequency: %s, defaulting to weekly",
+                    autoupdate_freq,
+                )
+
+            # Shortcut creation setting
+            self.create_shortcut_check.setChecked(
+                self.settings_service.get_setting_value(
+                    "create_shortcut_on_start", True
+                )
+            )
 
             # Project settings
             self.auto_numbering_check.setChecked(
@@ -415,6 +456,11 @@ class SettingsDialog(QDialog):
 
             self.settings_service.set_setting(
                 "auto_update_frequency", self.autoupdate_freq.currentText()
+            )
+
+            # Shortcut creation setting
+            self.settings_service.set_setting(
+                "create_shortcut_on_start", self.create_shortcut_check.isChecked()
             )
 
             # Project settings
@@ -562,7 +608,8 @@ class SettingsDialog(QDialog):
             # Set default values for core settings
             default_settings = {
                 "auto_update_enabled": True,
-                "auto_update_frequency": "Co tydzień",
+                "auto_update_frequency": "Przy uruchomieniu",
+                "create_shortcut_on_start": True,
                 "auto_numbering": True,
                 "default_kitchen_type": "LOFT",
                 "dark_mode": False,
@@ -614,3 +661,67 @@ class SettingsDialog(QDialog):
             QMessageBox.critical(
                 self, "Błąd", f"Wystąpił błąd podczas resetowania ustawień: {str(e)}"
             )
+
+    def check_for_updates(self):
+        """Open update dialog and automatically trigger update check."""
+        try:
+            updater = UpdaterService(self)
+            dialog = UpdateDialog(VERSION, parent=self)
+
+            # Connect signals with new exception-based error system
+            dialog.check_for_updates.connect(updater.check_for_updates)
+            dialog.perform_update.connect(lambda: dialog.on_update_started())
+            dialog.perform_update.connect(updater.perform_update)
+            dialog.cancel_update.connect(updater.cancel_update)
+
+            # Handle update check results
+            updater.update_check_complete.connect(
+                lambda avail, cur, lat: (
+                    dialog.update_available(cur, lat)
+                    if avail
+                    else dialog.no_update_available()
+                )
+            )
+
+            # Handle update check failures with new exception-based system
+            updater.update_check_failed.connect(dialog.update_check_failed)
+
+            # Handle update progress and completion with correct signal names
+            updater.update_progress.connect(dialog.on_update_progress)
+            updater.update_complete.connect(dialog.on_update_complete)
+            updater.update_failed.connect(dialog.on_update_failed)
+
+            # Handle cancellation
+            dialog.cancel_update.connect(dialog.reject)
+
+            # Show dialog and immediately trigger update check
+            dialog.show()
+            updater.check_for_updates()
+
+        except Exception as e:
+            logger.exception("Error in update process: %s", e)
+            QMessageBox.critical(
+                self, self.tr("Błąd aktualizacji"), self.tr(f"Wystąpił błąd: {e}")
+            )
+
+    def _direct_handle_update_result(
+        self, dialog, update_available, current_version, latest_version
+    ):
+        """Directly handle update check result and update dialog UI"""
+        print(
+            f"DEBUG: Direct update check result handler called: available={update_available}, current={current_version}, latest={latest_version}"
+        )
+
+        if update_available:
+            dialog.update_available(current_version, latest_version)
+        else:
+            dialog.no_update_available()
+
+    def _perform_update(self, updater_service, dialog):
+        """Perform the update process"""
+        try:
+            dialog.update_started()
+            updater_service.perform_update()
+        except Exception as e:
+            logger.exception(f"Error during update: {e}")
+            dialog.update_failed(str(e))
