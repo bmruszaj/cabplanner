@@ -116,7 +116,9 @@ class SettingsDialog(QDialog):
         db_layout.addRow("Częstotliwość sprawdzania:", self.autoupdate_freq)
 
         # Shortcut creation setting
-        self.create_shortcut_check = QCheckBox("Twórz skrót przy uruchomieniu aplikacji")
+        self.create_shortcut_check = QCheckBox(
+            "Twórz skrót przy uruchomieniu aplikacji"
+        )
         db_layout.addRow(self.create_shortcut_check)
 
         # Add version information
@@ -343,7 +345,9 @@ class SettingsDialog(QDialog):
 
             # Shortcut creation setting
             self.create_shortcut_check.setChecked(
-                self.settings_service.get_setting_value("create_shortcut_on_start", True)
+                self.settings_service.get_setting_value(
+                    "create_shortcut_on_start", True
+                )
             )
 
             # Project settings

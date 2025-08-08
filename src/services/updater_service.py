@@ -3,16 +3,13 @@ import sys
 import shutil
 import logging
 import zipfile
-from tempfile import TemporaryDirectory
 
 import requests
 import subprocess
 from pathlib import Path
 from datetime import datetime, timezone
 from enum import Enum, auto
-from typing import Callable
 from PySide6.QtCore import QObject, Signal, QTimer
-from PySide6.QtWidgets import QMessageBox
 
 logger = logging.getLogger(__name__)
 
@@ -271,7 +268,9 @@ class UpdaterService(QObject):
             logger.info("Automatic updates disabled in settings")
             return False
 
-        freq_label = settings_service.get_setting_value("auto_update_frequency", "Co tydzień")
+        freq_label = settings_service.get_setting_value(
+            "auto_update_frequency", "Co tydzień"
+        )
         freq = LABEL_TO_FREQ.get(freq_label, UpdateFrequency.WEEKLY)
         last_iso = settings_service.get_setting_value("last_update_check", "")
         if not last_iso:
@@ -306,8 +305,8 @@ class UpdaterService(QObject):
             logger.info("Latest version available: %s", tag)
 
             curr_tup = self._version_to_tuple(self.current_version)
-            new_tup  = self._version_to_tuple(tag)
-            avail    = new_tup > curr_tup
+            new_tup = self._version_to_tuple(tag)
+            avail = new_tup > curr_tup
 
             self.update_check_complete.emit(avail, self.current_version, tag)
             return avail, self.current_version, tag
@@ -334,15 +333,19 @@ class UpdaterService(QObject):
             # Skip update in development mode
             if is_running_in_development_mode():
                 logger.warning("Cannot perform update in development mode")
-                self.update_failed.emit("Aktualizacja nie jest dostępna w trybie deweloperskim")
+                self.update_failed.emit(
+                    "Aktualizacja nie jest dostępna w trybie deweloperskim"
+                )
                 return
 
             # Get current executable path and install directory
-            if getattr(sys, 'frozen', False):
+            if getattr(sys, "frozen", False):
                 current_exe_path = Path(sys.executable)
                 install_dir = current_exe_path.parent
             else:
-                self.update_failed.emit("Nie można zaktualizować: aplikacja nie jest skompilowana")
+                self.update_failed.emit(
+                    "Nie można zaktualizować: aplikacja nie jest skompilowana"
+                )
                 return
 
             logger.info(f"Current install directory: {install_dir}")
@@ -363,13 +366,18 @@ class UpdaterService(QObject):
 
             if not download_url:
                 logger.error("No ZIP assets found in release")
-                available_assets = [asset["name"] for asset in release_info.get("assets", [])]
+                available_assets = [
+                    asset["name"] for asset in release_info.get("assets", [])
+                ]
                 logger.error(f"Available assets: {available_assets}")
-                self.update_failed.emit("Nie znaleziono pakietu aktualizacji (ZIP) dla Windows")
+                self.update_failed.emit(
+                    "Nie znaleziono pakietu aktualizacji (ZIP) dla Windows"
+                )
                 return
 
             # Create temporary directory for update
             import tempfile
+
             temp_dir = Path(tempfile.mkdtemp(prefix="cabplanner_update_"))
             extract_dir = temp_dir / "extracted"
             extract_dir.mkdir()
@@ -382,7 +390,9 @@ class UpdaterService(QObject):
             success = download_file_with_progress(
                 download_url,
                 zip_path,
-                progress_callback=lambda p: self.update_progress.emit(min(int(p * 0.7), 70))
+                progress_callback=lambda p: self.update_progress.emit(
+                    min(int(p * 0.7), 70)
+                ),
             )
 
             if not success:
@@ -393,7 +403,7 @@ class UpdaterService(QObject):
             # Extract the zip file (70-80% progress)
             self.update_progress.emit(75)
             try:
-                with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+                with zipfile.ZipFile(zip_path, "r") as zip_ref:
                     safe_extract(zip_ref, extract_dir)
                 logger.info(f"Extracted update to: {extract_dir}")
             except Exception as e:
@@ -407,7 +417,9 @@ class UpdaterService(QObject):
             if not new_dir or not new_dir.exists():
                 logger.error("No app root found in extracted files")
                 shutil.rmtree(temp_dir, ignore_errors=True)
-                self.update_failed.emit("Nie znaleziono aplikacji w pakiecie aktualizacji")
+                self.update_failed.emit(
+                    "Nie znaleziono aplikacji w pakiecie aktualizacji"
+                )
                 return
 
             logger.info(f"Found app root: {new_dir}")
@@ -425,7 +437,9 @@ class UpdaterService(QObject):
                 self.update_failed.emit("Pobrany plik aktualizacji jest uszkodzony")
                 return
 
-            logger.info(f"Update package ready: {new_exe} ({new_exe.stat().st_size} bytes)")
+            logger.info(
+                f"Update package ready: {new_exe} ({new_exe.stat().st_size} bytes)"
+            )
 
             # Update progress (80-100%)
             self.update_progress.emit(90)
@@ -439,7 +453,9 @@ class UpdaterService(QObject):
             self.update_complete.emit()
 
             # Use a short delay to ensure UI updates, then restart using in-place update
-            QTimer.singleShot(1000, lambda: self._write_and_run_inplace_update(install_dir, new_dir))
+            QTimer.singleShot(
+                1000, lambda: self._write_and_run_inplace_update(install_dir, new_dir)
+            )
 
         except Exception as e:
             logger.exception(f"Error during update process: {e}")
@@ -447,7 +463,7 @@ class UpdaterService(QObject):
 
     def create_shortcut_on_first_run(self):
         """Create shortcut on first application run."""
-        if getattr(sys, 'frozen', False):
+        if getattr(sys, "frozen", False):
             current_exe_path = Path(sys.executable)
             install_dir = current_exe_path.parent
             _create_shortcut_if_missing(install_dir)

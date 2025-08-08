@@ -183,7 +183,9 @@ class UpdateDialog(QDialog):
     def on_update_completed(self):
         """Show that the update has completed and will restart immediately."""
         self.progress_bar.setValue(100)
-        self.status_label.setText(self.tr("Aktualizacja zakończona! Restartowanie aplikacji..."))
+        self.status_label.setText(
+            self.tr("Aktualizacja zakończona! Restartowanie aplikacji...")
+        )
         self.cancel_button.setEnabled(False)
 
         # Force UI update

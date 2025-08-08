@@ -26,7 +26,7 @@ $piArgs = @(
   '--hidden-import'; 'requests'
   '--collect-submodules'; 'alembic'
   '--name'; 'cabplanner'
-  'src/gui/main_app.py'
+  'src/main_app.py'
 )
 
 # Run PyInstaller
