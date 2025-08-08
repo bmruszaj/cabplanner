@@ -1,4 +1,4 @@
-name: Build and Release EXE
+name: Build and Release
 
 on:
   workflow_run:
@@ -12,7 +12,7 @@ permissions:
   contents: write
 
 jobs:
-  build-windows-exe:
+  build-windows:
     runs-on: windows-latest
 
     steps:
@@ -47,9 +47,9 @@ jobs:
         shell: pwsh
         run: ./scripts/build.ps1
 
-      - name: Create ZIP with version
+      - name: Create ZIP with cabplanner folder
         run: |
-          Compress-Archive -Path dist/cabplanner.exe -DestinationPath "cabplanner-${env:VERSION}.zip"
+          Compress-Archive -Path dist/cabplanner -DestinationPath "cabplanner-${env:VERSION}.zip"
           echo "ZIP_NAME=cabplanner-${env:VERSION}.zip" >> $env:GITHUB_ENV
 
       - name: Create GitHub release

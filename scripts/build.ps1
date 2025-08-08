@@ -12,7 +12,7 @@ Write-Host "🧰 Building Cabplanner with PyInstaller…"
 # Build arguments
 $piArgs = @(
   '--clean'
-  '--onefile'
+  '--onedir'
   '--windowed'
   '--icon'; 'icon.ico'
   '--add-data'; 'alembic.ini;.'
@@ -38,7 +38,23 @@ if ($LASTEXITCODE -ne 0) {
     exit $LASTEXITCODE
 }
 
-Write-Host "✅ Build succeeded! See dist\cabplanner.exe"
+Write-Host "✅ PyInstaller build succeeded!"
+
+# Create shortcut for cabplanner.exe
+Write-Host "🔗 Creating shortcut..."
+
+$WScriptShell = New-Object -ComObject WScript.Shell
+$Shortcut = $WScriptShell.CreateShortcut("dist\cabplanner\Cabplanner.lnk")
+$Shortcut.TargetPath = (Resolve-Path "dist\cabplanner\cabplanner.exe").Path
+$Shortcut.WorkingDirectory = (Resolve-Path "dist\cabplanner").Path
+$Shortcut.IconLocation = (Resolve-Path "icon.ico").Path + ",0"
+$Shortcut.Description = "Cabplanner Application"
+$Shortcut.Save()
+
+Write-Host "✅ Build completed! See dist\cabplanner\ folder with:"
+Write-Host "   - cabplanner.exe (main executable)"
+Write-Host "   - _internal\ (supporting files)"
+Write-Host "   - Cabplanner.lnk (shortcut)"
 
 # Return to original directory
 Pop-Location
