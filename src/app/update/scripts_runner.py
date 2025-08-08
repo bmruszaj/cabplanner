@@ -7,6 +7,7 @@ from typing import List, Optional
 
 logger = logging.getLogger(__name__)
 
+
 def run_powershell(
     script_content: str, args: Optional[List[str]] = None, hidden: bool = True
 ) -> subprocess.Popen:
@@ -34,9 +35,11 @@ def run_powershell(
     # Build command line - Use full PowerShell path for reliability
     cmd = [
         "powershell.exe",
-        "-ExecutionPolicy", "Bypass",
+        "-ExecutionPolicy",
+        "Bypass",
         "-NoProfile",  # Don't load user profile for faster startup
-        "-File", str(ps_path)
+        "-File",
+        str(ps_path),
     ]
 
     if hidden:
@@ -75,6 +78,7 @@ def run_powershell(
         # If we're capturing output (for debugging), check for immediate errors
         if hidden and stdout == subprocess.PIPE:
             import time
+
             time.sleep(0.5)  # Give it a moment
 
             poll_result = process.poll()
@@ -82,7 +86,9 @@ def run_powershell(
                 # Process exited, capture output
                 try:
                     stdout_data, stderr_data = process.communicate(timeout=1)
-                    logger.error("PowerShell script failed with exit code: %s", poll_result)
+                    logger.error(
+                        "PowerShell script failed with exit code: %s", poll_result
+                    )
                     if stdout_data:
                         logger.error("PowerShell stdout: %s", stdout_data.strip())
                     if stderr_data:

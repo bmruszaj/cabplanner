@@ -230,7 +230,9 @@ class UpdateWorker(QRunnable):
                 self.service.update_complete.emit()
 
                 # Emit signal to start script on main thread (no timer needed in worker)
-                self.service.request_start_script.emit(str(current_install_dir), str(app_root))
+                self.service.request_start_script.emit(
+                    str(current_install_dir), str(app_root)
+                )
 
             finally:
                 # Clean up on error (temp dir will be cleaned by update script on success)
@@ -245,6 +247,7 @@ class UpdateWorker(QRunnable):
             else:
                 error = UpdateError(f"Unexpected error: {e}")
                 self.service.update_failed.emit(error)
+
 
 class UpdaterService(QObject):
     """Service for checking updates and performing application updates."""
@@ -355,7 +358,9 @@ class UpdaterService(QObject):
     def _start_update_script(self, install_dir: str, new_dir: str):
         """Start the update script on the main thread with a small delay."""
         # Small delay so UI can repaint
-        QTimer.singleShot(500, lambda: self._run_update_script(Path(install_dir), Path(new_dir)))
+        QTimer.singleShot(
+            500, lambda: self._run_update_script(Path(install_dir), Path(new_dir))
+        )
 
     def _run_update_script(self, install_dir: Path, new_dir: Path):
         """Run the PowerShell update script on the main thread."""
@@ -366,29 +371,36 @@ class UpdaterService(QObject):
 
             # Verify paths exist before running script
             if not install_dir.exists():
-                raise ScriptFailedError(f"Install directory does not exist: {install_dir}")
+                raise ScriptFailedError(
+                    f"Install directory does not exist: {install_dir}"
+                )
             if not new_dir.exists():
                 raise ScriptFailedError(f"New directory does not exist: {new_dir}")
 
             script_content = get_update_script()
-            logger.info("Generated PowerShell script (length: %d chars)", len(script_content))
+            logger.info(
+                "Generated PowerShell script (length: %d chars)", len(script_content)
+            )
 
             # Log script arguments for debugging
             script_args = [str(install_dir), str(new_dir)]
             logger.info("Script arguments: %s", script_args)
 
-            process = run_powershell(
-                script_content, script_args, hidden=True
-            )
+            process = run_powershell(script_content, script_args, hidden=True)
             logger.info("Started update script with PID: %s", process.pid)
 
             # Check if process is still running after a brief moment
             import time
+
             time.sleep(0.5)
             poll_result = process.poll()
             if poll_result is not None:
-                logger.error("PowerShell process exited immediately with code: %s", poll_result)
-                raise ScriptFailedError(f"PowerShell script failed immediately with exit code: {poll_result}")
+                logger.error(
+                    "PowerShell process exited immediately with code: %s", poll_result
+                )
+                raise ScriptFailedError(
+                    f"PowerShell script failed immediately with exit code: {poll_result}"
+                )
             else:
                 logger.info("PowerShell process is running successfully")
 
@@ -404,6 +416,7 @@ class UpdaterService(QObject):
         """Quit the application (called on main thread)."""
         try:
             from PySide6.QtCore import QCoreApplication
+
             logger.info("Quitting application for update...")
             QCoreApplication.quit()
         except Exception as e:
