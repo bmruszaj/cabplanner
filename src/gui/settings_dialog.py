@@ -668,10 +668,11 @@ class SettingsDialog(QDialog):
             updater = UpdaterService(self)
             dialog = UpdateDialog(VERSION, parent=self)
 
-            # Connect signals
+            # Connect signals with new exception-based error system
             dialog.check_for_updates.connect(updater.check_for_updates)
             dialog.perform_update.connect(lambda: dialog.on_update_started())
             dialog.perform_update.connect(updater.perform_update)
+            dialog.cancel_update.connect(updater.cancel_update)
 
             # Handle update check results
             updater.update_check_complete.connect(
@@ -682,9 +683,12 @@ class SettingsDialog(QDialog):
                 )
             )
 
-            # Handle update progress and completion
+            # Handle update check failures with new exception-based system
+            updater.update_check_failed.connect(dialog.update_check_failed)
+
+            # Handle update progress and completion with correct signal names
             updater.update_progress.connect(dialog.on_update_progress)
-            updater.update_complete.connect(dialog.on_update_completed)
+            updater.update_complete.connect(dialog.on_update_complete)
             updater.update_failed.connect(dialog.on_update_failed)
 
             # Handle cancellation

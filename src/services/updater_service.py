@@ -1,58 +1,33 @@
 import os
-import sys
-import shutil
 import logging
-import zipfile
-
-import requests
-import subprocess
+import shutil
 from pathlib import Path
 from datetime import datetime, timezone
 from enum import Enum, auto
-from PySide6.QtCore import QObject, Signal, QTimer
+
+from PySide6.QtCore import QObject, Signal, QTimer, QRunnable, QThreadPool
+
+from src.app.update.runtime import is_frozen, install_dir, tempdir
+from src.app.update.github_client import GitHubClient
+from src.app.update.versioning import is_newer_version
+from src.app.update.downloader import download, DownloadCancelled
+from src.app.update.zipops import safe_extract, find_app_root, verify_onedir_structure
+from src.app.update.scripts_runner import run_powershell
+from src.app.update.errors import (
+    UpdateError,
+    NetworkError,
+    NoAssetError,
+    BadArchiveError,
+    UpdateCancelledError,
+    NotFrozenError,
+    GitHubAPIError,
+    ExtractionFailedError,
+    ScriptFailedError,
+)
+from scripts.update import get_update_script
+from scripts.shortcut import get_shortcut_script
 
 logger = logging.getLogger(__name__)
-
-
-def is_running_in_development_mode() -> bool:
-    """
-    Detect if the application is running in development mode.
-    Returns True if running as Python script (e.g., from PyCharm), False if running as compiled executable.
-    """
-    # Check if running as frozen executable (PyInstaller, cx_Freeze, etc.)
-    if getattr(sys, "frozen", False):
-        logger.debug("Application is running as compiled executable")
-        return False
-
-    # Check if running from PyCharm specifically
-    if "pycharm" in os.environ.get("_", "").lower():
-        logger.debug("Application is running from PyCharm IDE")
-        return True
-
-    # Check for PyCharm environment variables
-    pycharm_vars = ["PYCHARM_HOSTED", "PYCHARM_DISPLAY_PORT", "JETBRAINS_IDE"]
-    if any(var in os.environ for var in pycharm_vars):
-        logger.debug(
-            "Application is running in PyCharm (environment variables detected)"
-        )
-        return True
-
-    # Check if sys.executable is python.exe (indicating script mode)
-    if sys.executable.endswith(("python.exe", "python3.exe", "python")):
-        logger.debug("Application is running as Python script")
-        return True
-
-    # Check if __file__ exists and points to a .py file
-    try:
-        main_file = sys.modules["__main__"].__file__
-        if main_file and main_file.endswith(".py"):
-            logger.debug("Application is running from .py file: %s", main_file)
-            return True
-    except (AttributeError, KeyError):
-        pass
-
-    logger.debug("Application appears to be running as compiled executable")
-    return False
 
 
 class UpdateFrequency(Enum):
@@ -71,11 +46,7 @@ LABEL_TO_FREQ = {
     "Nigdy": UpdateFrequency.NEVER,
 }
 
-
 GITHUB_REPO = "bmruszaj/cabplanner"
-RELEASE_API_URL = f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest"
-
-logger.info("Updater service module initialized with repository: %s", GITHUB_REPO)
 
 
 def get_current_version() -> str:
@@ -91,175 +62,215 @@ def get_current_version() -> str:
         return "0.0.0"
 
 
-def get_latest_release_info() -> dict:
-    """Fetch information about the latest GitHub release."""
-    logger.debug("Fetching latest release info from: %s", RELEASE_API_URL)
-    try:
-        response = requests.get(RELEASE_API_URL, timeout=5)
-        response.raise_for_status()
-        release_info = response.json()
-        tag = release_info.get("tag_name", "unknown")
-        logger.debug("GitHub API response successful, release tag: %s", tag)
-        return release_info
-    except requests.exceptions.RequestException as e:
-        logger.error("Failed to fetch release info: %s", e)
-        raise
+class UpdateCheckWorker(QRunnable):
+    """Worker for checking updates in background thread."""
 
+    def __init__(self, service: "UpdaterService"):
+        super().__init__()
+        self.service = service
 
-def download_file_with_progress(
-    url: str, dest_path: Path, progress_callback=None
-) -> bool:
-    """Download a file with progress reporting."""
-    logger.debug("Starting download from URL: %s to path: %s", url, dest_path)
-    try:
-        response = requests.get(url, stream=True, timeout=30)
-        response.raise_for_status()
-        total_size = int(response.headers.get("content-length", 0))
-        block_size = 1024
-        downloaded = 0
-        last_log_percent = 0
-
-        with open(dest_path, "wb") as f:
-            for chunk in response.iter_content(block_size):
-                downloaded += len(chunk)
-                f.write(chunk)
-                if progress_callback and total_size:
-                    percent = int(downloaded * 100 / total_size)
-                    progress_callback(percent)
-                    current_log = (percent // 10) * 10
-                    if current_log > last_log_percent:
-                        logger.debug(
-                            "Download progress: %d%% (%0.2f KB/%0.2f KB)",
-                            percent,
-                            downloaded / 1024,
-                            total_size / 1024,
-                        )
-                        last_log_percent = current_log
-
-        logger.debug("Download completed: %s", dest_path)
-        return True
-    except requests.exceptions.Timeout as e:
-        logger.error("Timeout downloading %s: %s", url, e)
-        return False
-    except Exception:
-        logger.exception("Unexpected error downloading %s", url)
-        return False
-
-
-def safe_extract(zip_ref: zipfile.ZipFile, extract_path: Path):
-    """Safely extract zip to prevent zip-slip vulnerabilities."""
-    for member in zip_ref.namelist():
-        member_path = extract_path / member
-        if not str(member_path.resolve()).startswith(str(extract_path.resolve())):
-            raise RuntimeError(f"Illegal path in zip: {member}")
-    zip_ref.extractall(path=extract_path)
-
-
-def _find_extracted_app_root(extract_dir: Path) -> Path | None:
-    """Find the extracted app root by locating cabplanner.exe."""
-    exe = next(extract_dir.rglob("cabplanner.exe"), None)
-    return exe.parent if exe else None
-
-
-def _create_shortcut_if_missing(install_dir: Path):
-    """Create desktop shortcut if it doesn't exist (first run only)."""
-    shortcut_path = install_dir / "Cabplanner.lnk"
-    exe_path = install_dir / "cabplanner.exe"
-
-    # Only create if both exe exists and shortcut doesn't exist
-    if exe_path.exists() and not shortcut_path.exists():
+    def run(self):
+        """Check for updates without blocking UI."""
         try:
-            # Use PowerShell to create shortcut with icon
-            ps_script = f"""
-$WScriptShell = New-Object -ComObject WScript.Shell
-$Shortcut = $WScriptShell.CreateShortcut("{shortcut_path}")
-$Shortcut.TargetPath = "{exe_path}"
-$Shortcut.WorkingDirectory = "{install_dir}"
-$Shortcut.IconLocation = "{exe_path},0"
-$Shortcut.Description = "Cabplanner Application"
-$Shortcut.Save()
-"""
+            current_version = get_current_version()
 
-            import tempfile
+            # Get GitHub token from environment
+            github_token = os.environ.get("GITHUB_TOKEN")
+            client = GitHubClient(GITHUB_REPO, github_token)
 
-            ps_path = Path(tempfile.gettempdir()) / "create_shortcut.ps1"
-            ps_path.write_text(ps_script, encoding="utf-8")
-
-            result = subprocess.run(
-                [
-                    "powershell.exe",
-                    "-ExecutionPolicy",
-                    "Bypass",
-                    "-File",
-                    str(ps_path),
-                ],
-                capture_output=True,
-                text=True,
+            release_info = client.get_latest_release()
+            latest_version = release_info.tag_name.lstrip("v").replace(
+                "cabplanner-", ""
             )
 
-            if result.returncode == 0:
-                logger.info(f"Created shortcut: {shortcut_path}")
-            else:
-                logger.warning(f"Failed to create shortcut: {result.stderr}")
+            is_available = is_newer_version(current_version, latest_version)
 
-            # Clean up temp script
-            ps_path.unlink(missing_ok=True)
+            logger.info(
+                "Update check completed: current=%s, latest=%s, available=%s",
+                current_version,
+                latest_version,
+                is_available,
+            )
+
+            # Emit signal on main thread
+            self.service.update_check_complete.emit(
+                is_available, current_version, latest_version
+            )
 
         except Exception as e:
-            logger.warning(f"Could not create shortcut: {e}")
+            logger.exception("Update check failed: %s", e)
+            # Convert to appropriate exception type
+            if "timeout" in str(e).lower() or "connection" in str(e).lower():
+                error = NetworkError(f"Network error: {e}")
+            elif "github" in str(e).lower() or "api" in str(e).lower():
+                error = GitHubAPIError(f"GitHub API error: {e}")
+            else:
+                error = UpdateError(f"Update check failed: {e}")
 
+            self.service.update_check_failed.emit(error)
+
+
+class UpdateWorker(QRunnable):
+    """Worker for performing updates in background thread."""
+
+    def __init__(self, service: "UpdaterService"):
+        super().__init__()
+        self.service = service
+        self.cancelled = False
+
+    def is_cancelled(self) -> bool:
+        """Check if update was cancelled."""
+        return self.cancelled
+
+    def cancel(self):
+        """Cancel the update operation."""
+        self.cancelled = True
+
+    def run(self):
+        """Perform update without blocking UI."""
+        try:
+            # Check if frozen
+            if not is_frozen():
+                logger.error("Cannot update in development mode")
+                error = NotFrozenError("Cannot update in development mode")
+                self.service.update_failed.emit(error)
+                return
+
+            current_install_dir = install_dir()
+            temp_dir = tempdir()
+
+            try:
+                # Get release info
+                github_token = os.environ.get("GITHUB_TOKEN")
+                client = GitHubClient(GITHUB_REPO, github_token)
+                release_info = client.get_latest_release()
+
+                # Find Windows onedir ZIP asset
+                zip_asset = None
+                for asset in release_info.assets:
+                    if asset.name.endswith(".zip"):
+                        zip_asset = asset
+                        break
+
+                if not zip_asset:
+                    logger.error("No ZIP asset found in release")
+                    error = NoAssetError("No Windows ZIP package found")
+                    self.service.update_failed.emit(error)
+                    return
+
+                # Download with progress (0-70%)
+                zip_path = temp_dir / "update.zip"
+                try:
+                    download(
+                        zip_asset.download_url,
+                        zip_path,
+                        progress_callback=lambda p: self.service.update_progress.emit(
+                            min(int(p * 0.7), 70)
+                        ),
+                        is_cancelled=self.is_cancelled,
+                        timeout=30,
+                    )
+                except DownloadCancelled:
+                    error = UpdateCancelledError("Download cancelled")
+                    self.service.update_failed.emit(error)
+                    return
+
+                if self.is_cancelled():
+                    error = UpdateCancelledError("Update cancelled")
+                    self.service.update_failed.emit(error)
+                    return
+
+                # Extract (70-85%)
+                self.service.update_progress.emit(75)
+                extract_dir = temp_dir / "extracted"
+                try:
+                    safe_extract(zip_path, extract_dir)
+                except Exception as e:
+                    logger.error("Extraction failed: %s", e)
+                    error = ExtractionFailedError(f"Failed to extract ZIP: {e}")
+                    self.service.update_failed.emit(error)
+                    return
+
+                if self.is_cancelled():
+                    error = UpdateCancelledError("Update cancelled")
+                    self.service.update_failed.emit(error)
+                    return
+
+                # Find and verify app root (85-95%)
+                self.service.update_progress.emit(85)
+                app_root = find_app_root(extract_dir)
+                if not app_root:
+                    error = BadArchiveError(
+                        "Application executable not found in package"
+                    )
+                    self.service.update_failed.emit(error)
+                    return
+
+                if not verify_onedir_structure(app_root):
+                    error = BadArchiveError("Invalid onedir package structure")
+                    self.service.update_failed.emit(error)
+                    return
+
+                # Remove packaged database to preserve user data
+                packaged_db = app_root / "cabplanner.db"
+                if packaged_db.exists():
+                    packaged_db.unlink()
+                    logger.info("Removed packaged database to preserve user data")
+
+                if self.is_cancelled():
+                    error = UpdateCancelledError("Update cancelled")
+                    self.service.update_failed.emit(error)
+                    return
+
+                # Prepare for update (95-100%)
+                self.service.update_progress.emit(95)
+                self.service.update_progress.emit(100)
+
+                # Signal completion and start update process
+                self.service.update_complete.emit()
+
+                # Emit signal to start script on main thread (no timer needed in worker)
+                self.service.request_start_script.emit(str(current_install_dir), str(app_root))
+
+            finally:
+                # Clean up on error (temp dir will be cleaned by update script on success)
+                if self.cancelled and temp_dir.exists():
+                    shutil.rmtree(temp_dir, ignore_errors=True)
+
+        except Exception as e:
+            logger.exception("Update failed: %s", e)
+            # Convert to appropriate exception type
+            if isinstance(e, UpdateError):
+                self.service.update_failed.emit(e)
+            else:
+                error = UpdateError(f"Unexpected error: {e}")
+                self.service.update_failed.emit(error)
 
 class UpdaterService(QObject):
     """Service for checking updates and performing application updates."""
 
+    # Signals - now emit exception objects instead of enum codes
     update_progress = Signal(int)
     update_complete = Signal()
-    update_failed = Signal(str)
-    update_check_complete = Signal(bool, str, str)
+    update_failed = Signal(Exception)  # Now emits exception objects
+    update_check_complete = Signal(bool, str, str)  # available, current, latest
+    update_check_failed = Signal(Exception)  # Now emits exception objects
+
+    # New signals for moving timer operations to main thread
+    request_start_script = Signal(str, str)  # install_dir, new_dir
+    request_quit = Signal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self.current_version = get_current_version()
-        logger.info("Current application version: %s", self.current_version)
+        self.thread_pool = QThreadPool()
+        self.update_worker = None
 
-    def _write_and_run_inplace_update(self, install_dir: Path, new_dir: Path):
-        """Write and execute PowerShell script for in-place folder update."""
-        import tempfile
+        # Connect signals to move timer operations to main thread
+        self.request_start_script.connect(self._start_update_script)
+        self.request_quit.connect(self._quit_application)
 
-        try:
-            from scripts.update import get_update_script
-
-            script_content = get_update_script()
-        except ImportError:
-            logger.error("Could not import update script")
-            self.update_failed.emit("Nie można załadować skryptu aktualizacji")
-            return
-
-        ps_path = Path(tempfile.gettempdir()) / "cabplanner_inplace_update.ps1"
-        ps_path.write_text(script_content, encoding="utf-8")
-
-        logger.info(f"Created PowerShell update script: {ps_path}")
-        logger.info(f"Install directory: {install_dir}")
-        logger.info(f"New package directory: {new_dir}")
-
-        subprocess.Popen(
-            [
-                "powershell.exe",
-                "-ExecutionPolicy",
-                "Bypass",
-                "-WindowStyle",
-                "Hidden",
-                "-File",
-                str(ps_path),
-                str(install_dir),
-                str(new_dir),
-            ],
-            creationflags=getattr(subprocess, "CREATE_NEW_CONSOLE", 0),
-        )
-
-        from PySide6.QtCore import QCoreApplication
-
-        QCoreApplication.quit()
+        logger.info("UpdaterService initialized with version: %s", self.current_version)
 
     def should_check_for_updates(self, settings_service) -> bool:
         """Decide whether to check for updates based on user settings."""
@@ -273,6 +284,7 @@ class UpdaterService(QObject):
         )
         freq = LABEL_TO_FREQ.get(freq_label, UpdateFrequency.WEEKLY)
         last_iso = settings_service.get_setting_value("last_update_check", "")
+
         if not last_iso:
             return True
 
@@ -288,182 +300,111 @@ class UpdaterService(QObject):
         delta = (now - last_dt).days
         if freq is UpdateFrequency.ON_LAUNCH:
             return True
-        if freq is UpdateFrequency.DAILY:
+        elif freq is UpdateFrequency.DAILY:
             return delta >= 1
-        if freq is UpdateFrequency.WEEKLY:
+        elif freq is UpdateFrequency.WEEKLY:
             return delta >= 7
-        if freq is UpdateFrequency.MONTHLY:
+        elif freq is UpdateFrequency.MONTHLY:
             return delta >= 30
         return False  # NEVER
 
-    def check_for_updates(self) -> tuple[bool, str, str]:
-        """Check GitHub for a newer release."""
-        try:
-            logger.info("Checking for application updates...")
-            info = get_latest_release_info()
-            tag = info.get("tag_name", "").lstrip("v").replace("cabplanner-", "")
-            logger.info("Latest version available: %s", tag)
-
-            curr_tup = self._version_to_tuple(self.current_version)
-            new_tup = self._version_to_tuple(tag)
-            avail = new_tup > curr_tup
-
-            self.update_check_complete.emit(avail, self.current_version, tag)
-            return avail, self.current_version, tag
-        except Exception:
-            logger.exception("Failed to check for updates")
-            self.update_check_complete.emit(False, self.current_version, "")
-            return False, self.current_version, ""
-
-    def _version_to_tuple(self, version: str) -> tuple:
-        """Convert a version string into a comparable tuple."""
-        if not version:
-            return ()
-        for sep in ("-", "+"):
-            if sep in version:
-                main, pre = version.split(sep, 1)
-                parts = [int(p) if p.isdigit() else p for p in main.split(".")]
-                return tuple(parts) + (f"{sep}{pre}",)
-        parts = [int(p) if p.isdigit() else p for p in version.split(".")]
-        return tuple(parts)
+    def check_for_updates(self):
+        """Check GitHub for a newer release asynchronously."""
+        logger.info("Starting async update check...")
+        worker = UpdateCheckWorker(self)
+        self.thread_pool.start(worker)
 
     def perform_update(self):
-        """Download, install, and restart the application with folder-based updates."""
-        try:
-            # Skip update in development mode
-            if is_running_in_development_mode():
-                logger.warning("Cannot perform update in development mode")
-                self.update_failed.emit(
-                    "Aktualizacja nie jest dostępna w trybie deweloperskim"
-                )
-                return
+        """Download, install, and restart the application asynchronously."""
+        logger.info("Starting async update process...")
+        self.update_worker = UpdateWorker(self)
+        self.thread_pool.start(self.update_worker)
 
-            # Get current executable path and install directory
-            if getattr(sys, "frozen", False):
-                current_exe_path = Path(sys.executable)
-                install_dir = current_exe_path.parent
-            else:
-                self.update_failed.emit(
-                    "Nie można zaktualizować: aplikacja nie jest skompilowana"
-                )
-                return
-
-            logger.info(f"Current install directory: {install_dir}")
-
-            # Get latest release info
-            release_info = get_latest_release_info()
-
-            # Find download URL - look for .zip file (onedir package)
-            download_url = None
-            asset_name = None
-
-            for asset in release_info.get("assets", []):
-                if asset["name"].endswith(".zip"):
-                    download_url = asset["browser_download_url"]
-                    asset_name = asset["name"]
-                    logger.info(f"Found ZIP asset: {asset_name}")
-                    break
-
-            if not download_url:
-                logger.error("No ZIP assets found in release")
-                available_assets = [
-                    asset["name"] for asset in release_info.get("assets", [])
-                ]
-                logger.error(f"Available assets: {available_assets}")
-                self.update_failed.emit(
-                    "Nie znaleziono pakietu aktualizacji (ZIP) dla Windows"
-                )
-                return
-
-            # Create temporary directory for update
-            import tempfile
-
-            temp_dir = Path(tempfile.mkdtemp(prefix="cabplanner_update_"))
-            extract_dir = temp_dir / "extracted"
-            extract_dir.mkdir()
-
-            logger.info(f"Downloading update from: {download_url}")
-            logger.info(f"Temporary directory: {temp_dir}")
-
-            # Download zip file (0-70% progress)
-            zip_path = temp_dir / "update.zip"
-            success = download_file_with_progress(
-                download_url,
-                zip_path,
-                progress_callback=lambda p: self.update_progress.emit(
-                    min(int(p * 0.7), 70)
-                ),
-            )
-
-            if not success:
-                shutil.rmtree(temp_dir, ignore_errors=True)
-                self.update_failed.emit("Nie udało się pobrać aktualizacji")
-                return
-
-            # Extract the zip file (70-80% progress)
-            self.update_progress.emit(75)
-            try:
-                with zipfile.ZipFile(zip_path, "r") as zip_ref:
-                    safe_extract(zip_ref, extract_dir)
-                logger.info(f"Extracted update to: {extract_dir}")
-            except Exception as e:
-                logger.error(f"Failed to extract zip: {e}")
-                shutil.rmtree(temp_dir, ignore_errors=True)
-                self.update_failed.emit(f"Nie udało się rozpakować aktualizacji: {e}")
-                return
-
-            # Find the extracted app root by locating cabplanner.exe
-            new_dir = _find_extracted_app_root(extract_dir)
-            if not new_dir or not new_dir.exists():
-                logger.error("No app root found in extracted files")
-                shutil.rmtree(temp_dir, ignore_errors=True)
-                self.update_failed.emit(
-                    "Nie znaleziono aplikacji w pakiecie aktualizacji"
-                )
-                return
-
-            logger.info(f"Found app root: {new_dir}")
-
-            # Safety: remove packaged database if present (preserve user data)
-            db_in_pkg = new_dir / "cabplanner.db"
-            if db_in_pkg.exists():
-                logger.info("Removing packaged database to preserve user data")
-                db_in_pkg.unlink()
-
-            # Verify the new executable exists and is not empty
-            new_exe = new_dir / "cabplanner.exe"
-            if not new_exe.exists() or new_exe.stat().st_size == 0:
-                shutil.rmtree(temp_dir, ignore_errors=True)
-                self.update_failed.emit("Pobrany plik aktualizacji jest uszkodzony")
-                return
-
-            logger.info(
-                f"Update package ready: {new_exe} ({new_exe.stat().st_size} bytes)"
-            )
-
-            # Update progress (80-100%)
-            self.update_progress.emit(90)
-
-            logger.info("Preparing to restart application for update...")
-
-            # Final progress update
-            self.update_progress.emit(100)
-
-            # Signal that update is complete and restart
-            self.update_complete.emit()
-
-            # Use a short delay to ensure UI updates, then restart using in-place update
-            QTimer.singleShot(
-                1000, lambda: self._write_and_run_inplace_update(install_dir, new_dir)
-            )
-
-        except Exception as e:
-            logger.exception(f"Error during update process: {e}")
-            self.update_failed.emit(f"Błąd podczas aktualizacji: {e}")
+    def cancel_update(self):
+        """Cancel the ongoing update operation."""
+        if self.update_worker:
+            logger.info("Cancelling update operation...")
+            self.update_worker.cancel()
+            self.update_worker = None
 
     def create_shortcut_on_first_run(self):
         """Create shortcut on first application run."""
-        if getattr(sys, "frozen", False):
-            current_exe_path = Path(sys.executable)
-            install_dir = current_exe_path.parent
-            _create_shortcut_if_missing(install_dir)
+        if not is_frozen():
+            logger.debug("Not creating shortcut in development mode")
+            return
+
+        current_install_dir = install_dir()
+        shortcut_path = current_install_dir / "Cabplanner.lnk"
+
+        # Only create if shortcut doesn't exist
+        if shortcut_path.exists():
+            logger.debug("Shortcut already exists")
+            return
+
+        try:
+            script_content = get_shortcut_script()
+            process = run_powershell(
+                script_content, [str(current_install_dir)], hidden=True
+            )
+
+            logger.info("Started shortcut creation script with PID: %s", process.pid)
+
+        except Exception as e:
+            logger.warning("Failed to create shortcut: %s", e)
+
+    def _start_update_script(self, install_dir: str, new_dir: str):
+        """Start the update script on the main thread with a small delay."""
+        # Small delay so UI can repaint
+        QTimer.singleShot(500, lambda: self._run_update_script(Path(install_dir), Path(new_dir)))
+
+    def _run_update_script(self, install_dir: Path, new_dir: Path):
+        """Run the PowerShell update script on the main thread."""
+        try:
+            logger.info("Preparing to run update script...")
+            logger.info("Install directory: %s", install_dir)
+            logger.info("New directory: %s", new_dir)
+
+            # Verify paths exist before running script
+            if not install_dir.exists():
+                raise ScriptFailedError(f"Install directory does not exist: {install_dir}")
+            if not new_dir.exists():
+                raise ScriptFailedError(f"New directory does not exist: {new_dir}")
+
+            script_content = get_update_script()
+            logger.info("Generated PowerShell script (length: %d chars)", len(script_content))
+
+            # Log script arguments for debugging
+            script_args = [str(install_dir), str(new_dir)]
+            logger.info("Script arguments: %s", script_args)
+
+            process = run_powershell(
+                script_content, script_args, hidden=True
+            )
+            logger.info("Started update script with PID: %s", process.pid)
+
+            # Check if process is still running after a brief moment
+            import time
+            time.sleep(0.5)
+            poll_result = process.poll()
+            if poll_result is not None:
+                logger.error("PowerShell process exited immediately with code: %s", poll_result)
+                raise ScriptFailedError(f"PowerShell script failed immediately with exit code: {poll_result}")
+            else:
+                logger.info("PowerShell process is running successfully")
+
+            # Queue app quit on main thread with a small delay
+            QTimer.singleShot(2000, self.request_quit.emit)
+
+        except Exception as e:
+            logger.error("Failed to run update script: %s", e)
+            error = ScriptFailedError(f"Failed to run update script: {e}")
+            self.update_failed.emit(error)
+
+    def _quit_application(self):
+        """Quit the application (called on main thread)."""
+        try:
+            from PySide6.QtCore import QCoreApplication
+            logger.info("Quitting application for update...")
+            QCoreApplication.quit()
+        except Exception as e:
+            logger.error("Error quitting application: %s", e)

@@ -7,6 +7,7 @@ from PySide6.QtWidgets import QMessageBox
 from src.gui.update_dialog import UpdateDialog
 from src.services.settings_service import SettingsService
 from src.services.updater_service import UpdaterService
+from src.app.update.errors import UpdateError
 from src.version import VERSION
 
 logger = logging.getLogger(__name__)
@@ -120,7 +121,7 @@ def _handle_startup_update_result(
             # Show update dialog
             dialog = UpdateDialog(VERSION, parent=window)
 
-            # Connect signals properly
+            # Connect signals properly with new error enum system
             dialog.check_for_updates.connect(updater_service.check_for_updates)
 
             # Connect update button to start the update process
@@ -128,12 +129,16 @@ def _handle_startup_update_result(
                 lambda: _start_update_process(dialog, updater_service)
             )
 
-            # Handle update progress and completion
+            # Handle update progress and completion with new signatures
             updater_service.update_progress.connect(dialog.on_update_progress)
-            updater_service.update_complete.connect(dialog.on_update_completed)
+            updater_service.update_complete.connect(dialog.on_update_complete)
             updater_service.update_failed.connect(dialog.on_update_failed)
 
+            # Handle update check failures with new error enum system
+            updater_service.update_check_failed.connect(dialog.update_check_failed)
+
             # Handle cancellation
+            dialog.cancel_update.connect(updater_service.cancel_update)
             dialog.cancel_update.connect(dialog.reject)
 
             # Show that update is available
@@ -150,12 +155,18 @@ def _handle_startup_update_result(
 def _start_update_process(dialog, updater_service: UpdaterService):
     """Start the update process with proper dialog state management."""
     try:
-        # Show update started state
+        logger.info("Starting update process from dialog")
+
+        # Update dialog state to show update is starting
         dialog.on_update_started()
 
-        # Start the actual update
+        # Start the actual update process
         updater_service.perform_update()
 
     except Exception as e:
         logger.exception(f"Error starting update process: {e}")
-        dialog.on_update_failed(str(e))
+        # Convert to UpdateError if it's not already an update-related exception
+        if isinstance(e, UpdateError):
+            dialog.on_update_failed(e)
+        else:
+            dialog.on_update_failed(UpdateError(f"Unexpected error: {e}"))

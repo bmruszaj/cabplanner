@@ -8,7 +8,8 @@ PyInstaller permission issues when reading .ps1 files from temporary directories
 def get_update_script() -> str:
     """
     Get the PowerShell update script content as a string.
-    This script handles the folder-based update process after the main application exits.
+    This script handles the onedir-based update process after the main application exits.
+    Backs up cabplanner.exe and _internal/, installs new versions, preserves cabplanner.db.
 
     Returns:
         str: The complete PowerShell script content for Windows updates
@@ -19,7 +20,7 @@ def get_update_script() -> str:
 )
 
 $ErrorActionPreference = "Continue"
-$LogFile = "$env:TEMP\cab_update.log"
+$LogFile = "$env:TEMP\cabplanner_update.log"
 
 function Write-Log {
     param([string]$Message)
@@ -28,116 +29,148 @@ function Write-Log {
     Write-Host "[$timestamp] $Message"
 }
 
+function Backup-Item {
+    param([string]$Path, [string]$BackupSuffix = ".bak")
+    if (Test-Path $Path) {
+        $backupPath = "$Path$BackupSuffix"
+        if (Test-Path $backupPath) {
+            Remove-Item $backupPath -Recurse -Force -ErrorAction SilentlyContinue
+        }
+        Move-Item $Path $backupPath -Force
+        Write-Log "Backed up $Path to $backupPath"
+        return $backupPath
+    }
+    return $null
+}
+
+function Restore-Backup {
+    param([string]$BackupPath, [string]$OriginalPath)
+    if (Test-Path $BackupPath) {
+        if (Test-Path $OriginalPath) {
+            Remove-Item $OriginalPath -Recurse -Force -ErrorAction SilentlyContinue
+        }
+        Move-Item $BackupPath $OriginalPath -Force
+        Write-Log "Restored $OriginalPath from backup"
+    }
+}
+
 $exe = Join-Path $InstallDir 'cabplanner.exe'
-$db  = Join-Path $InstallDir 'cabplanner.db'
-$lnk = Join-Path $InstallDir 'Cabplanner.lnk'
+$internal = Join-Path $InstallDir '_internal'
+$db = Join-Path $InstallDir 'cabplanner.db'
 $successMarker = Join-Path $InstallDir '.update_success'
 
-Write-Log "[UPDATER] starting in-place update process"
-Write-Log "[UPDATER] install dir: $InstallDir"
-Write-Log "[UPDATER] new package dir: $NewDir"
-
-Write-Log "[UPDATER] waiting for cabplanner.exe to exit"
-for ($i=0; $i -lt 15; $i++) {
-  $p = Get-Process -Name 'cabplanner' -ErrorAction SilentlyContinue
-  if (-not $p) { 
-    Write-Log "[UPDATER] process has exited"
-    break 
-  }
-  Write-Log "[UPDATER] waiting... attempt $($i+1)/15"
-  Start-Sleep -Seconds 1
-}
-
-# 1) Ensure we will NOT bring a db from the new package
-$pkgDb = Join-Path $NewDir 'cabplanner.db'
-if (Test-Path $pkgDb) {
-  Write-Log "[UPDATER] removing package DB to preserve user data"
-  Remove-Item $pkgDb -Force -ErrorAction SilentlyContinue
-}
-
-# 2) Back up current critical pieces (do not touch cabplanner.db)
-$exeBak = Join-Path $InstallDir 'cabplanner.exe.bak'
-$intDir = Join-Path $InstallDir '_internal'
-$intBak = Join-Path $InstallDir '_internal.bak'
-
-if (Test-Path $exe) { 
-  Write-Log "[UPDATER] backing up executable"
-  Rename-Item $exe $exeBak -Force -EA SilentlyContinue 
-}
-if (Test-Path $intDir) { 
-  Write-Log "[UPDATER] backing up _internal directory"
-  Rename-Item $intDir $intBak -Force -EA SilentlyContinue 
-}
-
-# 3) Install new files
 $newExe = Join-Path $NewDir 'cabplanner.exe'
-$newInt = Join-Path $NewDir '_internal'
-$newLnk = Join-Path $NewDir 'Cabplanner.lnk'
+$newInternal = Join-Path $NewDir '_internal'
 
-if (-not (Test-Path $newExe)) { 
-  Write-Log "[UPDATER] ERROR: cabplanner.exe missing in package"
-  exit 1 
+Write-Log "Starting onedir update process"
+Write-Log "Install dir: $InstallDir"
+Write-Log "New package dir: $NewDir"
+
+# Wait for application to exit
+Write-Log "Waiting for cabplanner.exe to exit"
+for ($i = 0; $i -lt 15; $i++) {
+    $process = Get-Process -Name 'cabplanner' -ErrorAction SilentlyContinue
+    if (-not $process) { 
+        Write-Log "Process has exited"
+        break 
+    }
+    Write-Log "Waiting... attempt $($i+1)/15"
+    Start-Sleep -Seconds 1
 }
 
-Write-Log "[UPDATER] installing new executable"
-Copy-Item $newExe $exe -Force
-
-if (Test-Path $intBak) { 
-  Write-Log "[UPDATER] removing old _internal backup"
-  Remove-Item $intBak -Recurse -Force -EA SilentlyContinue 
-}
-Write-Log "[UPDATER] installing new _internal directory"
-Copy-Item $newInt $InstallDir -Recurse -Force
-
-# Always recreate shortcut with proper icon
-if (Test-Path $lnk) { 
-  Write-Log "[UPDATER] removing old shortcut"
-  Remove-Item $lnk -Force -EA SilentlyContinue 
+# Verify new package structure
+if (-not (Test-Path $newExe)) {
+    Write-Log "ERROR: New executable not found: $newExe"
+    exit 1
 }
 
-Write-Log "[UPDATER] creating new shortcut with icon"
-$WScriptShell = New-Object -ComObject WScript.Shell
-$Shortcut = $WScriptShell.CreateShortcut($lnk)
-$Shortcut.TargetPath = $exe
-$Shortcut.WorkingDirectory = $InstallDir
-$Shortcut.IconLocation = "$exe,0"
-$Shortcut.Description = "Cabplanner Application"
-$Shortcut.Save()
-
-# 4) Launch and quick health check
-Write-Log "[UPDATER] launching updated application"
-$p = Start-Process -FilePath $exe -WorkingDirectory $InstallDir -PassThru
-Start-Sleep -Seconds 2
-
-if ($p.HasExited) {
-  Write-Log "[UPDATER] launch failed, rolling back"
-  if (Test-Path $exeBak) { 
-    Write-Log "[UPDATER] restoring executable backup"
-    Move-Item $exeBak $exe -Force -EA SilentlyContinue 
-  }
-  if (Test-Path $intBak) {
-    Write-Log "[UPDATER] restoring _internal backup"
-    if (Test-Path $intDir) { Remove-Item $intDir -Recurse -Force -EA SilentlyContinue }
-    Move-Item $intBak $intDir -Force -EA SilentlyContinue
-  }
-  exit 1
+if (-not (Test-Path $newInternal)) {
+    Write-Log "ERROR: New _internal directory not found: $newInternal"
+    exit 1
 }
 
-# 5) Success; cleanup and create success marker
-Write-Log "[UPDATER] update successful, cleaning up"
-if (Test-Path $exeBak) { 
-  Write-Log "[UPDATER] removing executable backup"
-  Remove-Item $exeBak -Force -EA SilentlyContinue 
+# Remove any packaged database to preserve user data
+$newDb = Join-Path $NewDir 'cabplanner.db'
+if (Test-Path $newDb) {
+    Write-Log "Removing packaged database to preserve user data"
+    Remove-Item $newDb -Force -ErrorAction SilentlyContinue
 }
-# $intBak removed earlier already
 
-Write-Log "[UPDATER] creating success marker file"
-"" | Out-File -FilePath $successMarker -Encoding UTF8
+# Backup current installation
+$exeBackup = Backup-Item $exe
+$internalBackup = Backup-Item $internal
 
-Write-Log "[UPDATER] removing temporary package directory"
-Remove-Item $NewDir -Recurse -Force -EA SilentlyContinue
+try {
+    # Install new executable
+    Write-Log "Installing new executable"
+    Copy-Item $newExe $exe -Force
+    
+    # Install new _internal directory
+    Write-Log "Installing new _internal directory"
+    Copy-Item $newInternal $internal -Recurse -Force
+    
+    # Create/update shortcut
+    $shortcutPath = Join-Path $InstallDir 'Cabplanner.lnk'
+    if (-not (Test-Path $shortcutPath) -or -not (Test-Path $db)) {
+        Write-Log "Creating/updating desktop shortcut"
+        $WScriptShell = New-Object -ComObject WScript.Shell
+        $Shortcut = $WScriptShell.CreateShortcut($shortcutPath)
+        $Shortcut.TargetPath = $exe
+        $Shortcut.WorkingDirectory = $InstallDir
+        $Shortcut.IconLocation = "$exe,0"
+        $Shortcut.Description = "Cabplanner Application"
+        $Shortcut.Save()
+        Write-Log "Shortcut created/updated: $shortcutPath"
+    }
+    
+    # Mark update as successful
+    "Update completed successfully at $(Get-Date)" | Out-File -FilePath $successMarker -Encoding UTF8
+    Write-Log "Update completed successfully"
+    
+    # Clean up backups on success
+    if ($exeBackup -and (Test-Path $exeBackup)) {
+        Remove-Item $exeBackup -Force -ErrorAction SilentlyContinue
+        Write-Log "Removed executable backup"
+    }
+    if ($internalBackup -and (Test-Path $internalBackup)) {
+        Remove-Item $internalBackup -Recurse -Force -ErrorAction SilentlyContinue
+        Write-Log "Removed _internal backup"
+    }
+    
+    # Restart the application
+    Write-Log "Restarting application: $exe"
+    try {
+        Start-Process -FilePath $exe -WorkingDirectory $InstallDir -ErrorAction Stop
+        Write-Log "Application restarted successfully"
+    } catch {
+        Write-Log "ERROR: Failed to restart application: $($_.Exception.Message)"
+        # Don't exit with error - the update was successful, just restart failed
+    }
+    
+} catch {
+    Write-Log "ERROR: Update failed: $($_.Exception.Message)"
+    
+    # Restore from backups
+    if ($exeBackup) {
+        Restore-Backup $exeBackup $exe
+    }
+    if ($internalBackup) {
+        Restore-Backup $internalBackup $internal
+    }
+    
+    Write-Log "Rollback completed"
+    exit 1
+}
 
-Write-Log "[UPDATER] update process completed successfully"
+# Clean up temporary directory
+try {
+    Remove-Item $NewDir -Recurse -Force -ErrorAction SilentlyContinue
+    Write-Log "Cleaned up temporary directory: $NewDir"
+} catch {
+    Write-Log "Warning: Could not clean up temporary directory: $($_.Exception.Message)"
+}
+
+Write-Log "Update process completed successfully"
 exit 0
 """
 

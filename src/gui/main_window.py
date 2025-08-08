@@ -671,10 +671,15 @@ class MainWindow(QMainWindow):
             dialog = UpdateDialog(current, parent=self)
             dialog.update_available(current, latest)
 
+            # Connect signals with new exception-based error system
             dialog.perform_update.connect(self.updater_service.perform_update)
+            dialog.cancel_update.connect(self.updater_service.cancel_update)
+
+            # Connect progress and completion signals with correct names
             self.updater_service.update_progress.connect(dialog.on_update_progress)
-            self.updater_service.update_complete.connect(dialog.on_update_completed)
+            self.updater_service.update_complete.connect(dialog.on_update_complete)
             self.updater_service.update_failed.connect(dialog.on_update_failed)
+            self.updater_service.update_check_failed.connect(dialog.update_check_failed)
 
             dialog.exec()
         except Exception as e:

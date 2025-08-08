@@ -9,7 +9,20 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt, Signal, Slot
 from PySide6.QtGui import QFont, QKeySequence, QShortcut
-from PySide6.QtCore import QCoreApplication
+
+from src.app.update.errors import (
+    UpdateError,
+    NetworkError,
+    NoAssetError,
+    BadArchiveError,
+    UpdateCancelledError,
+    NotFrozenError,
+    GitHubAPIError,
+    DownloadFailedError,
+    ExtractionFailedError,
+    VerificationFailedError,
+    ScriptFailedError,
+)
 
 
 class UpdateDialog(QDialog):
@@ -18,6 +31,21 @@ class UpdateDialog(QDialog):
     check_for_updates = Signal()
     perform_update = Signal()
     cancel_update = Signal()
+
+    # Error message translations from exception types to Polish
+    ERROR_MESSAGES = {
+        NetworkError: "Błąd połączenia z internetem",
+        NoAssetError: "Nie znaleziono pakietu aktualizacji dla Windows",
+        BadArchiveError: "Pakiet aktualizacji jest uszkodzony",
+        UpdateCancelledError: "Aktualizacja została anulowana",
+        NotFrozenError: "Aktualizacja nie jest dostępna w trybie deweloperskim",
+        GitHubAPIError: "Błąd API GitHub",
+        DownloadFailedError: "Nie udało się pobrać aktualizacji",
+        ExtractionFailedError: "Nie udało się rozpakować aktualizacji",
+        VerificationFailedError: "Weryfikacja pakietu aktualizacji nie powiodła się",
+        ScriptFailedError: "Błąd wykonania skryptu aktualizacji",
+        UpdateError: "Nieoczekiwany błąd podczas aktualizacji",
+    }
 
     def __init__(self, current_version, parent=None):
         super().__init__(parent)
@@ -121,13 +149,22 @@ class UpdateDialog(QDialog):
         self.update_button.setEnabled(False)
         self.progress_bar.setVisible(False)
 
-    def update_check_failed(self, error_message):
-        """Show that the update check failed."""
+    def update_check_failed(self, error: Exception):
+        """Show that the update check failed with proper error translation."""
         self.status_label.setText(self.tr("Nie udało się sprawdzić aktualizacji."))
+
+        # Get Polish error message based on exception type
+        polish_message = self.ERROR_MESSAGES.get(type(error), "Nieznany błąd")
+
+        # Show detailed message with technical details
+        detail_message = polish_message
+        if str(error):
+            detail_message += f"\n\nSzczegóły techniczne: {error}"
+
         QMessageBox.warning(
             self,
             self.tr("Błąd sprawdzania aktualizacji"),
-            self.tr(f"Nie można sprawdzić aktualizacji: {error_message}"),
+            self.tr(detail_message),
         )
         self.check_button.setVisible(True)
         self.check_button.setEnabled(True)
@@ -148,65 +185,60 @@ class UpdateDialog(QDialog):
         self.check_button.setEnabled(False)
         self.update_button.setVisible(False)
         self.update_button.setEnabled(False)
-        self.cancel_button.setEnabled(False)
-
-        # Show and reset progress bar
-        self.progress_bar.setValue(0)
+        self.cancel_button.setEnabled(True)
         self.progress_bar.setVisible(True)
-
-        # Force UI update
-        self.repaint()
-        QCoreApplication.processEvents()
+        self.progress_bar.setValue(0)
 
     @Slot(int)
-    def on_update_progress(self, percent):
-        """Update the progress bar and status text."""
-        self.progress_bar.setValue(percent)
-
-        # Update status based on progress
-        if percent < 10:
-            self.status_label.setText(self.tr("Przygotowywanie aktualizacji..."))
-        elif percent < 70:
+    def on_update_progress(self, percentage):
+        """Update the progress bar."""
+        self.progress_bar.setValue(percentage)
+        if percentage < 70:
             self.status_label.setText(self.tr("Pobieranie aktualizacji..."))
-        elif percent < 80:
-            self.status_label.setText(self.tr("Rozpakowywanie aktualizacji..."))
-        elif percent < 95:
-            self.status_label.setText(self.tr("Instalowanie aktualizacji..."))
+        elif percentage < 85:
+            self.status_label.setText(self.tr("Rozpakowywanie..."))
+        elif percentage < 95:
+            self.status_label.setText(self.tr("Weryfikacja pakietu..."))
         else:
-            self.status_label.setText(self.tr("Finalizowanie aktualizacji..."))
-
-        # Force UI update
-        self.repaint()
-        QCoreApplication.processEvents()
+            self.status_label.setText(self.tr("Przygotowanie do instalacji..."))
 
     @Slot()
-    def on_update_completed(self):
-        """Show that the update has completed and will restart immediately."""
-        self.progress_bar.setValue(100)
+    def on_update_complete(self):
+        """Show that the update completed successfully."""
         self.status_label.setText(
-            self.tr("Aktualizacja zakończona! Restartowanie aplikacji...")
+            self.tr("Aktualizacja zakończona. Aplikacja zostanie uruchomiona ponownie.")
         )
+        self.progress_bar.setValue(100)
         self.cancel_button.setEnabled(False)
 
-        # Force UI update
-        self.repaint()
-        QCoreApplication.processEvents()
+    @Slot(Exception)
+    def on_update_failed(self, error: Exception):
+        """Show that the update failed with proper error translation."""
+        # Re-enable the window close button
+        self.setWindowFlag(Qt.WindowType.WindowCloseButtonHint, True)
+        self.show()
 
-    @Slot(str)
-    def on_update_failed(self, error_message):
-        """Show that the update failed."""
+        # Get Polish error message based on exception type
+        polish_message = self.ERROR_MESSAGES.get(type(error), "Nieznany błąd")
+
         self.status_label.setText(self.tr("Aktualizacja nie powiodła się."))
-        self.progress_bar.setVisible(False)
+
+        # Show detailed message with technical details
+        detail_message = polish_message
+        if str(error):
+            detail_message += f"\n\nSzczegóły techniczne: {error}"
+
+        QMessageBox.critical(
+            self,
+            self.tr("Błąd aktualizacji"),
+            self.tr(detail_message),
+        )
+
+        # Reset UI state
         self.check_button.setVisible(True)
         self.check_button.setEnabled(True)
         self.update_button.setVisible(False)
         self.update_button.setEnabled(False)
         self.cancel_button.setEnabled(True)
-        # Re-enable close button
-        self.setWindowFlag(Qt.WindowType.WindowCloseButtonHint, True)
-        self.show()
-        QMessageBox.critical(
-            self,
-            self.tr("Błąd aktualizacji"),
-            self.tr(f"Proces aktualizacji nie powiódł się: {error_message}"),
-        )
+        self.progress_bar.setVisible(False)
+        self.progress_bar.setValue(0)
