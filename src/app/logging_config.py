@@ -38,9 +38,9 @@ def configure_logging(log_path: Path) -> logging.Logger:
             logging.FileHandler(log_path, mode="a"),
         ],
     )
-
+    
     logger = logging.getLogger(__name__)
     logger.debug("Application starting with PID: %s", os.getpid())
     logger.debug("Command line arguments: %s", sys.argv)
-
+    
     return logger

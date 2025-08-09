@@ -674,7 +674,7 @@ class MainWindow(QMainWindow):
             # Connect signals with new exception-based error system
             dialog.perform_update.connect(self.updater_service.perform_update)
             dialog.cancel_update.connect(self.updater_service.cancel_update)
-
+            
             # Connect progress and completion signals with correct names
             self.updater_service.update_progress.connect(dialog.on_update_progress)
             self.updater_service.update_complete.connect(dialog.on_update_complete)
