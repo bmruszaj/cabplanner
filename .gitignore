@@ -6,6 +6,9 @@ __pycache__/
 # Alembic compiled cache
 src/db_alembic/migrations/versions/__pycache__/
 
+# Generated reports
+src/documents/reports/
+
 # SQLite database
 cabplanner.db
 
