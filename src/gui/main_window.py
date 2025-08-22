@@ -600,7 +600,7 @@ class MainWindow(QMainWindow):
         card = ProjectCard(project)
         card.clicked.connect(lambda c, w=card: self._on_card_clicked(w))
         card.doubleClicked.connect(lambda c, w=card: self.on_open_details(w.project))
-        card.editRequested.connect(lambda p: self.on_open_details(p))
+        card.editRequested.connect(lambda p: self.on_edit_project(p))
         card.exportRequested.connect(lambda p: self._perform_report_action(p, "open"))
         card.printRequested.connect(lambda p: self._perform_report_action(p, "print"))
         card.deleteRequested.connect(lambda p: self._delete_specific_project(p))
@@ -717,8 +717,13 @@ class MainWindow(QMainWindow):
         if project:
             menu.addAction(
                 get_icon("edit"),
-                self.tr("Otwórz"),
+                self.tr("Otwórz szczegóły"),
                 lambda: self.on_open_details(project),
+            )
+            menu.addAction(
+                get_icon("edit"),
+                self.tr("Edytuj projekt"),
+                lambda: self.on_edit_project(project),
             )
             menu.addSeparator()
             menu.addAction(
@@ -883,6 +888,25 @@ class MainWindow(QMainWindow):
             self.status.showMessage(self.tr("Wybierz projekt do druku"))
             return
         self._perform_report_action(project, "print")
+
+    def on_edit_project(self, project):
+        """Open project dialog in edit mode"""
+        if not project:
+            self.status.showMessage(self.tr("Wybierz projekt do edycji"))
+            return
+
+        try:
+            dlg = ProjectDialog(self.session, project_id=project.id, parent=self)
+            if dlg.exec():
+                self.load_projects()
+                self.status.showMessage(self.tr("Projekt zaktualizowany"), 2000)
+        except Exception as e:
+            logger.error(f"Error editing project: {e}")
+            QMessageBox.critical(
+                self,
+                self.tr("Błąd"),
+                self.tr("Nie udało się otworzyć edycji projektu: {0}").format(str(e)),
+            )
 
     def on_open_details(self, project):
         """Open project details dialog"""
