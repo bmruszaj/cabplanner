@@ -23,6 +23,16 @@ class CabinetTypeService:
     def get_cabinet_type(self, type_id: int) -> Optional[CabinetType]:
         return self.db.get(CabinetType, type_id)
 
+    def is_name_taken(self, nazwa: str, exclude_id: Optional[int] = None) -> bool:
+        """Return True if a cabinet type with given name exists, excluding optional ID."""
+        if not nazwa:
+            return False
+        stmt = select(CabinetType.id).filter(CabinetType.nazwa == nazwa)
+        if exclude_id is not None:
+            stmt = stmt.filter(CabinetType.id != exclude_id)
+        row = self.db.execute(stmt).first()
+        return row is not None
+
     def create_cabinet_type(
         self,
         kitchen_type: str,
