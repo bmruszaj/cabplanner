@@ -8,7 +8,7 @@ from .windows import CabinetCatalogWindow
 
 __all__ = [
     "CabinetTypeModel",
-    "Col", 
+    "Col",
     "CabinetTypeProxyModel",
     "CabinetTypeDialog",
     "CabinetTypeCard",

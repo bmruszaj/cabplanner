@@ -32,7 +32,6 @@ class TestUpdaterServiceIntegration:
             version = get_current_version()
             assert version == "1.2.3"
 
-
     def test_updater_service_initialization(self, updater_service):
         """Test UpdaterService initializes correctly."""
         assert updater_service.current_version is not None

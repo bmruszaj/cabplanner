@@ -4,9 +4,9 @@ This module provides modern styling for all UI elements.
 """
 
 # --- Shared color constants (Teal palette) ---
-PRIMARY = "#0A766C"      # accent / outlines / links
+PRIMARY = "#0A766C"  # accent / outlines / links
 PRIMARY_LIGHT = "#2DD4BF"  # subtle tints/hover
-PRIMARY_DARK = "#064E46"   # solid fills with white text
+PRIMARY_DARK = "#064E46"  # solid fills with white text
 
 HOVER_GRAY = "#E0E0E0"
 CARD_HOVER = "#EEEEEE"

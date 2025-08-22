@@ -13,6 +13,7 @@ from src.gui.utils.ui_bits import dot
 
 class Col(IntEnum):
     """Column indices for the cabinet type table."""
+
     ID = 0
     NAZWA = 1
     TYP = 2
@@ -39,7 +40,9 @@ class CabinetTypeModel(QAbstractTableModel):
         "Półki",
     ]
 
-    def __init__(self, cabinet_types: List[Any], parent: Optional[QObject] = None) -> None:
+    def __init__(
+        self, cabinet_types: List[Any], parent: Optional[QObject] = None
+    ) -> None:
         super().__init__(parent)
         self.cabinet_types: List[Any] = cabinet_types
 

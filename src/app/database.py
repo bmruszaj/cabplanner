@@ -17,7 +17,7 @@ def ensure_db_and_migrate(base: Path) -> Path:
     # Run migrations
     logger.info("Upgrading database schema (Alembic)...")
     upgrade_database(db_path)
-    
+
     return db_path
 
 

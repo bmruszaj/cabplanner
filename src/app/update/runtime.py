@@ -1,4 +1,5 @@
 """Runtime detection and path utilities."""
+
 import sys
 import tempfile
 from pathlib import Path

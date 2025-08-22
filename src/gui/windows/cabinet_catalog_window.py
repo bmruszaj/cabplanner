@@ -122,7 +122,9 @@ class CabinetCatalogWindow(QMainWindow):
         btn_layout.addWidget(self.edit_btn)
 
         self.duplicate_btn = QPushButton("Duplikuj")
-        self.duplicate_btn.setIcon(get_icon("add"))  # Changed from "copy" to "add" since copy icon doesn't exist
+        self.duplicate_btn.setIcon(
+            get_icon("add")
+        )  # Changed from "copy" to "add" since copy icon doesn't exist
         self.duplicate_btn.setProperty("class", "secondary")
         self.duplicate_btn.clicked.connect(self.duplicate_cabinet_type)
         btn_layout.addWidget(self.duplicate_btn)
@@ -152,7 +154,9 @@ class CabinetCatalogWindow(QMainWindow):
         self.table_view.verticalHeader().setVisible(False)
         self.table_view.doubleClicked.connect(self.edit_cabinet_type)
         self.table_view.setContextMenuPolicy(Qt.CustomContextMenu)
-        self.table_view.customContextMenuRequested.connect(self._show_table_context_menu)
+        self.table_view.customContextMenuRequested.connect(
+            self._show_table_context_menu
+        )
         self.view_stack.addWidget(self.table_view)
 
         # Card view (scrollable grid of cabinet cards)
@@ -186,9 +190,13 @@ class CabinetCatalogWindow(QMainWindow):
         self.statusBar().showMessage("Gotowy")
 
         # Keyboard shortcuts
-        QShortcut(QKeySequence.New, self, activated=self.add_cabinet_type)        # Ctrl+N
-        QShortcut(QKeySequence.Delete, self, activated=self.delete_cabinet_type)  # Delete
-        QShortcut(QKeySequence.Find, self, activated=lambda: self.search_edit.setFocus())  # Ctrl+F
+        QShortcut(QKeySequence.New, self, activated=self.add_cabinet_type)  # Ctrl+N
+        QShortcut(
+            QKeySequence.Delete, self, activated=self.delete_cabinet_type
+        )  # Delete
+        QShortcut(
+            QKeySequence.Find, self, activated=lambda: self.search_edit.setFocus()
+        )  # Ctrl+F
         QShortcut(QKeySequence(Qt.Key_Return), self, activated=self.edit_cabinet_type)
         QShortcut(QKeySequence(Qt.Key_Enter), self, activated=self.edit_cabinet_type)
 
@@ -217,7 +225,9 @@ class CabinetCatalogWindow(QMainWindow):
 
         # Column sizes
         self.table_view.horizontalHeader().setSectionResizeMode(QHeaderView.Interactive)
-        self.table_view.horizontalHeader().setSectionResizeMode(Col.NAZWA, QHeaderView.Stretch)
+        self.table_view.horizontalHeader().setSectionResizeMode(
+            Col.NAZWA, QHeaderView.Stretch
+        )
 
         # Restore header state if available
         s = QSettings("Cabplanner", "Cabplanner")
@@ -226,7 +236,9 @@ class CabinetCatalogWindow(QMainWindow):
             self.table_view.horizontalHeader().restoreState(header_state)
 
         # Update action buttons when selection changes
-        self.table_view.selectionModel().selectionChanged.connect(self._update_actions_enabled)
+        self.table_view.selectionModel().selectionChanged.connect(
+            self._update_actions_enabled
+        )
         self._update_actions_enabled()
 
     def _inject_kitchen_types(self) -> None:
@@ -251,7 +263,9 @@ class CabinetCatalogWindow(QMainWindow):
         """Save window state on close."""
         s = QSettings("Cabplanner", "Cabplanner")
         s.setValue("catalog_geometry", self.saveGeometry())
-        s.setValue("catalog_header_state", self.table_view.horizontalHeader().saveState())
+        s.setValue(
+            "catalog_header_state", self.table_view.horizontalHeader().saveState()
+        )
         super().closeEvent(e)
 
     # --- View toggling / resizing ---
@@ -317,7 +331,7 @@ class CabinetCatalogWindow(QMainWindow):
     def apply_filters(self) -> None:
         """Apply selected filters and refresh the table (DB-level for kitchen type)."""
         # Guard against calling this before model is initialized
-        if not hasattr(self, 'model') or self.model is None:
+        if not hasattr(self, "model") or self.model is None:
             return
         self.load_cabinet_types()
 
@@ -328,7 +342,9 @@ class CabinetCatalogWindow(QMainWindow):
     def load_cabinet_types(self) -> None:
         """Load cabinet types from database with optional filtering"""
         kitchen_type = self._current_kitchen_filter()
-        cabinet_types = self.cabinet_type_service.list_cabinet_types(kitchen_type=kitchen_type)
+        cabinet_types = self.cabinet_type_service.list_cabinet_types(
+            kitchen_type=kitchen_type
+        )
 
         # Update model (keeps proxy, header, selection signals intact)
         self.model.update_cabinet_types(cabinet_types)
@@ -427,7 +443,9 @@ class CabinetCatalogWindow(QMainWindow):
             cabinet_type = self._selected_cabinet_type()
 
         if not cabinet_type:
-            QMessageBox.information(self, "Wybierz szafkę", "Proszę wybrać typ szafki do edycji.")
+            QMessageBox.information(
+                self, "Wybierz szafkę", "Proszę wybrać typ szafki do edycji."
+            )
             return
 
         dlg = CabinetTypeDialog(self.session, cabinet_type.id, parent=self)
@@ -439,7 +457,9 @@ class CabinetCatalogWindow(QMainWindow):
         """Duplicate selected cabinet type (prefilled dialog, saved as new)."""
         source = self._selected_cabinet_type()
         if not source:
-            QMessageBox.information(self, "Wybierz szafkę", "Proszę wybrać typ szafki do duplikacji.")
+            QMessageBox.information(
+                self, "Wybierz szafkę", "Proszę wybrać typ szafki do duplikacji."
+            )
             return
         dlg = CabinetTypeDialog(self.session, parent=self, prefill_cabinet=source)
         dlg.inject_kitchen_types(self._available_kitchen_types_for_dialog())
@@ -451,7 +471,9 @@ class CabinetCatalogWindow(QMainWindow):
         cabinet_type = self._selected_cabinet_type()
         if not cabinet_type:
             if self.current_view_mode == "table":
-                QMessageBox.information(self, "Wybierz szafkę", "Proszę wybrać typ szafki do usunięcia.")
+                QMessageBox.information(
+                    self, "Wybierz szafkę", "Proszę wybrać typ szafki do usunięcia."
+                )
             else:
                 QMessageBox.information(
                     self,
@@ -475,7 +497,13 @@ class CabinetCatalogWindow(QMainWindow):
                 self.statusBar().showMessage("Typ szafki został usunięty")
             except Exception as e:
                 logger.error(f"Error deleting cabinet type: {e}")
-                msg = QMessageBox(QMessageBox.Critical, "Błąd", "Nie udało się usunąć typu szafki.", QMessageBox.Ok, self)
+                msg = QMessageBox(
+                    QMessageBox.Critical,
+                    "Błąd",
+                    "Nie udało się usunąć typu szafki.",
+                    QMessageBox.Ok,
+                    self,
+                )
                 msg.setDetailedText(str(e))
                 msg.exec()
 
@@ -483,5 +511,8 @@ class CabinetCatalogWindow(QMainWindow):
 
     def _available_kitchen_types_for_dialog(self) -> List[str]:
         """Dialog should not include 'Wszystkie' option."""
-        items = [self.filter_kitchen_combo.itemText(i) for i in range(self.filter_kitchen_combo.count())]
+        items = [
+            self.filter_kitchen_combo.itemText(i)
+            for i in range(self.filter_kitchen_combo.count())
+        ]
         return [x for x in items if x and x != "Wszystkie"]

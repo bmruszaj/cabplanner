@@ -43,6 +43,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class PartDefaults:
     """Default dimensions for cabinet parts."""
+
     last_w: int = 600
     last_h: int = 720
 
@@ -50,6 +51,7 @@ class PartDefaults:
 @dataclass
 class PresetDefinition:
     """Definition of a preset with count and dimensions."""
+
     count: int
     width: int
     height: int
@@ -64,7 +66,9 @@ class PartStatusChip(QLabel):
         self.setProperty("chip", True)  # Mark as chip for QSS styling
         self.update_status(False, False, 0, 0, 0)  # Initial gray state
 
-    def update_status(self, is_checked: bool, is_valid: bool, count: int, w: int, h: int) -> None:
+    def update_status(
+        self, is_checked: bool, is_valid: bool, count: int, w: int, h: int
+    ) -> None:
         """Update the chip appearance based on status."""
         if not is_checked:
             # Gray - unchecked
@@ -87,7 +91,9 @@ class PartStatusChip(QLabel):
 class CollapsiblePartGroup(QGroupBox):
     """A collapsible group box with summary display when collapsed."""
 
-    def __init__(self, title: str, part_key: str, parent: Optional[QWidget] = None) -> None:
+    def __init__(
+        self, title: str, part_key: str, parent: Optional[QWidget] = None
+    ) -> None:
         super().__init__(title, parent)
         self.part_key = part_key
         self.setCheckable(True)
@@ -188,7 +194,9 @@ class CollapsiblePartGroup(QGroupBox):
         self._summary_label.setVisible(not checked)
         if not checked:
             # Unchecking a group should clear its data (delete parts semantics)
-            self.count_spin.setValue(0)   # this will cascade and zero w/h via _on_count_changed
+            self.count_spin.setValue(
+                0
+            )  # this will cascade and zero w/h via _on_count_changed
             self._update_summary()
 
     def _on_count_changed(self, count: int) -> None:
@@ -280,7 +288,9 @@ def is_part_valid(count: int, w: float, h: float) -> bool:
     return w > 0 and h > 0
 
 
-def validate_form_data(nazwa: str, parts_data: Dict[str, Tuple[int, float, float, bool]]) -> List[str]:
+def validate_form_data(
+    nazwa: str, parts_data: Dict[str, Tuple[int, float, float, bool]]
+) -> List[str]:
     """Get comprehensive form validation errors - only for checked groups. Name validation removed."""
     errors = []
 
@@ -359,10 +369,16 @@ class CabinetTypeDialog(QDialog):
         self._show_errors = False
 
         if cabinet_type_id:
-            self.cabinet_type = self.cabinet_type_service.get_cabinet_type(cabinet_type_id)
+            self.cabinet_type = self.cabinet_type_service.get_cabinet_type(
+                cabinet_type_id
+            )
 
         # Window configuration for minimize/maximize/resize support
-        self.setWindowFlags(self.windowFlags() | Qt.WindowType.WindowMinimizeButtonHint | Qt.WindowType.WindowMaximizeButtonHint)
+        self.setWindowFlags(
+            self.windowFlags()
+            | Qt.WindowType.WindowMinimizeButtonHint
+            | Qt.WindowType.WindowMaximizeButtonHint
+        )
         self.setSizeGripEnabled(True)
 
         self._build_ui()
@@ -372,7 +388,9 @@ class CabinetTypeDialog(QDialog):
             self.setWindowTitle("Edytuj typ szafki")
             self._load_cabinet_type_data(self.cabinet_type)
         elif prefill_cabinet is not None:
-            self.setWindowTitle(f"Nowy typ szafki (na podstawie: {prefill_cabinet.nazwa})")
+            self.setWindowTitle(
+                f"Nowy typ szafki (na podstawie: {prefill_cabinet.nazwa})"
+            )
             self._load_cabinet_type_data(prefill_cabinet, is_prefill=True)
         else:
             self.setWindowTitle("Nowy typ szafki")
@@ -489,7 +507,7 @@ class CabinetTypeDialog(QDialog):
 
         # Content (scrollable)
         self._build_body()
-        main_layout.addWidget(self.content_scroll, 1) # Stretch to fill
+        main_layout.addWidget(self.content_scroll, 1)  # Stretch to fill
 
         # Footer (sticky)
         self._build_footer()
@@ -512,7 +530,9 @@ class CabinetTypeDialog(QDialog):
 
         # Title
         title_label = QLabel("Nowy typ szafki")
-        title_label.setStyleSheet("font-size: 18px; font-weight: bold; margin-bottom: 4px;")
+        title_label.setStyleSheet(
+            "font-size: 18px; font-weight: bold; margin-bottom: 4px;"
+        )
         left_layout.addWidget(title_label)
 
         # Status chips row
@@ -550,7 +570,9 @@ class CabinetTypeDialog(QDialog):
         # HDF checkbox
         self.hdf_plecy_check = QCheckBox("Plecy HDF")
         self.hdf_plecy_check.setAccessibleName("Plecy HDF")
-        self.hdf_plecy_check.setToolTip("Plecy HDF - określa czy szafka ma tylną ścianę z płyty HDF")
+        self.hdf_plecy_check.setToolTip(
+            "Plecy HDF - określa czy szafka ma tylną ścianę z płyty HDF"
+        )
         right_layout.addWidget(self.hdf_plecy_check)
 
         header_layout.addLayout(right_layout)
@@ -559,7 +581,9 @@ class CabinetTypeDialog(QDialog):
         """Build the scrollable content area with single-column responsive layout."""
         self.content_scroll = QScrollArea()
         self.content_scroll.setWidgetResizable(True)
-        self.content_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.content_scroll.setHorizontalScrollBarPolicy(
+            Qt.ScrollBarPolicy.ScrollBarAlwaysOff
+        )
 
         self.content_widget = QWidget()
         self.content_scroll.setWidget(self.content_widget)
@@ -628,8 +652,10 @@ class CabinetTypeDialog(QDialog):
     def _relayout_parts(self) -> None:
         """Relayout parts in responsive grid based on current width."""
         # Calculate number of columns based on available width
-        if hasattr(self, 'content_scroll') and self.content_scroll.isVisible():
-            viewport_width = self.content_scroll.viewport().width() - 32  # Account for margins
+        if hasattr(self, "content_scroll") and self.content_scroll.isVisible():
+            viewport_width = (
+                self.content_scroll.viewport().width() - 32
+            )  # Account for margins
         else:
             viewport_width = 800  # Default fallback
 
@@ -651,7 +677,7 @@ class CabinetTypeDialog(QDialog):
     def resizeEvent(self, event) -> None:
         """Handle resize events for responsive layout."""
         super().resizeEvent(event)
-        if hasattr(self, '_parts') and self._parts:
+        if hasattr(self, "_parts") and self._parts:
             self._relayout_parts()
 
     def _build_footer(self) -> None:
@@ -698,7 +724,8 @@ class CabinetTypeDialog(QDialog):
         # Standard buttons
         self.button_box = QDialogButtonBox()
         self.button_box.setStandardButtons(
-            QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Cancel
+            QDialogButtonBox.StandardButton.Save
+            | QDialogButtonBox.StandardButton.Cancel
         )
         self.save_button = self.button_box.button(QDialogButtonBox.StandardButton.Save)
         self.save_button.setText("Zapi&sz")  # Alt+S mnemonic
@@ -723,8 +750,12 @@ class CabinetTypeDialog(QDialog):
         self.error_dismiss_btn.setText("×")
         self.error_dismiss_btn.setObjectName("errClose")
         # Fix the RGBA color format for hover effect
-        primary_rgb = PRIMARY.replace('#', '')
-        r, g, b = int(primary_rgb[0:2], 16), int(primary_rgb[2:4], 16), int(primary_rgb[4:6], 16)
+        primary_rgb = PRIMARY.replace("#", "")
+        r, g, b = (
+            int(primary_rgb[0:2], 16),
+            int(primary_rgb[2:4], 16),
+            int(primary_rgb[4:6], 16),
+        )
         self.error_dismiss_btn.setStyleSheet(f"""
             QToolButton {{
                 background: none;
@@ -761,10 +792,14 @@ class CabinetTypeDialog(QDialog):
     def _on_field_changed(self) -> None:
         """Handle field change."""
         self._is_dirty = True
-        self._validate_form(show_errors=self._show_errors)  # only paint errors after first save attempt
+        self._validate_form(
+            show_errors=self._show_errors
+        )  # only paint errors after first save attempt
         self._update_summary()
 
-    def _on_count_changed(self, group: CollapsiblePartGroup, part_name: str, count: int) -> None:
+    def _on_count_changed(
+        self, group: CollapsiblePartGroup, part_name: str, count: int
+    ) -> None:
         """Handle count change with smart prefill."""
         if count > 0 and group.isChecked():
             defaults = self._part_defaults[part_name]
@@ -799,7 +834,7 @@ class CabinetTypeDialog(QDialog):
                 group.count_spin.value(),
                 group.w_spin.value(),
                 group.h_spin.value(),
-                group.isChecked()  # Include check state
+                group.isChecked(),  # Include check state
             )
 
         # Build errors ONLY for checked groups
@@ -848,7 +883,11 @@ class CabinetTypeDialog(QDialog):
             banner_msgs.extend(part_errors)
 
             if banner_msgs:
-                error_html = "<ul style='margin: 0; padding-left: 20px;'>" + "".join(f"<li>{m}</li>" for m in banner_msgs) + "</ul>"
+                error_html = (
+                    "<ul style='margin: 0; padding-left: 20px;'>"
+                    + "".join(f"<li>{m}</li>" for m in banner_msgs)
+                    + "</ul>"
+                )
                 self.error_label.setText(error_html)
                 self.error_banner.show()
             else:
@@ -883,12 +922,14 @@ class CabinetTypeDialog(QDialog):
 
         # Add all parts data including check state
         for part_key, group, _ in self._parts:
-            self._original_data.update({
-                f"{part_key}_count": group.count_spin.value(),
-                f"{part_key}_w": group.w_spin.value(),
-                f"{part_key}_h": group.h_spin.value(),
-                f"{part_key}_checked": group.isChecked(),
-            })
+            self._original_data.update(
+                {
+                    f"{part_key}_count": group.count_spin.value(),
+                    f"{part_key}_w": group.w_spin.value(),
+                    f"{part_key}_h": group.h_spin.value(),
+                    f"{part_key}_checked": group.isChecked(),
+                }
+            )
 
         self._is_dirty = False
 
@@ -905,12 +946,14 @@ class CabinetTypeDialog(QDialog):
 
         # Add current parts data including check state
         for part_key, group, _ in self._parts:
-            current_data.update({
-                f"{part_key}_count": group.count_spin.value(),
-                f"{part_key}_w": group.w_spin.value(),
-                f"{part_key}_h": group.h_spin.value(),
-                f"{part_key}_checked": group.isChecked(),
-            })
+            current_data.update(
+                {
+                    f"{part_key}_count": group.count_spin.value(),
+                    f"{part_key}_w": group.w_spin.value(),
+                    f"{part_key}_h": group.h_spin.value(),
+                    f"{part_key}_checked": group.isChecked(),
+                }
+            )
 
         return current_data != self._original_data
 
@@ -1016,10 +1059,14 @@ class CabinetTypeDialog(QDialog):
             cabinet_data = self._build_cabinet_data()
 
             if self.cabinet_type_id:
-                self.cabinet_type_service.update_cabinet_type(self.cabinet_type_id, **cabinet_data)
+                self.cabinet_type_service.update_cabinet_type(
+                    self.cabinet_type_id, **cabinet_data
+                )
                 logger.info(f"Updated cabinet type ID: {self.cabinet_type_id}")
             else:
-                new_cabinet = self.cabinet_type_service.create_cabinet_type(**cabinet_data)
+                new_cabinet = self.cabinet_type_service.create_cabinet_type(
+                    **cabinet_data
+                )
                 logger.info(f"Created new cabinet type ID: {new_cabinet.id}")
 
             # Reset form for next item
@@ -1030,8 +1077,13 @@ class CabinetTypeDialog(QDialog):
 
         except Exception as e:
             logger.error(f"Error saving cabinet type: {e}")
-            msg = QMessageBox(QMessageBox.Icon.Critical, "Błąd",
-                            "Nie udało się zapisać typu szafki.", QMessageBox.StandardButton.Ok, self)
+            msg = QMessageBox(
+                QMessageBox.Icon.Critical,
+                "Błąd",
+                "Nie udało się zapisać typu szafki.",
+                QMessageBox.StandardButton.Ok,
+                self,
+            )
             msg.setDetailedText(str(e))
             msg.exec()
 
@@ -1041,7 +1093,9 @@ class CabinetTypeDialog(QDialog):
         kitchen_type = self.kitchen_type_combo.currentText()
         hdf_plecy = self.hdf_plecy_check.isChecked()
 
-        def mm_or_none(count: int, w: float, h: float, is_checked: bool) -> Tuple[Optional[float], Optional[float]]:
+        def mm_or_none(
+            count: int, w: float, h: float, is_checked: bool
+        ) -> Tuple[Optional[float], Optional[float]]:
             # If group is unchecked, force None regardless of values
             if not is_checked:
                 return (None, None)
@@ -1056,7 +1110,9 @@ class CabinetTypeDialog(QDialog):
 
         for part_key, group, _ in self._parts:
             count = group.count_spin.value() if group.isChecked() else 0
-            w_mm, h_mm = mm_or_none(count, group.w_spin.value(), group.h_spin.value(), group.isChecked())
+            w_mm, h_mm = mm_or_none(
+                count, group.w_spin.value(), group.h_spin.value(), group.isChecked()
+            )
 
             cabinet_data[f"{part_key}_count"] = count
             cabinet_data[f"{part_key}_w_mm"] = w_mm

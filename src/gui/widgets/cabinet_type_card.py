@@ -68,7 +68,9 @@ class CabinetTypeCard(QFrame):
 
         hdf_value = "Tak" if self.cabinet_type.hdf_plecy else "Nie"
         hdf_label = QLabel(hdf_value)
-        hdf_label.setPixmap(dot(QColor("#2ecc71") if self.cabinet_type.hdf_plecy else QColor("#e74c3c")))
+        hdf_label.setPixmap(
+            dot(QColor("#2ecc71") if self.cabinet_type.hdf_plecy else QColor("#e74c3c"))
+        )
         details_layout.addRow("Plecy HDF:", hdf_label)
 
         layout.addLayout(details_layout)
