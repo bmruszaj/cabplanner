@@ -1,13 +1,13 @@
 import sys
 
-from app.logging_config import configure_logging
-from app.paths import get_base_path
-from app.bootstrap import create_qt_app, create_services, create_main_window
-from app.database import ensure_db_and_migrate, create_session
-from app.theme import apply_theme
-from app.resources import set_app_icon
-from app.updates import wire_startup_update_check
-from app.instance_guard import enforce_single_instance
+from src.app.logging_config import configure_logging
+from src.app.paths import get_base_path
+from src.app.bootstrap import create_qt_app, create_services, create_main_window
+from src.app.database import ensure_db_and_migrate, create_session
+from src.app.theme import apply_theme
+from src.app.resources import set_app_icon
+from src.app.updates import wire_startup_update_check
+from src.app.instance_guard import enforce_single_instance
 
 
 def main():
