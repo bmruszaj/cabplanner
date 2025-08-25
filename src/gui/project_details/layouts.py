@@ -1,13 +1,19 @@
-# src/gui/layouts/flow_layout.py
-from PySide6.QtWidgets import QLayout, QSizePolicy
+"""
+Custom layouts for project details UI.
+"""
+
+import logging
 from PySide6.QtCore import Qt, QRect, QPoint, QSize
+from PySide6.QtWidgets import QLayout, QSizePolicy, QApplication
 
-from ..constants import CARD_WIDTH
+from .constants import CARD_WIDTH
+
+logger = logging.getLogger(__name__)
 
 
-class FlowLayout(QLayout):
+class ResponsiveFlowLayout(QLayout):
     """
-    UX: Custom flow layout that wraps widgets based on available width.
+    Responsive flow layout that wraps widgets based on available width.
     Based on Qt's FlowLayout example for smooth responsive behavior.
     """
 
@@ -82,7 +88,7 @@ class FlowLayout(QLayout):
             if not w or not w.isVisible():
                 continue
 
-            sz = item.sizeHint()  # fixed from card
+            sz = item.sizeHint()
             next_x = x + sz.width()
             if next_x > right and line_h > 0:
                 # wrap
@@ -143,8 +149,13 @@ class FlowLayout(QLayout):
                 widgets.append(widget)
 
         # Process events to ensure layout is cleared
-        from PySide6.QtWidgets import QApplication
-
         QApplication.processEvents()
-
         return widgets
+
+    def activate(self):
+        """Force layout to recalculate."""
+        try:
+            super().activate()
+        except Exception:
+            logger.exception("Failed to activate layout")
+            self.update()

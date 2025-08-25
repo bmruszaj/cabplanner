@@ -305,6 +305,20 @@ QFrame#projectCard[selected="true"] {{
     border: 2px solid {PRIMARY};
 }}
 
+/* Cabinet Card Styles */
+QFrame#cabinetCard {{
+    background-color: {BG_LIGHT_ALT};
+    border: 1px solid {BORDER_LIGHT};
+    border-radius: 8px;
+    padding: 12px;
+    margin: 4px;
+}}
+QFrame#cabinetCard:hover {{
+    border-color: {PRIMARY};
+    border-width: 2px;
+    background-color: {CARD_HOVER};
+}}
+
 /* Dashboard widget */
 #dashboardWidget {{
     background-color: {BG_LIGHT_ALT};
@@ -582,6 +596,21 @@ QFrame#projectCard[selected="true"] {{
     background-color: #333333;
     border: 2px solid {PRIMARY};
 }}
+
+/* Cabinet Card Styles */
+QFrame#cabinetCard {{
+    background-color: {BG_DARK_ALT};
+    border: 1px solid #424242;
+    border-radius: 8px;
+    padding: 12px;
+    margin: 4px;
+}}
+QFrame#cabinetCard:hover {{
+    border-color: {PRIMARY};
+    border-width: 2px;
+    background-color: #333333;
+}}
+
 #dashboardWidget {{
     background-color: {BG_DARK_ALT};
     border-radius: 8px;

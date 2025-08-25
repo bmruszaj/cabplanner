@@ -1,0 +1,77 @@
+"""
+UI Constants for Project Details
+
+Centralized constants for consistent UI dimensions, colors, and behavior.
+"""
+
+from PySide6.QtCore import QSize
+
+# Icon sizes
+ICON_SIZE = QSize(24, 24)
+SMALL_ICON_SIZE = QSize(16, 16)
+LARGE_ICON_SIZE = QSize(32, 32)
+BANNER_ICON_SIZE = QSize(20, 20)
+
+# Layout dimensions
+HEADER_HEIGHT = 60
+TOOLBAR_HEIGHT = 40
+CONTENT_MARGINS = (12, 12, 12, 12)
+LAYOUT_SPACING = 8
+SECTION_SPACING = 16
+WIDGET_SPACING = 4
+
+# Card dimensions
+CARD_WIDTH = 320
+CARD_MIN_WIDTH = 320
+CARD_MIN_HEIGHT = 200
+CARD_MAX_WIDTH = 400
+CARD_HEIGHT = 250
+CARD_MARGIN = 16
+CARD_SPACING = 16
+CARD_PADDING = 16
+CARD_RADIUS = 12
+CARD_GRID_SPACING = 16  # Space between cards
+
+# Component dimensions
+COLOR_CHIP_SIZE = 16
+QUANTITY_STEPPER_BUTTON_SIZE = 24
+QUANTITY_INPUT_WIDTH = 50
+SEARCH_WIDTH = 200
+BUTTON_MIN_WIDTH = 80
+
+# View modes
+VIEW_MODE_CARDS = "cards"
+VIEW_MODE_TABLE = "table"
+
+# Sort options
+SORT_BY_SEQ = "sequence"
+SORT_BY_NAME = "name"
+SORT_BY_SIZE = "size"
+SORT_BY_QTY = "quantity"
+SORT_ASCENDING = "asc"
+SORT_DESCENDING = "desc"
+
+# Selection and interaction
+SELECTION_PRIMARY = "#0078d4"
+SELECTION_SECONDARY = "#f0f9ff"
+HOVER_ALPHA = 0.1
+FOCUS_WIDTH = 2
+
+# Quantity limits
+MIN_CABINET_QUANTITY = 1
+MAX_CABINET_QUANTITY = 999
+
+# Search and performance
+MIN_SEARCH_CHARS = 2
+UPDATE_DELAY_MS = 300
+TOOLTIP_DELAY_MS = 1000
+ANIMATION_DURATION_MS = 200
+DOUBLE_CLICK_INTERVAL_MS = 300
+
+# Data and pagination
+MAX_RECENT_ITEMS = 50
+DEFAULT_PAGE_SIZE = 50
+
+# Legacy aliases for compatibility
+CARD_MIN_W = CARD_MIN_WIDTH
+CARD_MIN_H = CARD_MIN_HEIGHT

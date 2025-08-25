@@ -31,8 +31,7 @@ from src.gui.project_dialog import ProjectDialog
 from src.services.project_service import ProjectService
 from src.services.report_generator import ReportGenerator
 from src.services.settings_service import SettingsService
-from src.gui.project_details.controllers.controller import ProjectDetailsController
-from src.gui.project_details.view import ProjectDetailsView
+from src.gui.project_details import ProjectDetailsView
 from src.gui.settings_dialog import SettingsDialog
 from src.gui.cabinet_catalog import CabinetCatalogWindow
 from src.gui.resources.styles import get_theme
@@ -916,13 +915,11 @@ class MainWindow(QMainWindow):
             return
 
         try:
-            # Create controller and view
-            controller = ProjectDetailsController(self.session, project, modal=True)
-            view = ProjectDetailsView(modal=True, parent=self)
-
-            # Attach view to controller and open
-            controller.attach(view)
-            controller.open()
+            # Create integrated project details dialog
+            dialog = ProjectDetailsView(
+                session=self.session, project=project, modal=True, parent=self
+            )
+            dialog.show_dialog()
 
             # Always refresh projects after dialog closes (regardless of save/cancel)
             # since the new design uses auto-save functionality

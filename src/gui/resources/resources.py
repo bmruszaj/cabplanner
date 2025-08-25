@@ -34,7 +34,12 @@ ICON_PATHS = {
     "remove": ICON_DIR / "remove.png",
     "search": ICON_DIR / "search.png",
     "filter": ICON_DIR / "filter.png",
-    "sort": ICON_DIR / "sort.png",
+    "menu": ICON_DIR / "menu.png",
+    "table": ICON_DIR / "menu.png",  # Use menu icon for table view
+    "close": ICON_DIR / "close.png",
+    "help": ICON_DIR / "help.png",
+    "arrow_left": ICON_DIR / "arrow_left.png",
+    "arrow_right": ICON_DIR / "arrow_right.png",
     # Status icons
     "success": ICON_DIR / "success.png",
     "warning": ICON_DIR / "warning.png",
