@@ -4,7 +4,6 @@ from .cabinet_type_model import CabinetTypeModel, Col
 from .cabinet_type_proxy import CabinetTypeProxyModel
 from .dialogs import CabinetTypeDialog
 from .widgets import CabinetTypeCard
-from .windows import CabinetCatalogWindow
 
 __all__ = [
     "CabinetTypeModel",
@@ -12,5 +11,4 @@ __all__ = [
     "CabinetTypeProxyModel",
     "CabinetTypeDialog",
     "CabinetTypeCard",
-    "CabinetCatalogWindow",
 ]

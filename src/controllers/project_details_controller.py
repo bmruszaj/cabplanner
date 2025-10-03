@@ -68,9 +68,13 @@ class ProjectDetailsController(QObject):
                 # Sequence hasn't changed, no need to update
                 return
 
-            # Validate sequence uniqueness
+            # Validate sequence uniqueness - create temporary cabinet with proper project_id
             temp_cabinets = [c for c in self.cabinets if c.id != cabinet_id]
-            temp_cabinet = ProjectCabinet(id=cabinet_id, sequence_number=new_sequence)
+            temp_cabinet = ProjectCabinet(
+                id=cabinet_id,
+                project_id=current_cabinet.project_id,
+                sequence_number=new_sequence,
+            )
             temp_cabinets.append(temp_cabinet)
 
             validation_errors = validate_sequence_unique(temp_cabinets)
@@ -79,21 +83,32 @@ class ProjectDetailsController(QObject):
                 return
 
             # Update cabinet via service
-            updated_cabinet = self.project_service.update_cabinet(
-                cabinet_id, sequence_number=new_sequence
-            )
+            try:
+                updated_cabinet = self.project_service.update_cabinet(
+                    cabinet_id, sequence_number=new_sequence
+                )
 
-            if not updated_cabinet:
-                self.validation_error.emit("Nie udało się zaktualizować sekwencji")
+                if not updated_cabinet:
+                    self.validation_error.emit("Nie udało się zaktualizować sekwencji")
+                    return
+
+                # Update local cache
+                self._replace_cabinet_in_cache(updated_cabinet)
+
+                # Re-sort and emit new order
+                ordered_cabinets = sort_cabinets(self.cabinets)
+                self.data_loaded.emit(ordered_cabinets)
+                self.cabinet_updated.emit(updated_cabinet)
+
+            except Exception as db_error:
+                # Handle database constraint errors specifically
+                if "UNIQUE constraint failed" in str(db_error):
+                    self.validation_error.emit(
+                        f"Sekwencja {new_sequence} już istnieje w projekcie"
+                    )
+                else:
+                    self.validation_error.emit(f"Błąd bazy danych: {str(db_error)}")
                 return
-
-            # Update local cache
-            self._replace_cabinet_in_cache(updated_cabinet)
-
-            # Re-sort and emit new order
-            ordered_cabinets = sort_cabinets(self.cabinets)
-            self.data_loaded.emit(ordered_cabinets)
-            self.cabinet_updated.emit(updated_cabinet)
 
         except Exception as e:
             error_msg = f"Błąd podczas aktualizacji sekwencji: {str(e)}"
@@ -107,6 +122,59 @@ class ProjectDetailsController(QObject):
         except Exception as e:
             error_msg = f"Błąd podczas sortowania: {str(e)}"
             self.data_error.emit(error_msg)
+
+    def on_quantity_changed(self, cabinet_id: int, new_quantity: int):
+        """
+        Handle quantity change from UI.
+
+        Args:
+            cabinet_id: ID of the cabinet to update
+            new_quantity: New quantity value
+        """
+        try:
+            # Find the current cabinet
+            current_cabinet = None
+            for cabinet in self.cabinets:
+                if cabinet.id == cabinet_id:
+                    current_cabinet = cabinet
+                    break
+
+            if not current_cabinet:
+                self.validation_error.emit("Nie znaleziono szafy do aktualizacji")
+                return
+
+            # Check if quantity is actually changing
+            if current_cabinet.quantity == new_quantity:
+                # Quantity hasn't changed, no need to update
+                return
+
+            # Update cabinet via service
+            try:
+                updated_cabinet = self.project_service.update_cabinet(
+                    cabinet_id, quantity=new_quantity
+                )
+
+                if not updated_cabinet:
+                    self.validation_error.emit("Nie udało się zaktualizować ilości")
+                    return
+
+                # Update local cache
+                self._replace_cabinet_in_cache(updated_cabinet)
+
+                # Re-sort and emit new order
+                ordered_cabinets = sort_cabinets(self.cabinets)
+                self.data_loaded.emit(ordered_cabinets)
+                self.cabinet_updated.emit(updated_cabinet)
+
+            except Exception as db_error:
+                self.validation_error.emit(
+                    f"Błąd bazy danych podczas aktualizacji ilości: {str(db_error)}"
+                )
+                return
+
+        except Exception as e:
+            error_msg = f"Błąd podczas aktualizacji ilości: {str(e)}"
+            self.validation_error.emit(error_msg)
 
     def on_cabinet_deleted(self, cabinet_id: int):
         """
@@ -138,3 +206,140 @@ class ProjectDetailsController(QObject):
             if cabinet.id == updated_cabinet.id:
                 self.cabinets[i] = updated_cabinet
                 break
+
+    def get_next_cabinet_sequence(self, project_id: int) -> int:
+        """Get the next available sequence number for a cabinet."""
+        return self.project_service.get_next_cabinet_sequence(project_id)
+
+    def add_cabinet(self, project_id: int, **kwargs):
+        """Add a cabinet to the project."""
+        try:
+            # Check if this is a custom cabinet with parts
+            if "parts" in kwargs:
+                return self._add_custom_cabinet_with_parts(project_id, **kwargs)
+
+            # Standard cabinet addition
+            sequence_number = kwargs.get(
+                "sequence_number"
+            ) or self.get_next_cabinet_sequence(project_id)
+
+            cabinet_data = {
+                "sequence_number": sequence_number,
+                "type_id": kwargs.get(
+                    "type_id", None
+                ),  # Use provided type_id or None for custom
+                "body_color": kwargs.get("body_color", "#ffffff"),
+                "front_color": kwargs.get("front_color", "#ffffff"),
+                "handle_type": kwargs.get("handle_type", "Standardowy"),
+                "quantity": kwargs.get("quantity", 1),
+            }
+
+            new_cabinet = self.project_service.add_cabinet(project_id, **cabinet_data)
+            self.cabinets.append(new_cabinet)
+            self.load_data()
+            return new_cabinet
+
+        except Exception as e:
+            error_msg = f"Błąd podczas dodawania szafy: {str(e)}"
+            self.validation_error.emit(error_msg)
+            raise
+
+    def _add_custom_cabinet_with_parts(self, project_id: int, **kwargs):
+        """Add a custom cabinet with calculated parts using new architecture."""
+        try:
+            # Create custom cabinet WITHOUT creating CabinetTemplate (type_id=NULL)
+            next_sequence = self.get_next_cabinet_sequence(project_id)
+
+            cabinet_data = {
+                "sequence_number": next_sequence,
+                "type_id": None,  # Custom cabinet - no template
+                "body_color": kwargs.get("body_color", "#ffffff"),
+                "front_color": kwargs.get("front_color", "#ffffff"),
+                "handle_type": kwargs.get("handle_type", "Standardowy"),
+                "quantity": kwargs.get("quantity", 1),
+            }
+
+            # Create the cabinet first
+            new_cabinet = self.project_service.add_cabinet(project_id, **cabinet_data)
+
+            # Now add all the calculated parts to ProjectCabinetPart table (new architecture)
+            from src.db_schema.orm_models import ProjectCabinetPart
+
+            for part_data in kwargs.get("parts", []):
+                custom_part = ProjectCabinetPart(
+                    project_cabinet_id=new_cabinet.id,
+                    part_name=part_data["part_name"],
+                    height_mm=part_data["height_mm"],
+                    width_mm=part_data["width_mm"],
+                    pieces=part_data["pieces"],
+                    material=part_data.get("material"),
+                    thickness_mm=part_data.get("thickness_mm"),
+                    wrapping=part_data.get("wrapping"),
+                    comments=part_data.get("comments"),
+                )
+                self.session.add(custom_part)
+
+            # Commit all parts
+            self.session.commit()
+
+            self.cabinets.append(new_cabinet)
+            self.load_data()
+            return new_cabinet
+
+        except Exception as e:
+            self.session.rollback()
+            error_msg = f"Błąd podczas dodawania niestandardowej szafy: {str(e)}"
+            self.validation_error.emit(error_msg)
+            raise
+
+    def add_catalog_cabinet(self, cabinet_data):
+        """Add a cabinet from catalog to the project."""
+        try:
+            # Handle both dictionary and object inputs
+            if hasattr(cabinet_data, "__dict__"):
+                # It's an object (like ProjectCabinet), already added to database
+                # Just update local cache and reload
+                self.cabinets.append(cabinet_data)
+                self.load_data()
+                return cabinet_data
+            else:
+                # It's a dictionary, convert to cabinet data
+                data = {
+                    "name": cabinet_data.get("name", "Cabinet"),
+                    "width": cabinet_data.get("width", 60),
+                    "height": cabinet_data.get("height", 72),
+                    "depth": cabinet_data.get("depth", 35),
+                    "code": cabinet_data.get("code", ""),
+                    "description": cabinet_data.get("description", ""),
+                    "price": cabinet_data.get("price", 0.0),
+                }
+
+                # Get next sequence number
+                next_sequence = self.get_next_cabinet_sequence(self.project.id)
+                data["sequence_number"] = next_sequence
+
+                # Add cabinet through project service - need to use proper parameters
+                cabinet_kwargs = {
+                    "sequence_number": data["sequence_number"],
+                    "type_id": None,  # Catalog method creates custom cabinets
+                    "body_color": "#ffffff",  # Default colors
+                    "front_color": "#ffffff",
+                    "handle_type": "Standardowy",
+                    "quantity": 1,
+                }
+                new_cabinet = self.project_service.add_cabinet(
+                    self.project.id, **cabinet_kwargs
+                )
+
+                # Update local cache
+                self.cabinets.append(new_cabinet)
+
+                # Reload data to refresh view
+                self.load_data()
+
+                return new_cabinet
+
+        except Exception as e:
+            error_msg = f"Błąd podczas dodawania szafy z katalogu: {str(e)}"
+            self.validation_error.emit(error_msg)
+            raise

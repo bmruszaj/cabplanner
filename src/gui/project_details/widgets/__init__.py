@@ -9,6 +9,7 @@ from .cabinet_card import CabinetCard
 from .header_bar import HeaderBar
 from .toolbar import Toolbar
 from .banner_manager import BannerManager
+from .banners import Banner
 
 __all__ = [
     "ColorChip",
@@ -18,4 +19,5 @@ __all__ = [
     "HeaderBar",
     "Toolbar",
     "BannerManager",
+    "Banner",
 ]

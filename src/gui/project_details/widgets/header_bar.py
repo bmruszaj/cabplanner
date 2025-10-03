@@ -2,7 +2,7 @@
 Header Bar Widget
 
 A professional header bar displaying project information and action buttons.
-Shows project title, metadata, and provides export/print functionality.
+Shows project title, metadata, and provides export functionality.
 """
 
 from PySide6.QtWidgets import (
@@ -25,11 +25,11 @@ class HeaderBar(QWidget):
 
     Layout:
     - Left: Project title (h2) + metadata row (Order, Typ, Created)
-    - Right: Export and Print buttons with proper tooltips
+    - Right: Export button with proper tooltip
     """
 
     sig_export = Signal()
-    sig_print = Signal()
+
     sig_client = Signal()
 
     def __init__(self, parent=None):
@@ -121,15 +121,6 @@ class HeaderBar(QWidget):
         self.export_btn.setToolTip("Eksportuj projekt")
         self.export_btn.clicked.connect(self.sig_export.emit)
         parent_layout.addWidget(self.export_btn)
-
-        # Print button
-        self.print_btn = QPushButton("Drukuj")
-        self.print_btn.setIcon(get_icon("print"))
-        self.print_btn.setIconSize(ICON_SIZE)
-        self.print_btn.setProperty("class", "secondary")
-        self.print_btn.setToolTip("Drukuj projekt")
-        self.print_btn.clicked.connect(self.sig_print.emit)
-        parent_layout.addWidget(self.print_btn)
 
     def _apply_styling(self):
         """Apply styling to the header bar."""

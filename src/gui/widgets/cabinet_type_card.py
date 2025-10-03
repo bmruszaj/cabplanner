@@ -5,7 +5,6 @@ from __future__ import annotations
 from typing import Any, Optional
 
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
     QFrame,
     QVBoxLayout,
@@ -18,7 +17,6 @@ from PySide6.QtWidgets import (
 )
 
 from src.gui.resources.resources import get_icon
-from src.gui.utils.ui_bits import dot
 
 
 class CabinetTypeCard(QFrame):
@@ -56,22 +54,35 @@ class CabinetTypeCard(QFrame):
         details_layout.setHorizontalSpacing(20)
         details_layout.setVerticalSpacing(5)
 
-        components_label = QLabel(
-            f"Boki: {self.cabinet_type.bok_count}, "
-            f"Wieńce: {self.cabinet_type.wieniec_count}, "
-            f"Półki: {self.cabinet_type.polka_count}, "
-            f"Fronty: {self.cabinet_type.front_count}, "
-            f"Listwy: {self.cabinet_type.listwa_count}"
-        )
-        components_label.setWordWrap(True)
-        details_layout.addRow("Komponenty:", components_label)
+        # Calculate dimensions from parts
+        width = height = depth = 0
+        parts_count = 0
 
-        hdf_value = "Tak" if self.cabinet_type.hdf_plecy else "Nie"
-        hdf_label = QLabel(hdf_value)
-        hdf_label.setPixmap(
-            dot(QColor("#2ecc71") if self.cabinet_type.hdf_plecy else QColor("#e74c3c"))
-        )
-        details_layout.addRow("Plecy HDF:", hdf_label)
+        if hasattr(self.cabinet_type, "parts") and self.cabinet_type.parts:
+            parts_count = len(self.cabinet_type.parts)
+            # Calculate max dimensions from parts
+            for part in self.cabinet_type.parts:
+                if hasattr(part, "width_mm") and part.width_mm:
+                    width = max(width, part.width_mm)
+                if hasattr(part, "height_mm") and part.height_mm:
+                    height = max(height, part.height_mm)
+                if hasattr(part, "depth_mm") and part.depth_mm:
+                    depth = max(depth, part.depth_mm)
+
+        # Display dimensions and parts count
+        if width > 0 and height > 0:
+            dimensions_text = f"{width} × {height}"
+            if depth > 0:
+                dimensions_text += f" × {depth}"
+            dimensions_text += " mm"
+        else:
+            dimensions_text = "Brak wymiarów"
+
+        dimensions_label = QLabel(dimensions_text)
+        details_layout.addRow("Wymiary:", dimensions_label)
+
+        parts_label = QLabel(f"{parts_count} części")
+        details_layout.addRow("Części:", parts_label)
 
         layout.addLayout(details_layout)
 
@@ -79,7 +90,7 @@ class CabinetTypeCard(QFrame):
         button_layout.addStretch()
         edit_btn = QPushButton("Edytuj")
         edit_btn.setProperty("class", "secondary")
-        edit_btn.setIcon(get_icon("edit"))
+        edit_btn.setIcon(get_icon("edit_white"))
         edit_btn.clicked.connect(lambda: self.clicked.emit(self.cabinet_type))
         button_layout.addWidget(edit_btn)
         layout.addLayout(button_layout)

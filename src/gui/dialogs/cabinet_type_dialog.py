@@ -33,7 +33,7 @@ from PySide6.QtWidgets import (
 
 from sqlalchemy.orm import Session
 
-from src.services.cabinet_type_service import CabinetTypeService
+from src.services.template_service import TemplateService
 from src.gui.resources.styles import PRIMARY, BORDER_MEDIUM
 
 # Configure logging
@@ -322,7 +322,7 @@ class CabinetTypeDialog(QDialog):
         super().__init__(parent)
 
         self.session: Session = db_session
-        self.cabinet_type_service = CabinetTypeService(self.session)
+        self.cabinet_type_service = TemplateService(self.session)
 
         self.cabinet_type_id: Optional[int] = cabinet_type_id
         self.cabinet_type: Optional[Any] = None
@@ -369,9 +369,7 @@ class CabinetTypeDialog(QDialog):
         self._show_errors = False
 
         if cabinet_type_id:
-            self.cabinet_type = self.cabinet_type_service.get_cabinet_type(
-                cabinet_type_id
-            )
+            self.cabinet_type = self.cabinet_type_service.get_template(cabinet_type_id)
 
         # Window configuration for minimize/maximize/resize support
         self.setWindowFlags(
@@ -479,14 +477,14 @@ class CabinetTypeDialog(QDialog):
     def _setup_shortcuts(self) -> None:
         """Setup keyboard shortcuts."""
         # Ctrl+Enter and Ctrl+S to save
-        shortcut1 = QShortcut(QKeySequence("Ctrl+Return"), self)
-        shortcut1.activated.connect(self._try_accept)
+        self.shortcut_save1 = QShortcut(QKeySequence("Ctrl+Return"), self)
+        self.shortcut_save1.activated.connect(self._try_accept)
 
-        shortcut2 = QShortcut(QKeySequence("Ctrl+Enter"), self)
-        shortcut2.activated.connect(self._try_accept)
+        self.shortcut_save2 = QShortcut(QKeySequence("Ctrl+Enter"), self)
+        self.shortcut_save2.activated.connect(self._try_accept)
 
-        shortcut3 = QShortcut(QKeySequence("Ctrl+S"), self)
-        shortcut3.activated.connect(self._try_accept)
+        self.shortcut_save3 = QShortcut(QKeySequence("Ctrl+S"), self)
+        self.shortcut_save3.activated.connect(self._try_accept)
 
     def _build_ui(self) -> None:
         """Build the single full-window editor card UI."""

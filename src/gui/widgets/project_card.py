@@ -22,8 +22,10 @@ class ProjectCard(QFrame):
     # UX: Add context menu signals for card actions
     editRequested = Signal(object)
     exportRequested = Signal(object)
-    printRequested = Signal(object)
+
     deleteRequested = Signal(object)
+    # New signal for opening in separate window
+    openInNewWindowRequested = Signal(object)
 
     def __init__(self, project, parent=None):
         super().__init__(parent)
@@ -37,6 +39,34 @@ class ProjectCard(QFrame):
         self.setContextMenuPolicy(Qt.CustomContextMenu)
         self.customContextMenuRequested.connect(self._show_context_menu)
         self._build_ui()
+
+    def update_project_data(self, project):
+        """Update card with new project data without rebuilding UI"""
+        self.project = project
+        # Update only the dynamic content that can change
+        self._update_dynamic_content()
+
+    def _update_dynamic_content(self):
+        """Update dynamic content (name, order number, client, etc.) without rebuilding entire UI"""
+        # Find and update labels by their content patterns
+        for child in self.findChildren(QLabel):
+            text = child.text()
+            # Update project name (bold text without prefixes)
+            if text.startswith("<b>") and text.endswith("</b>") and ":" not in text:
+                child.setText(f"<b>{self.project.name}</b>")
+            # Update order number
+            elif text.startswith("#"):
+                child.setText(f"#{self.project.order_number}")
+            # Update client name
+            elif self.tr("Klient") in text:
+                child.setText(
+                    f"<b>{self.tr('Klient')}:</b> {self.project.client_name or self.tr('Brak')}"
+                )
+            # Update kitchen type
+            elif self.tr("Typ") in text:
+                child.setText(f"<b>{self.tr('Typ')}:</b> {self.project.kitchen_type}")
+            # Update date (keep original date, don't update)
+            # Date should not change during project edits
 
     def _build_ui(self):
         layout = QVBoxLayout(self)
@@ -79,7 +109,7 @@ class ProjectCard(QFrame):
 
         # Edit button (primary action)
         btn_edit = QPushButton()
-        btn_edit.setIcon(get_icon("edit"))
+        btn_edit.setIcon(get_icon("edit_white"))
         btn_edit.setToolTip(self.tr("Edytuj projekt"))
         btn_edit.setFixedSize(24, 24)
         btn_edit.clicked.connect(lambda: self.editRequested.emit(self.project))
@@ -87,19 +117,11 @@ class ProjectCard(QFrame):
 
         # Export button
         btn_export = QPushButton()
-        btn_export.setIcon(get_icon("export"))
+        btn_export.setIcon(get_icon("export_white"))
         btn_export.setToolTip(self.tr("Eksportuj do Word"))
         btn_export.setFixedSize(24, 24)
         btn_export.clicked.connect(lambda: self.exportRequested.emit(self.project))
         btn_bar.addWidget(btn_export)
-
-        # Print button
-        btn_print = QPushButton()
-        btn_print.setIcon(get_icon("print"))
-        btn_print.setToolTip(self.tr("Drukuj"))
-        btn_print.setFixedSize(24, 24)
-        btn_print.clicked.connect(lambda: self.printRequested.emit(self.project))
-        btn_bar.addWidget(btn_print)
 
         layout.addLayout(btn_bar)
 
@@ -120,17 +142,18 @@ class ProjectCard(QFrame):
         menu.addAction(
             get_icon("edit"), self.tr("Otwórz"), lambda: self.doubleClicked.emit(self)
         )
+        menu.addAction(
+            get_icon("project"),
+            self.tr("Otwórz w nowym oknie"),
+            lambda: self.openInNewWindowRequested.emit(self.project),
+        )
         menu.addSeparator()
         menu.addAction(
             get_icon("export"),
             self.tr("Eksportuj"),
             lambda: self.exportRequested.emit(self.project),
         )
-        menu.addAction(
-            get_icon("print"),
-            self.tr("Drukuj"),
-            lambda: self.printRequested.emit(self.project),
-        )
+
         menu.addSeparator()
         menu.addAction(
             get_icon("delete"),

@@ -1,7 +1,8 @@
 # src/gui/main_window.py
 import os
 import logging
-from typing import Optional, Literal
+import time
+from typing import Optional
 
 from PySide6.QtWidgets import (
     QMainWindow,
@@ -31,9 +32,10 @@ from src.gui.project_dialog import ProjectDialog
 from src.services.project_service import ProjectService
 from src.services.report_generator import ReportGenerator
 from src.services.settings_service import SettingsService
-from src.gui.project_details import ProjectDetailsView
+from src.gui.project_details.widget import ProjectDetailsWidget
 from src.gui.settings_dialog import SettingsDialog
-from src.gui.cabinet_catalog import CabinetCatalogWindow
+
+from src.services.catalog_service import CatalogService
 from src.gui.resources.styles import get_theme
 from src.gui.resources.resources import get_icon
 from src.services.updater_service import UpdaterService
@@ -64,6 +66,7 @@ class MainWindow(QMainWindow):
         self._current_filter_type = ""  # UX: Persist filter type
 
         self.project_service = ProjectService(db_session)
+        self.catalog_service = CatalogService(db_session)
         self.report_generator = ReportGenerator(db_session=db_session)
         self.settings_service = SettingsService(db_session)
         self.updater_service = UpdaterService(parent=self)
@@ -217,6 +220,17 @@ class MainWindow(QMainWindow):
         self.view_button_group.addButton(self.btn_table)
         self.btn_cards.setChecked(True)
 
+        # Back button for project details view (initially hidden)
+        self.btn_back = QToolButton()
+        self.btn_back.setText(self.tr("Powrót"))
+        self.btn_back.setIcon(get_icon("arrow_left"))
+        self.btn_back.setToolTip(self.tr("Powrót do listy projektów"))
+        self.btn_back.setAutoRaise(True)
+        self.btn_back.setMinimumWidth(60)
+        self.btn_back.setMaximumWidth(100)
+        self.btn_back.setVisible(False)  # Hidden by default
+        view_toggle_layout.addWidget(self.btn_back)
+
         # Add the toggle widget without stretch factor (0) to prevent expansion
         filter_layout.addWidget(view_toggle_widget, 0)
         self._main_layout.addWidget(filter_container)
@@ -272,6 +286,10 @@ class MainWindow(QMainWindow):
 
         self.stack.addWidget(self.table)
 
+        # Project details view (in-window)
+        self.project_details_widget = None
+        self.current_project_for_details = None
+
         # UX: Empty state widget
         self.empty_state = EmptyStateWidget()
         self.empty_state.newProjectRequested.connect(self._handle_empty_state_action)
@@ -297,9 +315,7 @@ class MainWindow(QMainWindow):
         self._make_action(
             fm, self.tr("Eksportuj do Word"), "Ctrl+E", self.on_export_project, "export"
         )
-        self._make_action(
-            fm, self.tr("Drukuj"), "Ctrl+Shift+P", self.on_print_project, "print"
-        )
+
         fm.addSeparator()
         self._make_action(fm, self.tr("Zamknij"), "Alt+F4", self.close)
 
@@ -358,12 +374,6 @@ class MainWindow(QMainWindow):
                 self.on_export_project,
             ),
             (
-                "print",
-                self.tr("Drukuj"),
-                self.tr("Drukuj wybrany projekt"),
-                self.on_print_project,
-            ),
-            (
                 "delete",
                 self.tr("Usuń"),
                 self.tr("Usuń wybrany projekt"),
@@ -403,8 +413,8 @@ class MainWindow(QMainWindow):
     def _setup_shortcuts(self):
         """UX: Additional keyboard shortcuts for better accessibility"""
         # Focus search shortcut
-        search_shortcut = QShortcut(QKeySequence("Ctrl+F"), self)
-        search_shortcut.activated.connect(self.search_filter.focus_search)
+        self.search_shortcut = QShortcut(QKeySequence("Ctrl+F"), self)
+        self.search_shortcut.activated.connect(self.search_filter.focus_search)
 
     def _make_action(self, menu, text, shortcut=None, slot=None, icon=None):
         """UX: Helper to create menu actions with consistent styling"""
@@ -427,6 +437,7 @@ class MainWindow(QMainWindow):
         # View toggle
         self.btn_cards.clicked.connect(lambda: self.on_switch_view(0))
         self.btn_table.clicked.connect(lambda: self.on_switch_view(1))
+        self.btn_back.clicked.connect(self.on_back_to_list)
 
         # Table events
         sel_model = self.table.selectionModel()
@@ -575,11 +586,15 @@ class MainWindow(QMainWindow):
             self._project_cards[pid].hide()
 
         # Create missing cards for visible projects that don't have cards yet
+        # and update existing cards with fresh data
         for project in projects:
             if project.id not in self._project_cards:
                 card = self._create_project_card(project)
                 self._project_cards[project.id] = card
                 self.card_layout.addWidget(card)
+            else:
+                # Update existing card with fresh data from database
+                self._project_cards[project.id].update_project_data(project)
 
         # Remove cards only for projects that truly disappeared from the DB
         # (not just filtered out)
@@ -599,11 +614,14 @@ class MainWindow(QMainWindow):
         """UX: Factory method to create a project card with all connections"""
         card = ProjectCard(project)
         card.clicked.connect(lambda c, w=card: self._on_card_clicked(w))
-        card.doubleClicked.connect(lambda c, w=card: self.on_open_details(w.project))
+        card.doubleClicked.connect(
+            lambda c, w=card: self.open_project_in_window(w.project)
+        )
         card.editRequested.connect(lambda p: self.on_edit_project(p))
         card.exportRequested.connect(lambda p: self._perform_report_action(p, "open"))
-        card.printRequested.connect(lambda p: self._perform_report_action(p, "print"))
+
         card.deleteRequested.connect(lambda p: self._delete_specific_project(p))
+        card.openInNewWindowRequested.connect(lambda p: self.on_open_details(p))
         return card
 
     def _should_show_project(self, project) -> bool:
@@ -628,20 +646,25 @@ class MainWindow(QMainWindow):
 
     def load_projects(self):
         """Enhanced project loading with loading state and responsive updates"""
+        logger.debug("load_projects() called")
         self._show_loading(True)
 
         try:
             projects = self.project_service.list_projects()
+            logger.debug(f"Loaded {len(projects)} projects from database")
 
             # Update table model
             raw_model = self.table.model().sourceModel()
             raw_model.update_projects(projects)
+            logger.debug("Table model updated")
 
             # Update card layout (this will handle filtering and visibility)
             self._update_card_grid_layout()
+            logger.debug("Card grid layout updated")
 
             # Update stats
             self._update_counts()
+            logger.debug("Counts updated")
 
             # Update status
             if not projects:
@@ -718,6 +741,11 @@ class MainWindow(QMainWindow):
             menu.addAction(
                 get_icon("edit"),
                 self.tr("Otwórz szczegóły"),
+                lambda: self.open_project_in_window(project),
+            )
+            menu.addAction(
+                get_icon("project"),
+                self.tr("Otwórz w nowym oknie"),
                 lambda: self.on_open_details(project),
             )
             menu.addAction(
@@ -731,11 +759,7 @@ class MainWindow(QMainWindow):
                 self.tr("Eksportuj"),
                 lambda: self._perform_report_action(project, "open"),
             )
-            menu.addAction(
-                get_icon("print"),
-                self.tr("Drukuj"),
-                lambda: self._perform_report_action(project, "print"),
-            )
+
             menu.addSeparator()
             menu.addAction(
                 get_icon("delete"),
@@ -745,7 +769,7 @@ class MainWindow(QMainWindow):
 
         menu.exec(self.table.mapToGlobal(position))
 
-    def _perform_report_action(self, project, action: Literal["open", "print"]):
+    def _perform_report_action(self, project, action: str):
         """UX: Enhanced report action with better user feedback"""
         if not project:
             self.status.showMessage(self.tr("Wybierz projekt aby wykonać akcję"))
@@ -753,18 +777,22 @@ class MainWindow(QMainWindow):
 
         try:
             self.status.showMessage(self.tr("Generowanie raportu..."))
-            path = self.report_generator.generate(project)
 
-            if action == "open":
-                os.startfile(path)
-                # UX: Non-blocking status message instead of modal dialog
-                self.status.showMessage(
-                    self.tr("Eksport zakończony: {0}").format(os.path.basename(path)),
-                    3000,
-                )
-            else:  # print
-                os.startfile(path, "print")
-                self.status.showMessage(self.tr("Projekt wysłany do drukarki"), 3000)
+            # Get default project path from settings
+            default_path = self.settings_service.get_setting_value(
+                "default_project_path",
+                os.path.join(os.path.expanduser("~"), "Documents", "CabPlanner"),
+            )
+            output_dir = os.path.join(default_path, "reports")
+
+            path = self.report_generator.generate(project, output_dir=output_dir)
+
+            os.startfile(path)
+            # UX: Non-blocking status message instead of modal dialog
+            self.status.showMessage(
+                self.tr("Eksport zakończony: {0}").format(os.path.basename(path)),
+                3000,
+            )
 
         except Exception as e:
             logger.error(
@@ -846,7 +874,7 @@ class MainWindow(QMainWindow):
         src = self.table.model().mapToSource(index)
         project = self.table.model().sourceModel().get_project_at_row(src.row())
         if project:
-            self.on_open_details(project)
+            self.open_project_in_window(project)
 
     # --- Action Handlers ---
 
@@ -881,14 +909,6 @@ class MainWindow(QMainWindow):
             return
         self._perform_report_action(project, "open")
 
-    def on_print_project(self):
-        """Print currently selected project"""
-        project = self._get_current_project()
-        if not project:
-            self.status.showMessage(self.tr("Wybierz projekt do druku"))
-            return
-        self._perform_report_action(project, "print")
-
     def on_edit_project(self, project):
         """Open project dialog in edit mode"""
         if not project:
@@ -896,10 +916,16 @@ class MainWindow(QMainWindow):
             return
 
         try:
+            logger.debug(f"Opening edit dialog for project: {project.id}")
             dlg = ProjectDialog(self.session, project_id=project.id, parent=self)
-            if dlg.exec():
+            result = dlg.exec()
+            logger.debug(f"Dialog result: {result}")
+            if result:
+                logger.debug("Dialog accepted, reloading projects...")
                 self.load_projects()
                 self.status.showMessage(self.tr("Projekt zaktualizowany"), 2000)
+            else:
+                logger.debug("Dialog was cancelled")
         except Exception as e:
             logger.error(f"Error editing project: {e}")
             QMessageBox.critical(
@@ -909,21 +935,43 @@ class MainWindow(QMainWindow):
             )
 
     def on_open_details(self, project):
-        """Open project details dialog"""
+        """Open project details in separate window using widget-based approach"""
         if not project:
             self.status.showMessage(self.tr("Wybierz projekt do otwarcia"))
             return
 
         try:
-            # Create integrated project details dialog
-            dialog = ProjectDetailsView(
-                session=self.session, project=project, modal=True, parent=self
+            # Create project details widget (not dialog)
+            details_widget = ProjectDetailsWidget(
+                session=self.session, project=project, parent=self
             )
-            dialog.show_dialog()
 
-            # Always refresh projects after dialog closes (regardless of save/cancel)
-            # since the new design uses auto-save functionality
-            self.load_projects()
+            # Set it up as a separate window
+            details_widget.setWindowFlags(
+                Qt.Window | Qt.WindowCloseButtonHint | Qt.WindowMaximizeButtonHint
+            )
+            details_widget.resize(1000, 700)
+
+            # Center on parent
+            if self.geometry():
+                parent_geometry = self.geometry()
+                x = (
+                    parent_geometry.x()
+                    + (parent_geometry.width() - details_widget.width()) // 2
+                )
+                y = (
+                    parent_geometry.y()
+                    + (parent_geometry.height() - details_widget.height()) // 2
+                )
+                details_widget.move(max(0, x), max(0, y))
+
+            # Show the window
+            details_widget.show()
+            details_widget.raise_()
+            details_widget.activateWindow()
+
+            # Connect close signal to refresh projects
+            details_widget.closed.connect(self.load_projects)
 
         except Exception as e:
             logger.error(f"Error opening project details: {e}")
@@ -934,6 +982,225 @@ class MainWindow(QMainWindow):
                     str(e)
                 ),
             )
+
+    def open_project_in_window(self, project):
+        """Open project details in the same window (replace main view)"""
+        if not project:
+            self.status.showMessage(self.tr("Wybierz projekt do otwarcia"))
+            return
+
+        try:
+            # Remove existing project details widget if any
+            if self.project_details_widget:
+                self.stack.removeWidget(self.project_details_widget)
+                self.project_details_widget.deleteLater()
+                self.project_details_widget = None
+
+            # Start a per-operation debug timer
+            _dbg_start_time = time.perf_counter()
+
+            def _dbg(msg: str):
+                print(
+                    f"[DEBUG][{(time.perf_counter() - _dbg_start_time) * 1000:.1f}ms] {msg}"
+                )
+
+            _dbg(f"Loading data for project: {project.name}")
+            # Load data FIRST before creating widget
+            # This prevents any flash since widget will have data when shown
+            project_service = ProjectService(self.session)
+            cabinets = project_service.list_cabinets(project.id)
+            _dbg(f"Loaded {len(cabinets)} cabinets")
+
+            _dbg("Creating ProjectDetailsWidget...")
+            # Create project details widget (widget-based, no dialog)
+            self.project_details_widget = ProjectDetailsWidget(
+                session=self.session, project=project, parent=self
+            )
+
+            # Connect export signal once the details_view is available
+            self._connect_project_details_signals()
+
+            _dbg("Widget created")
+
+            # CRITICAL: Hide the widget completely before any operations
+            self.project_details_widget.setVisible(False)
+            self.project_details_widget.hide()
+
+            # Also hide the embedded view to prevent any flashing
+            if (
+                hasattr(self.project_details_widget, "details_view")
+                and self.project_details_widget.details_view is not None
+            ):
+                self.project_details_widget.details_view.setVisible(False)
+                self.project_details_widget.details_view.hide()
+
+            self.current_project_for_details = project
+
+            _dbg("Adding to stack...")
+            # Add to stack while still hidden
+            self.stack.addWidget(self.project_details_widget)
+
+            _dbg("Setting current widget...")
+            # Switch to the widget (it's still hidden)
+            self.stack.setCurrentWidget(self.project_details_widget)
+
+            _dbg("Keeping widget hidden until data is applied to avoid flash")
+
+            # NOW load data asynchronously to populate the visible widget
+            _dbg("Scheduling data loading...")
+            from PySide6.QtCore import QTimer
+
+            def load_data_deferred():
+                _dbg("Loading data asynchronously...")
+                try:
+                    # Wait for heavy UI setup to complete
+                    if (
+                        not hasattr(self.project_details_widget, "details_view")
+                        or not self.project_details_widget.details_view
+                    ):
+                        # UI not ready yet, try again in a bit
+                        QTimer.singleShot(20, load_data_deferred)
+                        return
+
+                    # Pre-load the data into the widget
+                    if hasattr(self.project_details_widget, "details_view") and hasattr(
+                        self.project_details_widget.details_view, "controller"
+                    ):
+                        controller = self.project_details_widget.details_view.controller
+                        view = self.project_details_widget.details_view
+                        controller.cabinets = cabinets
+
+                        # Temporarily disconnect signals to prevent async updates
+                        try:
+                            controller.data_loaded.disconnect(view.apply_card_order)
+                        except Exception:
+                            pass  # Signal might not be connected yet
+
+                        # Apply data directly to view synchronously (bypass signals)
+                        from src.domain.sorting import sort_cabinets
+
+                        ordered_cabinets = sort_cabinets(cabinets)
+
+                        # Call apply_card_order directly instead of emitting signal
+                        view.apply_card_order(ordered_cabinets)
+                        # Mark data as loaded to prevent duplicate loading
+                        view._data_loaded = True
+
+                        # Reconnect signals for future updates
+                        controller.data_loaded.connect(view.apply_card_order)
+
+                        # Now that heavy UI exists and data has been applied, show the widget
+                        try:
+                            self.project_details_widget.setVisible(True)
+                            if (
+                                hasattr(self.project_details_widget, "details_view")
+                                and self.project_details_widget.details_view is not None
+                            ):
+                                self.project_details_widget.details_view.setVisible(
+                                    True
+                                )
+                            _dbg("Widget shown after data applied")
+                        except Exception:
+                            pass
+                    _dbg("Data loading complete")
+                except Exception as e:
+                    _dbg(f"Error loading data: {e}")
+
+            # Schedule data loading for after UI setup
+            QTimer.singleShot(100, load_data_deferred)  # Give time for heavy UI setup
+            _dbg("Data loading scheduled")
+
+            # Show back button and hide view toggle buttons
+            self.btn_back.setVisible(True)
+            self.btn_cards.setVisible(False)
+            self.btn_table.setVisible(False)
+
+            # Hide the search/filter bar while viewing project details in-window
+            try:
+                if hasattr(self, "search_filter") and self.search_filter is not None:
+                    self.search_filter.setVisible(False)
+            except Exception:
+                pass
+
+            # Update status
+            self.status.showMessage(
+                self.tr("Szczegóły projektu: {0}").format(project.name)
+            )
+            _dbg("Project details loading complete")
+
+        except Exception as e:
+            logger.error(f"Error opening project details in window: {e}")
+            QMessageBox.critical(
+                self,
+                self.tr("Błąd"),
+                self.tr("Nie udało się otworzyć szczegółów projektu: {0}").format(
+                    str(e)
+                ),
+            )
+
+    def _connect_project_details_signals(self):
+        """Connect signals from ProjectDetailsWidget to main window handlers"""
+        if not self.project_details_widget:
+            return
+
+        # Use a timer to connect signals after details_view is created
+        def connect_when_ready():
+            if (
+                hasattr(self.project_details_widget, "details_view")
+                and self.project_details_widget.details_view is not None
+            ):
+                # Connect export signal to use default_project_path
+                try:
+                    self.project_details_widget.details_view.sig_export.connect(
+                        lambda: self._perform_report_action(
+                            self.current_project_for_details, "open"
+                        )
+                    )
+                    logger.debug("Connected project details export signal")
+                except Exception as e:
+                    logger.error(f"Failed to connect export signal: {e}")
+            else:
+                # Try again in 50ms if details_view isn't ready yet
+                QTimer.singleShot(50, connect_when_ready)
+
+        QTimer.singleShot(50, connect_when_ready)
+
+    def on_back_to_list(self):
+        """Return from project details view to main list view"""
+        try:
+            # Clean up project details widget
+            if self.project_details_widget:
+                self.stack.removeWidget(self.project_details_widget)
+                self.project_details_widget.deleteLater()
+                self.project_details_widget = None
+                self.current_project_for_details = None
+
+            # Show view toggle buttons and hide back button
+            self.btn_back.setVisible(False)
+            self.btn_cards.setVisible(True)
+            self.btn_table.setVisible(True)
+
+            # Restore visibility of the search/filter bar when returning to list
+            try:
+                if hasattr(self, "search_filter") and self.search_filter is not None:
+                    self.search_filter.setVisible(True)
+            except Exception:
+                pass
+
+            # Return to the previously selected view (cards or table)
+            if self.btn_cards.isChecked():
+                self.stack.setCurrentIndex(0)
+            else:
+                self.stack.setCurrentIndex(1)
+
+            # Refresh projects to reflect any changes made in details view
+            self.load_projects()
+
+            # Update status
+            self.status.showMessage(self.tr("Powrót do listy projektów"))
+
+        except Exception as e:
+            logger.error(f"Error returning to list view: {e}")
 
     def on_filter_text(self, text: str):
         """UX: Enhanced text filtering with table and card sync"""
@@ -966,6 +1233,13 @@ class MainWindow(QMainWindow):
 
     def on_switch_view(self, idx: int):
         """UX: Enhanced view switching with selection preservation"""
+        # If we're currently in project details view, go back to list first
+        if (
+            self.project_details_widget
+            and self.stack.currentWidget() == self.project_details_widget
+        ):
+            self.on_back_to_list()
+
         current_project = self._get_current_project()
 
         self.stack.setCurrentIndex(idx)
@@ -1017,8 +1291,17 @@ class MainWindow(QMainWindow):
     def on_open_catalog(self):
         """Open cabinet catalog window"""
         try:
-            win = CabinetCatalogWindow(self.session, parent=self)
-            win.show()
+            # Use the new unified catalog in manage mode from main window
+            from src.gui.cabinet_catalog.window import CatalogWindow
+
+            win = CatalogWindow(
+                catalog_service=self.catalog_service,
+                project_service=self.project_service,
+                initial_mode="manage",
+                target_project=None,
+                parent=self,
+            )
+            win.exec()
         except Exception as e:
             logger.error(f"Error opening catalog: {e}")
             QMessageBox.critical(

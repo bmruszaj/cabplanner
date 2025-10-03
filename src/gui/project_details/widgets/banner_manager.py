@@ -9,6 +9,9 @@ from typing import List
 from PySide6.QtWidgets import QWidget, QVBoxLayout, QLabel
 from PySide6.QtCore import QTimer
 
+# Import colors from the app's theme system
+from src.gui.resources.styles import PRIMARY, PRIMARY_LIGHT
+
 
 class BannerManager(QWidget):
     """Banner manager for showing notifications."""
@@ -39,11 +42,29 @@ class BannerManager(QWidget):
         """Create and display a banner with the specified type and timeout."""
         banner = QLabel(message)
         banner.setWordWrap(True)
+        # Define colors based on banner type using app theme
+        if banner_type == "success":
+            bg_color = f"{PRIMARY}20"  # Light teal with transparency
+            border_color = PRIMARY
+            text_color = "#ffffff"
+        elif banner_type == "error":
+            bg_color = "#f8d7da"
+            border_color = "#f5c6cb"
+            text_color = "#721c24"
+        elif banner_type == "warning":
+            bg_color = "#fff3cd"
+            border_color = "#ffeaa7"
+            text_color = "#856404"
+        else:  # info
+            bg_color = f"{PRIMARY}10"  # Very light teal
+            border_color = PRIMARY_LIGHT
+            text_color = PRIMARY
+
         banner.setStyleSheet(f"""
             QLabel {{
-                background-color: {"#d4edda" if banner_type == "success" else "#f8d7da" if banner_type == "error" else "#fff3cd"};
-                border: 1px solid {"#c3e6cb" if banner_type == "success" else "#f5c6cb" if banner_type == "error" else "#ffeaa7"};
-                color: {"#155724" if banner_type == "success" else "#721c24" if banner_type == "error" else "#856404"};
+                background-color: {bg_color};
+                border: 1px solid {border_color};
+                color: {text_color};
                 padding: 8px 12px;
                 border-radius: 4px;
                 margin: 2px 0px;

@@ -6,6 +6,7 @@ with inline editing capabilities for quantity and sequence numbers.
 """
 
 from typing import Dict, Any
+import time as _time
 from PySide6.QtWidgets import (
     QFrame,
     QVBoxLayout,
@@ -41,6 +42,13 @@ class CabinetCard(QFrame):
         self.card_data = card_data
         self.cabinet_id = card_data.get("id", 0)
         self._selected = False
+        # Prevent any chance of flashing as a separate window during construction
+        self.setAttribute(Qt.WA_DontShowOnScreen, True)
+        # Per-card instrumentation
+        self._card_start = _time.perf_counter()
+        self._card_dbg = lambda msg: print(
+            f"[CARD DEBUG][{self.cabinet_id}][{(_time.perf_counter() - self._card_start) * 1000:.1f}ms] {msg}"
+        )
 
         # Timer for delayed single-click handling to prevent conflict with double-click
         self._click_timer = QTimer()
@@ -49,30 +57,36 @@ class CabinetCard(QFrame):
 
         self._setup_ui()
         self._connect_signals()
+        # Report total card construction time
+        self._card_dbg("total construction complete")
+        # Allow normal display after construction completes
+        self.setAttribute(Qt.WA_DontShowOnScreen, False)
 
     def _setup_ui(self):
+        self._card_dbg("_setup_ui starting")
         self.setMinimumWidth(CARD_MIN_WIDTH)
         self.setMinimumHeight(CARD_MIN_HEIGHT)
         self.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Minimum)
         self.setObjectName("cabinetCard")
-
         main_layout = QVBoxLayout(self)
         main_layout.setContentsMargins(
             CARD_PADDING, CARD_PADDING, CARD_PADDING, CARD_PADDING
         )
         main_layout.setSpacing(8)
-
         # Header with sequence and actions
         header_layout = QHBoxLayout()
 
-        self.sequence_input = SequenceNumberInput(self.card_data.get("sequence", 1))
+        self._card_dbg("creating SequenceNumberInput")
+        self.sequence_input = SequenceNumberInput(
+            self.card_data.get("sequence", 1), parent=self
+        )
         self.sequence_input.sequence_changed.connect(self._on_sequence_changed)
         header_layout.addWidget(self.sequence_input)
 
         header_layout.addStretch()
 
         # Action menu
-        self.menu_btn = QToolButton()
+        self.menu_btn = QToolButton(self)
         self.menu_btn.setText("⋮")
         self.menu_btn.setPopupMode(QToolButton.InstantPopup)
         self._setup_menu()
@@ -81,24 +95,27 @@ class CabinetCard(QFrame):
         main_layout.addLayout(header_layout)
 
         # Cabinet name
+        self._card_dbg("setting name label")
         name = self.card_data.get("name", "Niestandardowy")
-        self.name_label = QLabel(name)
+        self.name_label = QLabel(name, parent=self)
         self.name_label.setFont(QFont("", 12, QFont.Weight.Bold))
         self.name_label.setWordWrap(True)
         main_layout.addWidget(self.name_label)
 
         # Colors section
+        self._card_dbg("creating ColorChip body")
         colors_layout = QHBoxLayout()
-        colors_layout.addWidget(QLabel("Korpus:"))
+        colors_layout.addWidget(QLabel("Korpus:", parent=self))
         self.body_color_chip = ColorChip(
-            self.card_data.get("body_color", "#ffffff"), "Korpus"
+            self.card_data.get("body_color", "Biały"), "Korpus", parent=self
         )
         colors_layout.addWidget(self.body_color_chip)
 
         colors_layout.addSpacing(10)
-        colors_layout.addWidget(QLabel("Front:"))
+        colors_layout.addWidget(QLabel("Front:", parent=self))
+        self._card_dbg("creating ColorChip front")
         self.front_color_chip = ColorChip(
-            self.card_data.get("front_color", "#ffffff"), "Front"
+            self.card_data.get("front_color", "Biały"), "Front", parent=self
         )
         colors_layout.addWidget(self.front_color_chip)
         colors_layout.addStretch()
@@ -106,31 +123,38 @@ class CabinetCard(QFrame):
         main_layout.addLayout(colors_layout)
 
         # Dimensions section (shape summary)
+        self._card_dbg("adding dimensions section")
         self._add_dimensions_section(main_layout)
 
-        # Quantity section
+        # Quantity section (lazy: create a lightweight placeholder; real widget created on demand)
+        self._card_dbg("creating quantity placeholder")
         qty_layout = QHBoxLayout()
         qty_layout.addWidget(QLabel("Ilość:"))
 
-        self.quantity_stepper = QuantityStepper(self.card_data.get("quantity", 1))
-        self.quantity_stepper.value_changed.connect(self._on_quantity_changed)
-        qty_layout.addWidget(self.quantity_stepper)
+        qty = int(self.card_data.get("quantity", 1))
+        self._qty_placeholder = QLabel(str(qty))
+        self._qty_placeholder.setObjectName("quantityPlaceholder")
+        qty_layout.addWidget(self._qty_placeholder)
         qty_layout.addStretch()
+
+        # keep reference so we can replace placeholder later
+        self._qty_layout = qty_layout
 
         main_layout.addLayout(qty_layout)
         main_layout.addStretch()
 
         self._update_selection_style()
+        self._card_dbg("_setup_ui complete")
 
     def _add_dimensions_section(self, main_layout):
         """Add cabinet dimensions/shape summary section."""
         # Create dimensions layout (always, but may be hidden)
         self.dims_layout = QHBoxLayout()
-        self.dims_label_title = QLabel("Wymiary:")
+        self.dims_label_title = QLabel("Wymiary:", parent=self)
         self.dims_layout.addWidget(self.dims_label_title)
 
         # Create dimensions label
-        self.dims_label = QLabel()
+        self.dims_label = QLabel(parent=self)
         self.dims_label.setStyleSheet("color: #666666; font-size: 11px;")
         self.dims_layout.addWidget(self.dims_label)
         self.dims_layout.addStretch()
@@ -196,6 +220,44 @@ class CabinetCard(QFrame):
     def _connect_signals(self):
         pass
 
+    def showEvent(self, event):
+        """Ensure heavy sub-widgets are created when card becomes visible."""
+        super().showEvent(event)
+        # Create QuantityStepper lazily when the card is shown
+        self._ensure_quantity_stepper()
+
+    def _ensure_quantity_stepper(self):
+        """Create QuantityStepper if not already present and replace placeholder."""
+        if hasattr(self, "quantity_stepper"):
+            return
+
+        self._card_dbg("creating lazy QuantityStepper")
+        qty_val = int(self.card_data.get("quantity", 1))
+        try:
+            self.quantity_stepper = QuantityStepper(qty_val, parent=self)
+            self.quantity_stepper.value_changed.connect(self._on_quantity_changed)
+        except Exception:
+            # Fallback: keep placeholder if creation fails
+            self._card_dbg("failed to create QuantityStepper, keeping placeholder")
+            return
+
+        # Replace placeholder widget in layout
+        if hasattr(self, "_qty_placeholder") and hasattr(self, "_qty_layout"):
+            # find index of placeholder in layout
+            for i in range(self._qty_layout.count()):
+                item = self._qty_layout.itemAt(i)
+                if item and item.widget() == self._qty_placeholder:
+                    # remove placeholder
+                    widget = item.widget()
+                    self._qty_layout.removeWidget(widget)
+                    widget.setParent(None)
+                    break
+
+            # insert the real stepper at the same position (append before stretch)
+            self._qty_layout.insertWidget(i, self.quantity_stepper)
+            # update placeholder reference
+            delattr(self, "_qty_placeholder")
+
     def update_data(self, new_card_data: Dict[str, Any]):
         """
         Update the card with new data.
@@ -218,17 +280,20 @@ class CabinetCard(QFrame):
 
         # Update colors
         if hasattr(self, "body_color_chip"):
-            new_body_color = new_card_data.get("body_color", "#ffffff")
+            new_body_color = new_card_data.get("body_color", "Biały")
             self.body_color_chip.set_color(new_body_color)
 
         if hasattr(self, "front_color_chip"):
-            new_front_color = new_card_data.get("front_color", "#ffffff")
+            new_front_color = new_card_data.get("front_color", "Biały")
             self.front_color_chip.set_color(new_front_color)
 
         # Update quantity
         new_quantity = new_card_data.get("quantity", 1)
         if hasattr(self, "quantity_stepper"):
             self.quantity_stepper.set_value(new_quantity)
+        else:
+            if hasattr(self, "_qty_placeholder"):
+                self._qty_placeholder.setText(str(new_quantity))
 
         # Update dimensions display
         if hasattr(self, "dims_label"):

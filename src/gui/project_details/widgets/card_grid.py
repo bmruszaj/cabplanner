@@ -6,7 +6,6 @@ Displays cabinet cards in a flow layout that adapts to container width.
 from PySide6.QtWidgets import (
     QWidget,
     QVBoxLayout,
-    QHBoxLayout,
     QScrollArea,
     QLabel,
     QFrame,
@@ -17,106 +16,8 @@ from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QFont
 
 from .cabinet_card import CabinetCard
-from ..constants import CARD_MIN_W, CARD_GRID_SPACING
-
-
-class FlowLayout(QVBoxLayout):
-    """Custom layout that arranges cards in rows, wrapping based on available width."""
-
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.setSpacing(CARD_GRID_SPACING)  # Vertical spacing between rows
-        self.rows = []
-        self.cards = []
-
-    def addCard(self, card_widget):
-        """Add a card to the flow layout, creating new rows as needed."""
-        self.cards.append(card_widget)
-
-        # Card dimensions for layout calculation
-        CARD_SPACING = CARD_GRID_SPACING  # Horizontal spacing between cards
-
-        # Check if we need a new row
-        if not self.rows:
-            # Create first row
-            row_layout = QHBoxLayout()
-            row_layout.setSpacing(CARD_SPACING)
-            row_layout.addWidget(card_widget)
-            row_layout.addStretch()
-
-            row_widget = QWidget()
-            row_widget.setLayout(row_layout)
-            self.addWidget(row_widget)
-            self.rows.append(row_layout)
-        else:
-            # Try to add to last row
-            last_row = self.rows[-1]
-            parent_width = self.parentWidget().width() if self.parentWidget() else 800
-
-            # Calculate if card fits in current row
-            cards_in_row = last_row.count() - 1  # Subtract stretch
-            needed_width = (cards_in_row + 1) * CARD_MIN_W + cards_in_row * CARD_SPACING
-
-            if needed_width <= parent_width - 40:  # 40px margin
-                # Remove stretch, add card, add stretch back
-                stretch_item = last_row.takeAt(last_row.count() - 1)
-                last_row.addWidget(card_widget)
-                last_row.addItem(stretch_item)
-            else:
-                # Create new row
-                row_layout = QHBoxLayout()
-                row_layout.setSpacing(CARD_SPACING)
-                row_layout.addWidget(card_widget)
-                row_layout.addStretch()
-
-                row_widget = QWidget()
-                row_widget.setLayout(row_layout)
-                self.addWidget(row_widget)
-                self.rows.append(row_layout)
-
-    def clear_cards(self):
-        """Remove all cards from the layout."""
-        self.cards.clear()
-
-        # Remove all row widgets
-        for i in reversed(range(self.count())):
-            item = self.takeAt(i)
-            if item.widget():
-                item.widget().deleteLater()
-
-        self.rows.clear()
-
-    def clear_layout_only(self):
-        """Remove cards from layout without deleting them."""
-        # Clear the cards list to reset state
-        self.cards.clear()
-
-        # Remove cards from rows but don't delete them
-        for row_layout in self.rows:
-            while row_layout.count() > 0:
-                item = row_layout.takeAt(0)
-                # Don't delete the widget, just remove from layout
-
-        # Remove all row widgets and clear the layout
-        for i in reversed(range(self.count())):
-            item = self.takeAt(i)
-            if item.widget():
-                item.widget().deleteLater()
-
-        # Clear rows list and force layout update
-        self.rows.clear()
-        self.update()
-
-        # Process any pending deletion events
-        from PySide6.QtWidgets import QApplication
-
-        QApplication.processEvents()
-
-    def filter_cards(self, search_text):
-        """Show/hide cards based on search text."""
-        for card in self.cards:
-            visible = search_text.lower() in card.cabinet_name.lower()
-            card.setVisible(visible)
+from ..constants import CARD_GRID_SPACING
+from src.gui.layouts.flow_layout import FlowLayout
 
 
 class EmptyStateWidget(QWidget):
@@ -231,9 +132,11 @@ class CardGrid(QWidget):
             QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred
         )
 
-        # Flow layout for cards
-        self.flow_layout = FlowLayout(self.content_widget)
-        self.flow_layout.addStretch()  # Push cards to top
+        # Flow layout for cards (shared QLayout-based FlowLayout)
+        self.flow_layout = FlowLayout(
+            self.content_widget, margin=8, spacing=CARD_GRID_SPACING
+        )
+        self.content_widget.setLayout(self.flow_layout)
 
         # Empty state widget
         self.empty_state = EmptyStateWidget()
@@ -263,8 +166,8 @@ class CardGrid(QWidget):
         if cabinet_id in self._cabinet_cards:
             return
 
-        # Create card widget
-        card = CabinetCard(cabinet_data)
+        # Create card widget with explicit parent to avoid stray windows
+        card = CabinetCard(cabinet_data, parent=self.content_widget)
 
         # Set up sequence validation to prevent duplicates
         card.sequence_input.set_validation_callback(self._validate_sequence_number)
@@ -482,8 +385,10 @@ class CardGrid(QWidget):
             self.content_widget.setSizePolicy(
                 QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred
             )
-            self.flow_layout = FlowLayout(self.content_widget)
-            self.flow_layout.addStretch()
+            self.flow_layout = FlowLayout(
+                self.content_widget, margin=8, spacing=CARD_GRID_SPACING
+            )
+            self.content_widget.setLayout(self.flow_layout)
 
         try:
             if self.scroll_area.widget() != self.content_widget:

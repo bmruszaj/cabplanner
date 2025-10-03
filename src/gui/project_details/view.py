@@ -25,8 +25,17 @@ from sqlalchemy.orm import Session
 from src.db_schema.orm_models import Project, ProjectCabinet
 from src.gui.resources.styles import get_theme
 from src.controllers.project_details_controller import ProjectDetailsController
-from .constants import *
-from .layouts import ResponsiveFlowLayout
+from src.gui.cabinet_catalog.window import CatalogWindow
+from src.services.catalog_service import CatalogService
+from .constants import (
+    CARD_WIDTH,
+    HEADER_HEIGHT,
+    TOOLBAR_HEIGHT,
+    VIEW_MODE_CARDS,
+    VIEW_MODE_TABLE,
+    CONTENT_MARGINS,
+)
+from src.gui.layouts.flow_layout import FlowLayout
 from .widgets import HeaderBar, Toolbar, BannerManager, CabinetCard
 
 logger = logging.getLogger(__name__)
@@ -128,7 +137,7 @@ class ProjectDetailsView(QDialog):
     sig_add_from_catalog = Signal()
     sig_add_custom = Signal()
     sig_export = Signal()
-    sig_print = Signal()
+
     sig_client_save = Signal(dict)
     sig_client_open_requested = Signal()
 
@@ -156,12 +165,42 @@ class ProjectDetailsView(QDialog):
             modal: Whether dialog should be modal
             parent: Parent widget
         """
+        import time as _time
+
+        # Start timing as early as possible for instrumentation
+        self._dbg_start_time = _time.perf_counter()
+
+        # Small helper to log elapsed ms from constructor start
+        self._dbg = lambda msg: print(
+            f"[VIEW DEBUG][{(_time.perf_counter() - self._dbg_start_time) * 1000:.1f}ms] {msg}"
+        )
+
+        self._dbg(
+            f"Creating ProjectDetailsView for project: {project.name if project else 'None'}"
+        )
+
         super().__init__(parent)
         self.session = session
         self.project = project
         self.modal = modal
         self._current_view_mode = VIEW_MODE_CARDS
         self.is_dark_mode = False  # Default value
+
+        self._dbg("Setting visibility flags...")
+        # Prevent any visibility during construction
+        self.setVisible(False)
+        self.hide()
+
+        # Set attribute to prevent automatic showing
+        self.setAttribute(Qt.WA_DontShowOnScreen, True)
+
+        # Set window flags to prevent premature showing
+        if parent:
+            self.setWindowFlags(Qt.Dialog | Qt.WindowCloseButtonHint)
+
+        self._dbg("Blocking signals during construction...")
+        # Block all signals during construction to prevent Qt from auto-showing
+        self.blockSignals(True)
 
         # Data management - no longer authoritative, just for UI
         self.cabinets = []  # Cached list for UI display
@@ -172,9 +211,13 @@ class ProjectDetailsView(QDialog):
 
         # Initialize controller if session and project are provided
         self.controller = None
+        self.catalog_service = None
         if session and project:
             self.controller = ProjectDetailsController(session, project, self)
             self._setup_controller_connections()
+
+            # Initialize catalog service for unified catalog access
+            self.catalog_service = CatalogService(session)
 
         # Initialize services for compatibility (removed in favor of controller)
         if session and project:
@@ -184,39 +227,52 @@ class ProjectDetailsView(QDialog):
         else:
             self.report_generator = None
 
+        self._dbg("Setting up UI...")
         self._setup_ui()
+        self._dbg("Setting up connections...")
         self._setup_connections()
+        self._dbg("Setting up styling...")
         self._setup_styling()
 
         # Update header info if project is available
         if self.project:
             self._update_header_info()
 
-        # Load initial data if controller is available
-        if self.controller:
-            self.controller.load_data()
-            
+        # Don't load data in constructor - will be loaded when shown
+        # Data loading deferred to showEvent to prevent flash
+        self._data_loaded = False
+
         # Set initial view mode from saved settings
         saved_view_mode = self.ui_state.get_view_mode(VIEW_MODE_CARDS)
         self._on_view_mode_changed(saved_view_mode)
-        
+
         # Update toolbar to reflect current view mode
-        if hasattr(self.toolbar, 'set_view_mode'):
+        if hasattr(self.toolbar, "set_view_mode"):
             self.toolbar.set_view_mode(saved_view_mode)
+
+        # Unblock signals after construction is complete
+        self.blockSignals(False)
+
+        # Remove the "don't show" attribute now that construction is done
+        self.setAttribute(Qt.WA_DontShowOnScreen, False)
 
     def _setup_ui(self) -> None:
         """Set up the dialog UI components."""
+        self._dbg("_setup_ui starting...")
+
         self.setWindowTitle("Szczegóły projektu")
 
         # Calculate minimum size based on card width (same as main window)
         minimum_width = CARD_WIDTH + 100  # Card width + margins/scrollbar
         self.setMinimumSize(minimum_width, 600)
 
+        self._dbg("Creating main layout...")
         # Main layout
         main_layout = QVBoxLayout(self)
         main_layout.setContentsMargins(0, 0, 0, 0)
         main_layout.setSpacing(0)
 
+        self._dbg("Creating header bar...")
         # Header bar
         self.header_bar = HeaderBar()
         self.header_bar.setFixedHeight(HEADER_HEIGHT)
@@ -245,6 +301,8 @@ class ProjectDetailsView(QDialog):
 
     def _create_central_area(self) -> None:
         """Create the central stacked widget area with responsive card layout."""
+        self._dbg("_create_central_area: starting...")
+
         self.central_widget = QWidget()
         central_layout = QVBoxLayout(self.central_widget)
         central_layout.setContentsMargins(*CONTENT_MARGINS)
@@ -263,18 +321,16 @@ class ProjectDetailsView(QDialog):
             Qt.ScrollBarPolicy.ScrollBarAsNeeded
         )
 
-        # Card container with ResponsiveFlowLayout for proper responsive behavior
+        # Card container with FlowLayout for simple, flash-free behavior (like main window)
         self.card_container = QWidget()
-        self.card_layout = ResponsiveFlowLayout(
-            self.card_container, margin=8, spacing=12
-        )
+        self.card_layout = FlowLayout(self.card_container, margin=8, spacing=12)
         self.card_container.setLayout(self.card_layout)
 
         self.card_scroll.setWidget(self.card_container)
         self.stacked_widget.addWidget(self.card_scroll)
 
         # Empty state widget for when no cabinets exist
-        self.empty_state = EmptyStateWidget()
+        self.empty_state = EmptyStateWidget(parent=self)
         self.empty_state.add_cabinet_requested.connect(self._handle_add_from_catalog)
         self.stacked_widget.addWidget(self.empty_state)
 
@@ -304,8 +360,9 @@ class ProjectDetailsView(QDialog):
             }
         """)
         self.stacked_widget.addWidget(self.table_view)
-
         central_layout.addWidget(self.stacked_widget)
+
+        self._dbg("_create_central_area: complete")
 
     def _setup_controller_connections(self) -> None:
         """Set up connections between controller and view."""
@@ -325,7 +382,7 @@ class ProjectDetailsView(QDialog):
 
         # Header bar signals
         self.header_bar.sig_export.connect(self._handle_export)
-        self.header_bar.sig_print.connect(self._handle_print)
+
         self.header_bar.sig_client.connect(self._on_client_open_requested)
 
         # Toolbar signals
@@ -340,6 +397,7 @@ class ProjectDetailsView(QDialog):
 
         # Cabinet card signals - delegate to controller
         self.sig_cabinet_sequence_changed.connect(self._on_sequence_changed_request)
+        self.sig_cabinet_qty_changed.connect(self._on_quantity_changed_request)
 
         # Cabinet edit signal - handle locally
         self.sig_cabinet_edit.connect(self._handle_cabinet_edit)
@@ -379,6 +437,7 @@ class ProjectDetailsView(QDialog):
             ordered_cabinets: List of cabinets in the desired display order
         """
         try:
+            self._dbg("apply_card_order starting...")
             # Update cached cabinet list
             self.cabinets = ordered_cabinets
 
@@ -387,10 +446,12 @@ class ProjectDetailsView(QDialog):
 
             # Check if we can avoid full rebuild by just reordering existing cards
             if self._can_reorder_existing_cards(ordered_cabinets):
+                self._dbg("Reordering existing cards (fast path)...")
                 self._reorder_existing_cards(ordered_cabinets)
                 return
 
             # Full rebuild needed
+            self._dbg("Full rebuild needed - rebuilding all cards...")
             self._rebuild_all_cards(ordered_cabinets)
 
         except Exception as e:
@@ -412,49 +473,94 @@ class ProjectDetailsView(QDialog):
         return True
 
     def _reorder_existing_cards(self, ordered_cabinets: List[ProjectCabinet]) -> None:
-        """Reorder existing cards without rebuilding them."""
-        # Clear layout without deleting widgets
-        self._clear_flow_layout_without_deleting()
+        """Reorder existing cards and update their data."""
+        if not ordered_cabinets:
+            return
+        self._dbg("_reorder_existing_cards: starting...")
 
-        # Re-add cards in the new order
-        for cabinet in ordered_cabinets:
-            if cabinet.id in self._cards_by_id:
-                card = self._cards_by_id[cabinet.id]
-                self.card_layout.addWidget(card)
+        # Freeze updates during rebuild
+        self.card_container.setUpdatesEnabled(False)
+        try:
+            # Clear layout without deleting widgets
+            self._clear_flow_layout_without_deleting()
 
-        # Apply geometry
-        if hasattr(self, "card_container"):
-            self.card_layout.setGeometry(self.card_container.rect())
+            # Re-add cards in the new order and update their data
+            for cabinet in ordered_cabinets:
+                if cabinet.id in self._cards_by_id:
+                    card = self._cards_by_id[cabinet.id]
+                    # Update card data with fresh cabinet information
+                    updated_card_data = self._cabinet_to_card_data(cabinet)
+                    card.update_data(updated_card_data)
+                    self.card_layout.addWidget(card)
+        finally:
+            self.card_container.setUpdatesEnabled(True)
 
     def _rebuild_all_cards(self, ordered_cabinets: List[ProjectCabinet]) -> None:
         """Rebuild all cards from scratch."""
-        # Clear existing cards
-        self._clear_flow_layout_without_deleting()
-        self._cards_by_id.clear()
+        if not ordered_cabinets:
+            return
+        import time as _time
 
-        # Create cards in the provided order
-        for cabinet in ordered_cabinets:
-            card_data = self._cabinet_to_card_data(cabinet)
-            card = CabinetCard(card_data)
+        start = _time.perf_counter()
+        self._dbg("_rebuild_all_cards: starting...")
 
-            # Connect card signals
-            self._connect_card_signals(card)
+        # Freeze updates during rebuild
+        self.card_container.setUpdatesEnabled(False)
+        per_card_times = []
+        try:
+            # Clear existing cards
+            self._clear_flow_layout_without_deleting()
+            self._cards_by_id.clear()
 
-            self.card_layout.addWidget(card)
-            self._cards_by_id[cabinet.id] = card
+            # Create cards in the provided order and record per-card timings
+            for cabinet in ordered_cabinets:
+                cstart = _time.perf_counter()
+                card_data = self._cabinet_to_card_data(cabinet)
+                card = CabinetCard(card_data, parent=self.card_container)
 
-        # Update view state
-        self._update_view_state()
+                # Connect card signals
+                self._connect_card_signals(card)
 
-        # Apply geometry
-        if hasattr(self, "card_container"):
-            self.card_layout.setGeometry(self.card_container.rect())
+                self.card_layout.addWidget(card)
+                self._cards_by_id[cabinet.id] = card
+
+                per_card_times.append((_time.perf_counter() - cstart) * 1000.0)
+
+            # Update view state
+            self._update_view_state()
+        finally:
+            self.card_container.setUpdatesEnabled(True)
+            elapsed = (_time.perf_counter() - start) * 1000.0
+            # Summarize per-card timings
+            if per_card_times:
+                total_card_ms = sum(per_card_times)
+                avg = total_card_ms / len(per_card_times)
+                # Top 5 slowest cards
+                indexed = list(enumerate(per_card_times))
+                indexed.sort(key=lambda x: x[1], reverse=True)
+                top_n = indexed[:5]
+                self._dbg(
+                    f"_rebuild_all_cards: created {len(per_card_times)} cards in {total_card_ms:.1f}ms (avg {avg:.1f}ms/card); total elapsed {elapsed:.1f}ms"
+                )
+                for idx, t in top_n:
+                    cab = ordered_cabinets[idx]
+                    self._dbg(
+                        f"  slow card[{idx}] id={getattr(cab, 'id', None)} name={getattr(cab, 'name', None)} {t:.1f}ms"
+                    )
+            else:
+                self._dbg(
+                    f"_rebuild_all_cards finished in {elapsed:.1f}ms (no cards created)"
+                )
 
     def _clear_flow_layout_without_deleting(self) -> None:
         """Clear layout without deleting the widgets."""
+        self._dbg("_clear_flow_layout_without_deleting: clearing layout...")
+        removed = 0
         while self.card_layout.count():
-            child = self.card_layout.takeAt(0)
+            self.card_layout.takeAt(0)
             # Don't delete the widget, just remove from layout
+            removed += 1
+        self._dbg(f"_clear_flow_layout_without_deleting: removed {removed} items")
 
     def _is_sequence_duplicate(self, sequence: int, exclude_cabinet_id: int) -> bool:
         """
@@ -511,6 +617,11 @@ class ProjectDetailsView(QDialog):
         """Handle sequence change request from card - delegate to controller."""
         if self.controller:
             self.controller.on_sequence_changed(cabinet_id, new_sequence)
+
+    def _on_quantity_changed_request(self, cabinet_id: int, new_quantity: int) -> None:
+        """Handle quantity change request from card - delegate to controller."""
+        if self.controller:
+            self.controller.on_quantity_changed(cabinet_id, new_quantity)
 
     def _on_table_double_click(self, index):
         """Handle double-click on table view row to edit cabinet."""
@@ -570,8 +681,8 @@ class ProjectDetailsView(QDialog):
             logger.warning(f"Validation error (no banner manager): {message}")
 
     def _handle_cabinet_edit(self, cabinet_id: int) -> None:
-        """Handle cabinet edit request - opens the edit dialog."""
-        from src.gui.add_cabinet_dialog import AddCabinetDialog
+        """Handle cabinet edit request - opens the unified edit dialog."""
+        from src.gui.cabinet_editor import CabinetEditorDialog
 
         try:
             # Find the cabinet
@@ -585,23 +696,82 @@ class ProjectDetailsView(QDialog):
                 self._show_error("Nie znaleziono szafki")
                 return
 
-            # Open edit dialog with the cabinet ID
-            dialog = AddCabinetDialog(
-                db_session=self.session,
-                project=self.project,
-                cabinet_id=cabinet_id,
-                parent=self,
+            # Check if this is a custom cabinet (type_id=NULL)
+            if cabinet.type_id is None:
+                # This is a custom cabinet - handle it differently
+                self._handle_custom_cabinet_edit(cabinet)
+                return
+
+            # Get the cabinet type for editing catalog cabinet
+            cabinet_type = self.catalog_service.cabinet_type_service.get_template(
+                cabinet.type_id
             )
 
-            if dialog.exec() == QDialog.Accepted:
-                # Reload data to reflect changes
-                if self.controller:
-                    self.controller.load_data()
+            if not cabinet_type:
+                self._show_error("Nie znaleziono typu szafki")
+                return
+
+            # Open unified editor dialog in instance mode for catalog cabinet
+            editor = CabinetEditorDialog(
+                catalog_service=self.catalog_service,
+                project_service=getattr(self.controller, "project_service", None)
+                if self.controller
+                else None,
+                parent=self,
+            )
+            editor.load_instance(cabinet_type, cabinet)
+
+            # Connect save signal to refresh data immediately when changes are applied
+            if self.controller:
+                editor.sig_saved.connect(self.controller.load_data)
+
+            dialog_result = editor.exec()
+
+            if dialog_result == QDialog.DialogCode.Accepted:
                 self._show_success("Szafka zaktualizowana")
+
+            # Ensure data is refreshed regardless of how dialog was closed
+            # (the sig_saved connection will handle real-time updates during editing)
+            if self.controller:
+                self.controller.load_data()
 
         except Exception as e:
             logger.exception("Error editing cabinet")
             self._show_error(f"Błąd podczas edycji szafki: {e}")
+
+    def _handle_custom_cabinet_edit(self, cabinet: ProjectCabinet) -> None:
+        """Handle editing a custom cabinet (type_id=NULL)."""
+        from src.gui.cabinet_editor import CabinetEditorDialog
+
+        try:
+            # Open cabinet editor dialog for custom cabinet (no catalog type)
+            editor = CabinetEditorDialog(
+                catalog_service=self.catalog_service,
+                project_service=getattr(self.controller, "project_service", None)
+                if self.controller
+                else None,
+                parent=self,
+            )
+
+            # Load custom cabinet instance without catalog type
+            editor.load_custom_instance(cabinet)
+
+            # Connect save signal to refresh data immediately when changes are applied
+            if self.controller:
+                editor.sig_saved.connect(self.controller.load_data)
+
+            dialog_result = editor.exec()
+
+            if dialog_result == QDialog.DialogCode.Accepted:
+                self._show_success("Niestandardowa szafka zaktualizowana")
+
+            # Ensure data is refreshed regardless of how dialog was closed
+            if self.controller:
+                self.controller.load_data()
+
+        except Exception as e:
+            logger.exception("Error handling custom cabinet edit")
+            self._show_error(f"Błąd podczas edycji niestandardowej szafki: {e}")
 
     def _show_success(self, message: str) -> None:
         """Show success message in banner."""
@@ -623,52 +793,70 @@ class ProjectDetailsView(QDialog):
                 child.widget().setParent(None)
 
     def _cabinet_to_card_data(self, cabinet: ProjectCabinet) -> Dict[str, Any]:
-        """Convert ProjectCabinet to card data dict."""
-        # Get dimensions from cabinet type or adhoc values
+        """Convert ProjectCabinet to card data dict using snapshot data."""
+        # Get dimensions from parts snapshot (works for both standard and custom cabinets)
         width = height = depth = None
+        cabinet_name = "Niestandardowy"
 
+        # Calculate dimensions from parts snapshot
+        if hasattr(cabinet, "parts") and cabinet.parts:
+            # Use max width/height among parts as representative cabinet dimensions
+            max_w = None
+            max_h = None
+            for part in cabinet.parts:
+                if part.width_mm is not None:
+                    max_w = (
+                        int(part.width_mm)
+                        if max_w is None
+                        else max(max_w, int(part.width_mm))
+                    )
+                if part.height_mm is not None:
+                    max_h = (
+                        int(part.height_mm)
+                        if max_h is None
+                        else max(max_h, int(part.height_mm))
+                    )
+            width = max_w
+            height = max_h
+
+            # Try to get name from calculation context (for custom cabinets)
+            if not cabinet.cabinet_type and cabinet.parts:
+                # Check if any part has calc_context_json with template_name
+                for part in cabinet.parts:
+                    if (
+                        part.calc_context_json
+                        and isinstance(part.calc_context_json, dict)
+                        and "template_name" in part.calc_context_json
+                    ):
+                        template_name = part.calc_context_json["template_name"]
+                        cabinet_name = f"{template_name} + niestandardowa"
+                        break
+
+        # Fallback to default dimensions if no parts found
+        if width is None or height is None:
+            width = 600  # Default width
+            height = 720  # Default height
+
+        # Set a reasonable default depth for kitchen cabinets
+        depth = 560.0  # Standard kitchen cabinet depth
+
+        # Get cabinet name (from template if standard, from context if custom)
         if cabinet.cabinet_type:
-            # Try to get dimensions from various components in order of preference
-            # 1. Front panel (most representative for display)
-            if cabinet.cabinet_type.front_w_mm and cabinet.cabinet_type.front_h_mm:
-                width = cabinet.cabinet_type.front_w_mm
-                height = cabinet.cabinet_type.front_h_mm
-            # 2. Bok (side panel) if front not available
-            elif cabinet.cabinet_type.bok_w_mm and cabinet.cabinet_type.bok_h_mm:
-                width = cabinet.cabinet_type.bok_w_mm
-                height = cabinet.cabinet_type.bok_h_mm
-            # 3. Polka (shelf) as last resort
-            elif cabinet.cabinet_type.polka_w_mm and cabinet.cabinet_type.polka_h_mm:
-                width = cabinet.cabinet_type.polka_w_mm
-                height = cabinet.cabinet_type.polka_h_mm
-
-            # Set a reasonable default depth for kitchen cabinets
-            if width and height:
-                depth = 600.0  # Standard kitchen cabinet depth
-
-        # Override with adhoc dimensions if available
-        if cabinet.adhoc_width_mm:
-            width = cabinet.adhoc_width_mm
-        if cabinet.adhoc_height_mm:
-            height = cabinet.adhoc_height_mm
-        if cabinet.adhoc_depth_mm:
-            depth = cabinet.adhoc_depth_mm
+            cabinet_name = cabinet.cabinet_type.nazwa
 
         return {
             "id": cabinet.id,
-            "name": cabinet.cabinet_type.nazwa
-            if cabinet.cabinet_type
-            else "Niestandardowy",
+            "name": cabinet_name,
             "sequence": cabinet.sequence_number or 1,
             "quantity": cabinet.quantity or 1,
-            "body_color": cabinet.body_color or "#ffffff",
-            "front_color": cabinet.front_color or "#ffffff",
+            "body_color": cabinet.body_color or "Biały",
+            "front_color": cabinet.front_color or "Biały",
             "width_mm": width,
             "height_mm": height,
             "depth_mm": depth,
             "kitchen_type": cabinet.cabinet_type.kitchen_type
             if cabinet.cabinet_type
-            else None,
+            else "CUSTOM",
         }
 
     def _update_header_info(self) -> None:
@@ -709,19 +897,86 @@ class ProjectDetailsView(QDialog):
 
     def _handle_add_from_catalog(self):
         """Handle add from catalog request."""
-        self.sig_add_from_catalog.emit()
+        try:
+            # Check if we have the required components
+            if not self.project:
+                logger.warning("No project available for catalog dialog")
+                self.sig_add_from_catalog.emit()
+                return
+
+            # Check if catalog service is available
+            if not self.catalog_service:
+                logger.warning("No catalog service available for catalog dialog")
+                self.sig_add_from_catalog.emit()
+                return
+
+            # Create and show unified catalog window in "add" mode
+            catalog_window = CatalogWindow(
+                catalog_service=self.catalog_service,
+                project_service=self.controller,
+                initial_mode="add",
+                target_project=self.project,
+                parent=self,
+            )
+
+            # Connect signal to handle cabinet addition
+            catalog_window.sig_added_to_project.connect(
+                self._on_cabinet_added_from_catalog
+            )
+
+            # Show the catalog window
+            catalog_window.exec()
+
+        except Exception:
+            logger.exception("Error opening catalog window")
+            # Fallback to signal for now
+            self.sig_add_from_catalog.emit()
+
+    def _on_cabinet_added_from_catalog(
+        self, cabinet_type_id: int, project_id: int, quantity: int, options: dict
+    ):
+        """Handle cabinet added from catalog."""
+        try:
+            # Refresh the view to show the new cabinet
+            if self.controller:
+                self.controller.load_data()
+            self.refresh_data()
+        except Exception:
+            logger.exception("Error refreshing after cabinet addition from catalog")
 
     def _handle_add_custom(self):
         """Handle add custom cabinet request."""
-        self.sig_add_custom.emit()
+        try:
+            # Create a custom cabinet dialog with formula service
+            from src.gui.dialogs.custom_cabinet_dialog import CustomCabinetDialog
+            from src.services.formula_service import FormulaService
+
+            # Create formula service
+            formula_service = FormulaService(self.controller.session)
+
+            # Create and show the dialog
+            dialog = CustomCabinetDialog(
+                formula_service,
+                self.controller.project_service,
+                self.controller.project,
+                parent=self,
+            )
+
+            if dialog.exec() == QDialog.Accepted:
+                # CustomCabinetDialog already added the cabinet to database
+                # Just refresh the view to show the new cabinet
+                self.controller.load_data()
+
+        except Exception as e:
+            from PySide6.QtWidgets import QMessageBox
+
+            QMessageBox.warning(
+                self, "Błąd", f"Nie udało się dodać niestandardowej szafki: {str(e)}"
+            )
 
     def _handle_export(self):
         """Handle export request."""
         self.sig_export.emit()
-
-    def _handle_print(self):
-        """Handle print request."""
-        self.sig_print.emit()
 
     def _on_client_open_requested(self):
         """Handle client info request."""
@@ -730,7 +985,7 @@ class ProjectDetailsView(QDialog):
     def _on_view_mode_changed(self, mode: str):
         """Handle view mode change."""
         self._current_view_mode = mode
-        
+
         # Actually switch the stacked widget to show the correct view
         if mode == VIEW_MODE_TABLE:
             self._populate_table_view()
@@ -741,91 +996,102 @@ class ProjectDetailsView(QDialog):
                 self.stacked_widget.setCurrentWidget(self.card_scroll)
             else:
                 self.stacked_widget.setCurrentWidget(self.empty_state)
-        
+
         # Persist the view mode choice
         self.ui_state.set_view_mode(mode)
-        
+
         self.sig_view_mode_changed.emit(mode)
-        
+
     def _populate_table_view(self):
         """Populate the table view with cabinet data."""
         if not self.cabinets:
             # Clear the table if no cabinets
             self.table_view.setModel(None)
             return
-            
+
         try:
-            from PySide6.QtCore import QAbstractTableModel, Qt
+            from PySide6.QtCore import Qt
             from PySide6.QtGui import QStandardItemModel, QStandardItem
-            
+
             # Create a simple table model
             model = QStandardItemModel()
-            headers = ["Sekwencja", "Nazwa", "Wymiary", "Kolor przód", "Kolor korpus", "Ilość"]
+            headers = [
+                "Sekwencja",
+                "Nazwa",
+                "Wymiary",
+                "Kolor przód",
+                "Kolor korpus",
+                "Ilość",
+            ]
             model.setHorizontalHeaderLabels(headers)
-            
+
             # Add cabinet data to the model
             for cabinet in self.cabinets:
                 row = []
-                
+
                 # Sequence
                 seq_item = QStandardItem(str(cabinet.sequence_number or ""))
-                seq_item.setData(cabinet.id, Qt.ItemDataRole.UserRole)  # Store cabinet ID
+                seq_item.setData(
+                    cabinet.id, Qt.ItemDataRole.UserRole
+                )  # Store cabinet ID
                 row.append(seq_item)
-                
+
                 # Name (from cabinet type)
                 name = ""
-                if hasattr(cabinet, 'cabinet_type') and cabinet.cabinet_type:
-                    name = getattr(cabinet.cabinet_type, 'nazwa', '') or str(cabinet.cabinet_type.id)
+                if hasattr(cabinet, "cabinet_type") and cabinet.cabinet_type:
+                    name = getattr(cabinet.cabinet_type, "nazwa", "") or str(
+                        cabinet.cabinet_type.id
+                    )
                 name_item = QStandardItem(name)
                 row.append(name_item)
-                
-                # Dimensions (try different sources)
-                dimensions = ""
-                if cabinet.adhoc_width_mm and cabinet.adhoc_height_mm and cabinet.adhoc_depth_mm:
-                    dimensions = f"{cabinet.adhoc_width_mm}×{cabinet.adhoc_height_mm}×{cabinet.adhoc_depth_mm}"
-                else:
-                    dimensions = "Auto"  # Calculated dimensions
+
+                # Dimensions (calculated from cabinet template parts)
+                dimensions = "Auto"  # Calculated from template parts
                 dim_item = QStandardItem(dimensions)
                 row.append(dim_item)
-                
+
                 # Front color
                 front_color_item = QStandardItem(cabinet.front_color or "")
                 row.append(front_color_item)
-                
+
                 # Body color
                 body_color_item = QStandardItem(cabinet.body_color or "")
                 row.append(body_color_item)
-                
+
                 # Quantity
                 qty_item = QStandardItem(str(cabinet.quantity))
                 row.append(qty_item)
-                
+
                 model.appendRow(row)
-            
+
             # Set the model to the table view
             self.table_view.setModel(model)
-            
+
             # Resize columns to content
             self.table_view.resizeColumnsToContents()
-            
+
         except Exception as e:
             logger.exception("Error populating table view")
             self._show_error(f"Błąd podczas ładowania tabeli: {e}")
 
     def show_dialog(self) -> None:
         """Show the dialog in the appropriate mode."""
+        # Ensure signals are unblocked and dialog can be shown
+        self.blockSignals(False)
+        self.setAttribute(Qt.WA_DontShowOnScreen, False)
+
         # Ensure proper sizing before showing
         if not self.size().isValid() or self.size().width() < 800:
             # Set a reasonable default size if not already set
             self.resize(1000, 700)
-        
+
         # Center the dialog on parent or screen
         if self.parent():
             parent_geometry = self.parent().geometry()
             x = parent_geometry.x() + (parent_geometry.width() - self.width()) // 2
             y = parent_geometry.y() + (parent_geometry.height() - self.height()) // 2
             self.move(max(0, x), max(0, y))
-        
+
         if self.modal:
             self.exec()
         else:
@@ -835,3 +1101,22 @@ class ProjectDetailsView(QDialog):
         """Update the card view with current cabinet data."""
         # This method is now handled by apply_card_order from controller
         pass
+
+    def showEvent(self, event):
+        """Load data when dialog is actually shown to prevent flash."""
+        super().showEvent(event)
+
+        # Mark that first show is done to enable geometry operations
+        if not getattr(self, "_first_show_done", False):
+            self._first_show_done = True
+
+        # Load data only once and only when we have a controller
+        # Check if controller already has data to avoid duplicate loading
+        if (
+            not self._data_loaded
+            and self.controller
+            and not hasattr(self.controller, "cabinets")
+            or not self.controller.cabinets
+        ):
+            self._data_loaded = True
+            self.controller.load_data()

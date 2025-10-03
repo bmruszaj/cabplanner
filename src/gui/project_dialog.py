@@ -347,6 +347,8 @@ class ProjectDialog(QDialog):
 
     def _mark_dirty(self):
         """Mark the dialog as having unsaved changes"""
+        if not self._dirty:
+            logger.debug("Dialog marked as dirty")
         self._dirty = True
 
     def _update_header(self):
@@ -394,13 +396,13 @@ class ProjectDialog(QDialog):
                 font-weight: bold;
             }
             
-            QLabel#modeLabel[mode="new"] {
-                background-color: #27ae60;
-            }
+            QLabel#modeLabel[mode="new"] {{
+                background-color: {PRIMARY};
+            }}
             
-            QLabel#modeLabel[mode="edit"] {
-                background-color: #f39c12;
-            }
+            QLabel#modeLabel[mode="edit"] {{
+                background-color: {PRIMARY_DARK};
+            }}
             
             QGroupBox {
                 font-weight: bold;
@@ -557,9 +559,26 @@ class ProjectDialog(QDialog):
         }
 
     def generate_order_number(self):
-        """Generate a new order number based on current date"""
-        today = datetime.now()
-        order_number = f"{today.year}{today.month:02d}{today.day:02d}-{today.hour:02d}{today.minute:02d}"
+        """Generate a new order number based on current date and time"""
+        now = datetime.now()
+
+        # First try with seconds
+        order_number = f"{now.year}{now.month:02d}{now.day:02d}-{now.hour:02d}{now.minute:02d}{now.second:02d}"
+
+        # If it already exists, add a sequential suffix
+        counter = 1
+        base_order_number = order_number
+
+        while self.project_service.get_project_by_order_number(order_number):
+            order_number = f"{base_order_number}-{counter:02d}"
+            counter += 1
+
+            # Safety check to prevent infinite loop
+            if counter > 99:
+                # Fall back to microseconds
+                order_number = f"{now.year}{now.month:02d}{now.day:02d}-{now.hour:02d}{now.minute:02d}{now.second:02d}{now.microsecond:06d}"
+                break
+
         self.order_number_edit.setText(order_number)
         self._mark_dirty()
 
@@ -688,13 +707,19 @@ class ProjectDialog(QDialog):
     def accept(self):
         """Handle dialog acceptance (Save button)"""
         try:
+            logger.debug(
+                f"Accept called - project exists: {bool(self.project)}, dirty: {self._dirty}"
+            )
+
             # Skip DB operations if no changes were made to existing project
             if self.project and not self._dirty:
+                logger.debug("No changes to save, accepting dialog")
                 super().accept()
                 return
 
             # Validate form
             is_valid, error_message, widget_to_focus = self._validate_form()
+            logger.debug(f"Form validation result: {is_valid}, error: {error_message}")
             if not is_valid:
                 QMessageBox.warning(
                     self,
@@ -707,34 +732,62 @@ class ProjectDialog(QDialog):
                     widget_to_focus.setFocus()
                 return
 
-            # TODO: Check for duplicate order numbers if ProjectService supports it
-            # if hasattr(self.project_service, 'get_project_by_order_number'):
-            #     existing = self.project_service.get_project_by_order_number(self.order_number_edit.text().strip())
-            #     if existing and (not self.project or existing.id != self.project.id):
-            #         QMessageBox.warning(self, "Duplikat", "Projekt z tym numerem zamówienia już istnieje.")
-            #         return
+            # Check for duplicate order numbers
+            order_number = self.order_number_edit.text().strip()
+            existing = self.project_service.get_project_by_order_number(order_number)
+            if existing and (not self.project or existing.id != self.project.id):
+                QMessageBox.warning(
+                    self,
+                    self.tr("Duplikat"),
+                    self.tr(
+                        f"Projekt z numerem zamówienia '{order_number}' już istnieje.\n"
+                        f"Istniejący projekt: '{existing.name}'"
+                    ),
+                )
+                self.order_number_edit.setFocus()
+                self.order_number_edit.selectAll()
+                return
 
             # Collect and save data
             project_data = self._collect_payload()
 
             if self.project:
                 # Update existing project
+                logger.debug(
+                    f"Updating project {self.project.id} with data: {project_data}"
+                )
                 self.project = self.project_service.update_project(
                     self.project.id, **project_data
                 )
                 logger.info(f"Project updated: {self.project.id}")
             else:
                 # Create new project
+                logger.debug(f"Creating new project with data: {project_data}")
                 self.project = self.project_service.create_project(**project_data)
                 logger.info(f"New project created: {self.project.id}")
 
             self._dirty = False
+            logger.debug("Dialog accepting successfully")
             super().accept()
 
         except Exception as e:
             logger.error(f"Error saving project: {str(e)}")
-            QMessageBox.critical(
-                self,
-                self.tr("Błąd zapisu"),
-                self.tr(f"Wystąpił błąd podczas zapisywania projektu: {str(e)}"),
-            )
+
+            # Handle specific database constraint errors
+            error_msg = str(e)
+            if "UNIQUE constraint failed: projects.order_number" in error_msg:
+                user_msg = self.tr(
+                    f"Projekt z numerem zamówienia '{order_number}' już istnieje.\n"
+                    "Kliknij 'Generuj' aby utworzyć nowy unikalny numer."
+                )
+                title = self.tr("Duplikat numeru zamówienia")
+                # Focus on order number field for correction
+                self.order_number_edit.setFocus()
+                self.order_number_edit.selectAll()
+            else:
+                user_msg = self.tr(
+                    f"Wystąpił błąd podczas zapisywania projektu:\n{error_msg}"
+                )
+                title = self.tr("Błąd zapisu")
+
+            QMessageBox.critical(self, title, user_msg)

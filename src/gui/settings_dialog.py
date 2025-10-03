@@ -3,6 +3,7 @@ Modern settings dialog for the Cabplanner application.
 """
 
 import logging
+import os
 from pathlib import Path
 from PySide6.QtWidgets import (
     QDialog,
@@ -15,8 +16,6 @@ from PySide6.QtWidgets import (
     QPushButton,
     QFileDialog,
     QCheckBox,
-    QSpinBox,
-    QDoubleSpinBox,
     QComboBox,
     QFormLayout,
     QGroupBox,
@@ -63,12 +62,14 @@ class SettingsDialog(QDialog):
 
         # Create tabs
         self.general_tab = self.create_general_tab()
+        self.projects_tab = self.create_projects_tab()
         self.appearance_tab = self.create_appearance_tab()
         self.company_tab = self.create_company_tab()
         self.advanced_tab = self.create_advanced_tab()
 
         # Add tabs to widget
         self.tab_widget.addTab(self.general_tab, "Ogólne")
+        self.tab_widget.addTab(self.projects_tab, "Projekty")
         self.tab_widget.addTab(self.appearance_tab, "Wygląd")
         self.tab_widget.addTab(self.company_tab, "Dane firmy")
         self.tab_widget.addTab(self.advanced_tab, "Zaawansowane")
@@ -141,18 +142,36 @@ class SettingsDialog(QDialog):
 
         layout.addWidget(db_group)
 
-        # Projects settings group
-        projects_group = QGroupBox("Projekty")
-        projects_layout = QFormLayout(projects_group)
+        layout.addStretch()
+        return tab
 
-        self.auto_numbering_check = QCheckBox("Automatyczne numerowanie projektów")
-        projects_layout.addRow(self.auto_numbering_check)
+    def create_projects_tab(self):
+        """Create the projects settings tab"""
+        tab = QWidget()
+        layout = QVBoxLayout(tab)
 
+        # Project defaults group
+        defaults_group = QGroupBox("Domyślne ustawienia projektów")
+        defaults_layout = QFormLayout(defaults_group)
+
+        # Default kitchen type
         self.default_kitchen_type = QComboBox()
         self.default_kitchen_type.addItems(["LOFT", "PARIS", "WINO"])
-        projects_layout.addRow("Domyślny typ kuchni:", self.default_kitchen_type)
+        defaults_layout.addRow("Domyślny typ kuchni:", self.default_kitchen_type)
 
-        layout.addWidget(projects_group)
+        # Default project path
+        self.default_project_path = QLineEdit()
+        project_path_layout = QHBoxLayout()
+        project_path_layout.addWidget(self.default_project_path)
+
+        browse_project_btn = QPushButton("Przeglądaj...")
+        browse_project_btn.clicked.connect(self.browse_project_path)
+        browse_project_btn.setProperty("class", "secondary")
+        project_path_layout.addWidget(browse_project_btn)
+
+        defaults_layout.addRow("Domyślna ścieżka projektów:", project_path_layout)
+
+        layout.addWidget(defaults_group)
 
         layout.addStretch()
         return tab
@@ -169,34 +188,7 @@ class SettingsDialog(QDialog):
         self.dark_mode_check = QCheckBox("Tryb ciemny")
         theme_layout.addWidget(self.dark_mode_check)
 
-        # Color scheme
-        color_layout = QFormLayout()
-        self.theme_color = QComboBox()
-        self.theme_color.addItems(
-            ["Niebieski", "Zielony", "Czerwony", "Pomarańczowy", "Fioletowy"]
-        )
-        color_layout.addRow("Główny kolor:", self.theme_color)
-        theme_layout.addLayout(color_layout)
-
-        # Font size
-        self.font_size = QSpinBox()
-        self.font_size.setRange(8, 16)
-        self.font_size.setSingleStep(1)
-        color_layout.addRow("Rozmiar czcionki:", self.font_size)
-
         layout.addWidget(theme_group)
-
-        # Table settings
-        table_group = QGroupBox("Tabele")
-        table_layout = QVBoxLayout(table_group)
-
-        self.alternate_row_colors = QCheckBox("Naprzemienne kolory wierszy")
-        table_layout.addWidget(self.alternate_row_colors)
-
-        self.grid_lines = QCheckBox("Pokaż linie siatki")
-        table_layout.addWidget(self.grid_lines)
-
-        layout.addWidget(table_group)
 
         layout.addStretch()
         return tab
@@ -262,30 +254,6 @@ class SettingsDialog(QDialog):
         tab = QWidget()
         layout = QVBoxLayout(tab)
 
-        # Formula settings
-        formula_group = QGroupBox("Wzory i obliczenia")
-        formula_layout = QFormLayout(formula_group)
-
-        self.base_offset = QDoubleSpinBox()
-        self.base_offset.setRange(0, 100)
-        self.base_offset.setSingleStep(0.1)
-        self.base_offset.setSuffix(" mm")
-        formula_layout.addRow("Domyślne przesunięcie:", self.base_offset)
-
-        layout.addWidget(formula_group)
-
-        # Developer settings
-        dev_group = QGroupBox("Opcje deweloperskie")
-        dev_layout = QVBoxLayout(dev_group)
-
-        self.enable_logging = QCheckBox("Włącz szczegółowe logowanie")
-        dev_layout.addWidget(self.enable_logging)
-
-        self.debug_mode = QCheckBox("Tryb debugowania")
-        dev_layout.addWidget(self.debug_mode)
-
-        layout.addWidget(dev_group)
-
         # Reset settings button
         reset_layout = QHBoxLayout()
         reset_layout.addStretch()
@@ -350,11 +318,6 @@ class SettingsDialog(QDialog):
                 )
             )
 
-            # Project settings
-            self.auto_numbering_check.setChecked(
-                self.settings_service.get_setting_value("auto_numbering", True)
-            )
-
             default_kitchen = self.settings_service.get_setting_value(
                 "default_kitchen_type", "LOFT"
             )
@@ -362,28 +325,14 @@ class SettingsDialog(QDialog):
             if index >= 0:
                 self.default_kitchen_type.setCurrentIndex(index)
 
+            # Default project path
+            self.default_project_path.setText(
+                self.settings_service.get_setting_value("default_project_path", "")
+            )
+
             # Appearance settings
             self.dark_mode_check.setChecked(
                 self.settings_service.get_setting_value("dark_mode", False)
-            )
-
-            theme_color = self.settings_service.get_setting_value(
-                "theme_color", "Niebieski"
-            )
-            index = self.theme_color.findText(theme_color)
-            if index >= 0:
-                self.theme_color.setCurrentIndex(index)
-
-            self.font_size.setValue(
-                self.settings_service.get_setting_value("font_size", 10)
-            )
-
-            self.alternate_row_colors.setChecked(
-                self.settings_service.get_setting_value("alternate_row_colors", True)
-            )
-
-            self.grid_lines.setChecked(
-                self.settings_service.get_setting_value("grid_lines", True)
             )
 
             # Company settings
@@ -424,19 +373,6 @@ class SettingsDialog(QDialog):
                 self.logo_preview.setText("Brak logo")
                 self.logo_preview.setPixmap(QPixmap())
 
-            # Advanced settings
-            self.base_offset.setValue(
-                self.settings_service.get_setting_value("base_formula_offset_mm", 20.0)
-            )
-
-            self.enable_logging.setChecked(
-                self.settings_service.get_setting_value("enable_logging", False)
-            )
-
-            self.debug_mode.setChecked(
-                self.settings_service.get_setting_value("debug_mode", False)
-            )
-
         except Exception as e:
             logger.error(f"Error loading settings: {str(e)}")
             QMessageBox.warning(
@@ -446,6 +382,10 @@ class SettingsDialog(QDialog):
     def save_settings(self):
         """Save settings to the database"""
         try:
+            # Validate settings first
+            if not self.validate_settings():
+                return
+
             # Database settings
             self.settings_service.set_setting("db_path", self.db_path_edit.text())
 
@@ -463,33 +403,18 @@ class SettingsDialog(QDialog):
                 "create_shortcut_on_start", self.create_shortcut_check.isChecked()
             )
 
-            # Project settings
             self.settings_service.set_setting(
-                "auto_numbering", self.auto_numbering_check.isChecked()
+                "default_kitchen_type", self.default_kitchen_type.currentText()
             )
 
             self.settings_service.set_setting(
-                "default_kitchen_type", self.default_kitchen_type.currentText()
+                "default_project_path", self.default_project_path.text()
             )
 
             # Appearance settings
             self.settings_service.set_setting(
                 "dark_mode", self.dark_mode_check.isChecked()
             )
-
-            self.settings_service.set_setting(
-                "theme_color", self.theme_color.currentText()
-            )
-
-            self.settings_service.set_setting(
-                "font_size", self.font_size.value(), "int"
-            )
-
-            self.settings_service.set_setting(
-                "alternate_row_colors", self.alternate_row_colors.isChecked()
-            )
-
-            self.settings_service.set_setting("grid_lines", self.grid_lines.isChecked())
 
             # Company settings
             self.settings_service.set_setting("company_name", self.company_name.text())
@@ -513,17 +438,6 @@ class SettingsDialog(QDialog):
             self.settings_service.set_setting(
                 "company_tax_id", self.company_tax_id.text()
             )
-
-            # Advanced settings
-            self.settings_service.set_setting(
-                "base_formula_offset_mm", self.base_offset.value(), "float"
-            )
-
-            self.settings_service.set_setting(
-                "enable_logging", self.enable_logging.isChecked()
-            )
-
-            self.settings_service.set_setting("debug_mode", self.debug_mode.isChecked())
 
             # Emit signal that settings have changed
             self.settingsChanged.emit()
@@ -583,11 +497,79 @@ class SettingsDialog(QDialog):
                     self, "Błąd", f"Nie udało się wczytać logo: {str(e)}"
                 )
 
+    def browse_project_path(self):
+        """Browse for default project directory"""
+        directory = QFileDialog.getExistingDirectory(
+            self,
+            "Wybierz domyślny folder dla projektów",
+            self.default_project_path.text() or "",
+        )
+
+        if directory:
+            self.default_project_path.setText(directory)
+
     def clear_company_logo(self):
         """Clear the company logo"""
         self.logo_preview.setText("Brak logo")
         self.logo_preview.setPixmap(QPixmap())
         self.settings_service.set_setting("company_logo_path", "")
+
+    def validate_settings(self):
+        """Validate all settings before saving"""
+        # Validate database path
+        db_path = self.db_path_edit.text().strip()
+        if not db_path:
+            QMessageBox.warning(
+                self, "Błąd walidacji", "Ścieżka do bazy danych nie może być pusta."
+            )
+            return False
+
+        # Validate project path if provided
+        project_path = self.default_project_path.text().strip()
+        if project_path and not os.path.exists(project_path):
+            reply = QMessageBox.question(
+                self,
+                "Nieprawidłowa ścieżka",
+                f"Ścieżka '{project_path}' nie istnieje. Czy chcesz kontynuować?",
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.No,
+            )
+            if reply == QMessageBox.No:
+                return False
+
+        # Validate company email if provided
+        company_email = self.company_email.text().strip()
+        if company_email and not self.is_valid_email(company_email):
+            QMessageBox.warning(
+                self, "Błąd walidacji", "Wprowadź prawidłowy adres e-mail firmy."
+            )
+            return False
+
+        # Validate company phone if provided
+        company_phone = self.company_phone.text().strip()
+        if company_phone and not self.is_valid_phone(company_phone):
+            QMessageBox.warning(
+                self, "Błąd walidacji", "Wprowadź prawidłowy numer telefonu."
+            )
+            return False
+
+        return True
+
+    def is_valid_email(self, email):
+        """Simple email validation"""
+        import re
+
+        pattern = r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$"
+        return re.match(pattern, email) is not None
+
+    def is_valid_phone(self, phone):
+        """Simple phone validation - allows digits, spaces, hyphens, parentheses, plus"""
+        import re
+
+        # Remove common separators and check if remaining are digits (with optional + at start)
+        cleaned = re.sub(r"[\s\-\(\)]+", "", phone)
+        pattern = r"^\+?[0-9]{7,15}$"
+        return re.match(pattern, cleaned) is not None
 
     def confirm_reset(self):
         """Confirm and reset all settings to defaults"""
@@ -610,16 +592,11 @@ class SettingsDialog(QDialog):
                 "auto_update_enabled": True,
                 "auto_update_frequency": "Przy uruchomieniu",
                 "create_shortcut_on_start": True,
-                "auto_numbering": True,
                 "default_kitchen_type": "LOFT",
+                "default_project_path": os.path.join(
+                    os.path.expanduser("~"), "Documents", "CabPlanner"
+                ),
                 "dark_mode": False,
-                "theme_color": "Niebieski",
-                "font_size": 10,
-                "alternate_row_colors": True,
-                "grid_lines": True,
-                "base_formula_offset_mm": 20.0,
-                "enable_logging": False,
-                "debug_mode": False,
                 "company_logo_path": "",
             }
 

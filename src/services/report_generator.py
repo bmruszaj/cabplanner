@@ -103,11 +103,11 @@ class ReportGenerator:
             # Optional notes
             self._add_notes(doc, project)
 
-            # Save
+            # Save with handling for open files
             out_dir = Path(output_dir)
             out_dir.mkdir(parents=True, exist_ok=True)
-            file_name = f"projekt_{project.order_number}.docx"
-            output_path = out_dir / file_name
+            base_name = f"projekt_{project.order_number}"
+            output_path = self._get_available_filename(out_dir, base_name)
             doc.save(str(output_path))
             logger.info(f"Report saved to: {output_path}")
 
@@ -147,161 +147,90 @@ class ReportGenerator:
             return formatki, fronty, hdf, akcesoria
 
         for cab in project.cabinets:
-            ct = cab.cabinet_type
             qty = cab.quantity
 
-            # Handle standard catalog cabinets
-            if ct:
-                self._process_catalog_cabinet(cab, ct, qty, formatki, fronty, hdf)
-            # Handle ad-hoc cabinets
-            elif cab.adhoc_width_mm and cab.adhoc_height_mm and cab.adhoc_depth_mm:
-                self._process_adhoc_cabinet(cab, qty, formatki, fronty, hdf)
+            # Process both catalog and custom cabinets
+            self._process_cabinet(cab, qty, formatki, fronty, hdf)
 
             # Process accessories for all cabinet types
             self._process_accessories(cab, qty, akcesoria)
 
         return formatki, fronty, hdf, akcesoria
 
-    def _process_catalog_cabinet(self, cab, ct, qty, formatki, fronty, hdf):
-        """Process a catalog cabinet and add its elements to the appropriate lists"""
+    def _process_cabinet(self, cab, qty, formatki, fronty, hdf):
+        """Process a cabinet (catalog or custom) and add its parts to the appropriate lists"""
         # Get the sequence number for this cabinet
         seq_num = getattr(cab, "sequence_number", 0)
         from src.services.project_service import get_circled_number
 
         seq_symbol = get_circled_number(seq_num)
 
-        # Process panels (formatki)
-        for attr, name in [
-            ("bok", "Bok"),
-            ("wieniec", "Wieniec"),
-            ("polka", "Półka"),
-            ("listwa", "Listwa"),
-        ]:
-            count = getattr(ct, f"{attr}_count", 0) or 0
-            width = getattr(ct, f"{attr}_w_mm", None)
-            height = getattr(ct, f"{attr}_h_mm", None)
-            if count > 0 and width and height:
+        # Determine parts source based on cabinet type
+        ct = cab.cabinet_type
+        if ct:
+            # Catalog cabinet: get parts from template
+            parts = ct.parts
+        else:
+            # Custom cabinet: get parts directly from cabinet (snapshot architecture)
+            parts = getattr(cab, "parts", [])
+
+        # Process all parts
+        for part in parts:
+            part_qty = part.pieces * qty
+
+            # Determine material
+            material = part.material
+            if not material:
+                # For catalog cabinets, infer material from part name if not set
+                if ct and not material:
+                    if "front" in part.part_name.lower():
+                        material = "FRONT"
+                    elif "hdf" in part.part_name.lower():
+                        material = "HDF"
+                    else:
+                        material = "PLYTA"  # Default for panels
+                else:
+                    # For custom cabinets, default to PLYTA
+                    material = "PLYTA"
+
+            # Determine category based on material
+            if material == "FRONT":
+                fronty.append(
+                    SimpleNamespace(
+                        seq=seq_symbol,
+                        name=part.part_name,
+                        quantity=part_qty,
+                        width=part.width_mm,
+                        height=part.height_mm,
+                        color=cab.front_color,
+                        notes=f"Handle: {cab.handle_type}",
+                    )
+                )
+            elif material == "HDF":
+                hdf.append(
+                    SimpleNamespace(
+                        seq=seq_symbol,
+                        name=part.part_name,
+                        quantity=part_qty,
+                        width=part.width_mm,
+                        height=part.height_mm,
+                        color="",
+                        notes=part.comments or "",
+                    )
+                )
+            else:
+                # Default to formatki (panels)
                 formatki.append(
                     SimpleNamespace(
                         seq=seq_symbol,
-                        name=name,
-                        quantity=count * qty,
-                        width=int(width),
-                        height=int(height),
+                        name=part.part_name,
+                        quantity=part_qty,
+                        width=part.width_mm,
+                        height=part.height_mm,
                         color=cab.body_color,
-                        notes="",
+                        notes=part.comments or "",
                     )
                 )
-
-        # Process fronts
-        fcount = getattr(ct, "front_count", 0) or 0
-        fw = getattr(ct, "front_w_mm", None)
-        fh = getattr(ct, "front_h_mm", None)
-        if fcount > 0 and fw and fh:
-            fronty.append(
-                SimpleNamespace(
-                    seq=seq_symbol,
-                    name="Front",
-                    quantity=fcount * qty,
-                    width=int(fw),
-                    height=int(fh),
-                    color=cab.front_color,
-                    notes=f"Handle: {cab.handle_type}",
-                )
-            )
-
-        # Process HDF backs
-        if getattr(ct, "hdf_plecy", False):
-            bw = getattr(ct, "bok_w_mm", 0)
-            bh = getattr(ct, "bok_h_mm", 0)
-            hdf.append(
-                SimpleNamespace(
-                    seq=seq_symbol,
-                    name="HDF Plecy",
-                    quantity=qty,
-                    width=int(bw or 0),
-                    height=int(bh or 0),
-                    color="",
-                    notes="",
-                )
-            )
-
-    def _process_adhoc_cabinet(self, cab, qty, formatki, fronty, hdf):
-        """Process an ad-hoc cabinet and add its elements to the appropriate lists"""
-        # Get the sequence number for this cabinet
-        seq_num = getattr(cab, "sequence_number", 0)
-        from src.services.project_service import get_circled_number
-
-        seq_symbol = get_circled_number(seq_num)
-
-        width = cab.adhoc_width_mm
-        height = cab.adhoc_height_mm
-        depth = cab.adhoc_depth_mm
-
-        # Sides (boki)
-        formatki.append(
-            SimpleNamespace(
-                seq=seq_symbol,
-                name="Bok",
-                quantity=2 * qty,
-                width=int(depth),
-                height=int(height),
-                color=cab.body_color,
-                notes="Ad-hoc",
-            )
-        )
-
-        # Top/bottom (wieńce)
-        formatki.append(
-            SimpleNamespace(
-                seq=seq_symbol,
-                name="Wieniec",
-                quantity=2 * qty,
-                width=int(width),
-                height=int(depth),
-                color=cab.body_color,
-                notes="Ad-hoc",
-            )
-        )
-
-        # Shelf (półka)
-        formatki.append(
-            SimpleNamespace(
-                seq=seq_symbol,
-                name="Półka",
-                quantity=qty,
-                width=int(width - 36),  # Account for sides
-                height=int(depth - 20),  # Account for back clearance
-                color=cab.body_color,
-                notes="Ad-hoc",
-            )
-        )
-
-        # Front
-        fronty.append(
-            SimpleNamespace(
-                seq=seq_symbol,
-                name="Front",
-                quantity=qty,
-                width=int(width),
-                height=int(height),
-                color=cab.front_color,
-                notes=f"Handle: {cab.handle_type} (Ad-hoc)",
-            )
-        )
-
-        # HDF back
-        hdf.append(
-            SimpleNamespace(
-                seq=seq_symbol,
-                name="HDF Plecy",
-                quantity=qty,
-                width=int(width - 6),  # Slight adjustment
-                height=int(height - 6),  # Slight adjustment
-                color="",
-                notes="Ad-hoc",
-            )
-        )
 
     def _process_accessories(self, cab, qty, akcesoria):
         """Process accessories for a cabinet and add them to the accessories list"""
@@ -326,22 +255,24 @@ class ReportGenerator:
         table = header.add_table(1, 2, usable_width)
         table.autofit = True
 
-        # Left: metadata
+        # Left: metadata in single line with Polish labels
         cell_meta = table.rows[0].cells[0]
         p = cell_meta.paragraphs[0]
         p.alignment = WD_ALIGN_PARAGRAPH.LEFT
-        lines = [
-            f"Client Name: {project.client_name}",
-            f"Client Address: {project.client_address}",
-            f"Client Phone: {project.client_phone}",
-            f"Client Email: {project.client_email}",
-            f"Order Number: {project.order_number}",
-            f"Kitchen Type: {project.kitchen_type}",
-            f"Report Date: {date.today().isoformat()}",
-        ]
-        for line in lines:
-            run = p.add_run(line + "\n")
-            run.font.size = Pt(10)
+
+        # Single line format with Polish labels
+        info_text = (
+            f"Klient: {project.client_name} | "
+            f"Adres: {project.client_address} | "
+            f"Tel.: {project.client_phone} | "
+            f"Email: {project.client_email} | "
+            f"Nr zamówienia: {project.order_number} | "
+            f"Typ kuchni: {project.kitchen_type} | "
+            f"Data raportu: {date.today().isoformat()}"
+        )
+
+        run = p.add_run(info_text)
+        run.font.size = Pt(10)
 
         # Right: company logo
         cell_logo = table.rows[0].cells[1]
@@ -380,6 +311,10 @@ class ReportGenerator:
     def _add_parts_section(
         self, doc: DocxDocument, title: str, parts: List[Any], accessory: bool = False
     ) -> None:
+        # Check if we need a page break before adding section
+        if parts and self._should_break_page_for_section(doc, len(parts)):
+            doc.add_page_break()
+
         doc.add_heading(title, level=2)
         if not parts:
             doc.add_paragraph("Brak pozycji.")
@@ -425,6 +360,60 @@ class ReportGenerator:
             p = doc.add_paragraph()
             p.add_run("Uwagi: ").bold = True
             p.add_run(project.uwagi_note)
+
+    def _get_available_filename(self, output_dir: Path, base_name: str) -> Path:
+        """Get an available filename, handling case when file is already open."""
+        original_path = output_dir / f"{base_name}.docx"
+
+        # Try to save to original path first
+        try:
+            # Test if we can write to the file by opening it
+            with open(original_path, "ab"):
+                pass  # Just test write access
+            return original_path
+        except (PermissionError, OSError):
+            # File is likely open, try alternative names
+            for i in range(1, 100):  # Try up to 99 alternatives
+                alt_path = output_dir / f"{base_name}_({i}).docx"
+                try:
+                    with open(alt_path, "ab"):
+                        pass  # Test write access
+                    logger.info(
+                        f"Original file appears to be open, using alternative: {alt_path.name}"
+                    )
+                    return alt_path
+                except (PermissionError, OSError):
+                    continue
+
+            # If all alternatives fail, raise the original error
+            raise PermissionError(
+                f"Nie można zapisać raportu. Plik '{base_name}.docx' "
+                "jest prawdopodobnie otwarty w innym programie. "
+                "Zamknij plik i spróbuj ponownie."
+            )
+
+    def _should_break_page_for_section(
+        self, doc: DocxDocument, items_count: int
+    ) -> bool:
+        """Check if we should add a page break before a new section."""
+        if items_count == 0:
+            return False
+
+        # Rough calculation: if we have less than 6 lines remaining on page
+        # (header + 2 table header rows + at least 1 data row + some margin)
+        # This is a simple heuristic - Word's actual pagination is more complex
+        current_elements = len(doc.paragraphs) + sum(
+            len(table.rows) for table in doc.tables
+        )
+
+        # Assume ~50 lines per page, break if we have less than 6 lines left
+        lines_used = current_elements % 50
+        lines_remaining = 50 - lines_used
+
+        # Need at least: title (1) + table header (1) + 1 data row (1) + margin (3) = 6 lines
+        min_lines_needed = 6
+
+        return lines_remaining < min_lines_needed
 
     def _open_file(self, path: Path) -> None:
         try:

@@ -23,7 +23,15 @@ class QuantityStepper(QWidget):
         self._value = max(
             MIN_CABINET_QUANTITY, min(MAX_CABINET_QUANTITY, initial_value)
         )
+        import time as _time
+
+        self._qt_start = _time.perf_counter()
+        self._qt_dbg = lambda m: print(
+            f"[QSTEP DEBUG][{(_time.perf_counter() - self._qt_start) * 1000:.1f}ms] {m}"
+        )
+        self._qt_dbg("start setup")
         self._setup_ui()
+        self._qt_dbg("setup complete")
 
     def _setup_ui(self):
         layout = QHBoxLayout(self)
