@@ -25,8 +25,12 @@ $piArgs = @(
   '--add-data'; 'src;src'
 
   # Include entire packages
-  '--collect-all'; 'PySide6'
-  '--collect-all'; 'shiboken6'
+  '--hidden-import'; 'PySide6'
+  '--hidden-import'; 'PySide6.QtCore'
+  '--hidden-import'; 'PySide6.QtGui'
+  '--hidden-import'; 'PySide6.QtWidgets'
+  '--hidden-import'; 'shiboken6'
+
 
   # Hidden imports
   '--hidden-import'; 'docx'
