@@ -5,9 +5,11 @@ from docx import Document
 from src.services.report_generator import ReportGenerator
 from src.db_schema.orm_models import (
     Project,
-    CabinetType,
+    CabinetTemplate,
+    CabinetPart,
     ProjectCabinet,
     ProjectCabinetAccessory,
+    ProjectCabinetPart,
     Accessory,
 )
 
@@ -33,25 +35,61 @@ def sample_project_orm():
         uwagi=True,
         uwagi_note="Uwagi test",
     )
-    # CabinetType with various counts and dimensions
-    ct = CabinetType(
+    # CabinetTemplate with basic info
+    ct = CabinetTemplate(
         kitchen_type="LOFT",
         nazwa="Standard",
-        hdf_plecy=True,
-        bok_count=1,
-        bok_w_mm=400,
-        bok_h_mm=800,
-        wieniec_count=1,
-        wieniec_w_mm=400,
-        wieniec_h_mm=50,
-        polka_count=2,
-        polka_w_mm=300,
-        polka_h_mm=20,
-        listwa_count=0,
-        front_count=1,
-        front_w_mm=400,
-        front_h_mm=800,
     )
+
+    # Add cabinet parts with different materials to trigger all report sections
+    parts = [
+        CabinetPart(
+            part_name="bok lewy",
+            height_mm=720,
+            width_mm=500,
+            pieces=1,
+            material="PLYTA",
+            thickness_mm=18,
+            wrapping="D",
+        ),
+        CabinetPart(
+            part_name="bok prawy",
+            height_mm=720,
+            width_mm=500,
+            pieces=1,
+            material="PLYTA",
+            thickness_mm=18,
+            wrapping="D",
+        ),
+        CabinetPart(
+            part_name="polka",
+            height_mm=480,
+            width_mm=500,
+            pieces=2,
+            material="PLYTA",
+            thickness_mm=18,
+            wrapping="D",
+        ),
+        CabinetPart(
+            part_name="front",
+            height_mm=700,
+            width_mm=596,
+            pieces=1,
+            material="FRONT",
+            thickness_mm=16,
+            wrapping="DDKK",
+        ),
+        CabinetPart(
+            part_name="plecy",
+            height_mm=715,
+            width_mm=580,
+            pieces=1,
+            material="HDF",
+            thickness_mm=3,
+        ),
+    ]
+    ct.parts = parts
+
     # One cabinet of quantity 2
     cab = ProjectCabinet(
         sequence_number=1,
@@ -99,8 +137,8 @@ def test_header_contains_orm_metadata(tmp_path, sample_project_orm):
     doc = Document(output)
     header = doc.sections[0].header
     text = header.tables[0].cell(0, 0).text
-    assert "Client Name: ORM Client" in text
-    assert "Order Number: ORM001" in text
+    assert "Klient: ORM Client" in text  # Polish localization
+    assert "Nr zamówienia: ORM001" in text  # Polish localization
     assert date.today().isoformat() in text
 
 
@@ -195,3 +233,242 @@ def test_notes_and_footer(tmp_path, sample_project_orm):
     footer = doc.sections[0].footer
     xml = footer.tables[0].cell(0, 1).paragraphs[0]._p.xml
     assert "fldSimple" in xml and "PAGE" in xml
+
+
+@pytest.fixture
+def project_with_custom_cabinets():
+    """
+    Given: a Project with both catalog and custom cabinets
+    """
+    # Project setup
+    project = Project(
+        name="Mixed Cabinet Project",
+        kitchen_type="LOFT",
+        order_number="MIX001",
+        client_name="Mixed Client",
+        client_address="789 Custom Ave",
+        client_phone="555-MIX",
+        client_email="mixed@example.com",
+        blaty=False,
+        cokoly=False,
+        uwagi=False,
+    )
+
+    # Create catalog template for regular cabinet
+    catalog_template = CabinetTemplate(
+        kitchen_type="LOFT",
+        nazwa="D40",
+    )
+
+    # Add parts to catalog template
+    catalog_parts = [
+        CabinetPart(
+            part_name="Catalog Panel",
+            height_mm=600,
+            width_mm=400,
+            pieces=2,
+            material="PLYTA",
+            thickness_mm=18,
+        ),
+        CabinetPart(
+            part_name="Catalog Front",
+            height_mm=598,
+            width_mm=398,
+            pieces=1,
+            material="FRONT",
+            thickness_mm=18,
+        ),
+    ]
+    catalog_template.parts = catalog_parts
+
+    # Create catalog cabinet
+    catalog_cabinet = ProjectCabinet(
+        sequence_number=1,
+        body_color="White",
+        front_color="Oak",
+        handle_type="Standard",
+        quantity=1,
+        cabinet_type=catalog_template,
+    )
+
+    # Create custom cabinet (type_id=NULL)
+    custom_cabinet = ProjectCabinet(
+        sequence_number=2,
+        body_color="Gray",
+        front_color="Black",
+        handle_type="Push-to-open",
+        quantity=2,
+        cabinet_type=None,  # Custom cabinet
+    )
+
+    # Add custom parts
+    custom_parts = [
+        ProjectCabinetPart(
+            part_name="Custom Side Panel",
+            height_mm=720,
+            width_mm=560,
+            pieces=2,
+            material="PLYTA",
+            thickness_mm=18,
+            comments="Custom side panels",
+        ),
+        ProjectCabinetPart(
+            part_name="Custom Front Door",
+            height_mm=718,
+            width_mm=558,
+            pieces=1,
+            material="FRONT",
+            thickness_mm=20,
+            comments="Custom front door",
+        ),
+        ProjectCabinetPart(
+            part_name="Custom Back Panel",
+            height_mm=710,
+            width_mm=550,
+            pieces=1,
+            material="HDF",
+            thickness_mm=3,
+            comments="Custom HDF back",
+        ),
+    ]
+    custom_cabinet.parts = custom_parts
+
+    # Link cabinets to project
+    project.cabinets = [catalog_cabinet, custom_cabinet]
+
+    return project
+
+
+def test_custom_cabinets_in_report(tmp_path, project_with_custom_cabinets):
+    """
+    Given: a project with both catalog and custom cabinets
+    When: generating a report
+    Then: both catalog and custom cabinet parts appear in appropriate sections
+    """
+    project = project_with_custom_cabinets
+    rg = ReportGenerator()
+    output = rg.generate(project, output_dir=str(tmp_path), auto_open=False)
+    doc = Document(output)
+
+    # Get body tables (excluding header/footer)
+    header_tables = doc.sections[0].header.tables
+    footer_tables = doc.sections[0].footer.tables
+    body_tables = [t for t in doc.tables if t not in header_tables + footer_tables]
+
+    # Should have 3 sections with tables: FORMATKI, FRONTY, HDF
+    # (AKCESORIA has no table when empty, just "Brak pozycji." text)
+    assert len(body_tables) == 3
+
+    # Check section headings
+    headings = [p.text for p in doc.paragraphs if p.style.name == "Heading 2"]
+    assert "FORMATKI" in headings
+    assert "FRONTY" in headings
+    assert "HDF" in headings
+    assert "AKCESORIA" in headings
+
+    # Test FORMATKI section (panels)
+    formatki_table = body_tables[0]
+
+    # Should have catalog panel + custom side panels
+    # Row 1: catalog panel (2 pieces * 1 quantity = 2)
+    # Row 2: custom side panels (2 pieces * 2 quantity = 4)
+    assert len(formatki_table.rows) >= 3  # Header + at least 2 data rows
+
+    # Find catalog panel row (sequence ①)
+    catalog_panel_found = False
+    custom_panel_found = False
+
+    for row in formatki_table.rows[1:]:  # Skip header
+        cells = row.cells
+        seq = cells[0].text.strip()
+        name = cells[1].text.strip()
+        quantity = cells[2].text.strip()
+
+        if seq == "①" and "Catalog Panel" in name:
+            catalog_panel_found = True
+            assert quantity == "2"  # 2 pieces * 1 cabinet
+        elif seq == "②" and "Custom Side Panel" in name:
+            custom_panel_found = True
+            assert quantity == "4"  # 2 pieces * 2 cabinets
+
+    assert catalog_panel_found, "Catalog panel not found in FORMATKI"
+    assert custom_panel_found, "Custom side panel not found in FORMATKI"
+
+    # Test FRONTY section (fronts)
+    fronty_table = body_tables[1]
+
+    # Should have catalog front + custom front
+    catalog_front_found = False
+    custom_front_found = False
+
+    for row in fronty_table.rows[1:]:  # Skip header
+        cells = row.cells
+        seq = cells[0].text.strip()
+        name = cells[1].text.strip()
+        quantity = cells[2].text.strip()
+        color = cells[4].text.strip()  # Color column
+
+        if seq == "①" and "Catalog Front" in name:
+            catalog_front_found = True
+            assert quantity == "1"  # 1 piece * 1 cabinet
+            assert "Oak" in color
+        elif seq == "②" and "Custom Front Door" in name:
+            custom_front_found = True
+            assert quantity == "2"  # 1 piece * 2 cabinets
+            assert "Black" in color
+
+    assert catalog_front_found, "Catalog front not found in FRONTY"
+    assert custom_front_found, "Custom front door not found in FRONTY"
+
+    # Test HDF section
+    hdf_table = body_tables[2]
+
+    # Should have custom HDF back panel only
+    custom_hdf_found = False
+
+    for row in hdf_table.rows[1:]:  # Skip header
+        cells = row.cells
+        seq = cells[0].text.strip()
+        name = cells[1].text.strip()
+        quantity = cells[2].text.strip()
+
+        if seq == "②" and "Custom Back Panel" in name:
+            custom_hdf_found = True
+            assert quantity == "2"  # 1 piece * 2 cabinets
+
+    assert custom_hdf_found, "Custom HDF back panel not found in HDF section"
+
+
+def test_custom_cabinet_sequence_numbers(tmp_path, project_with_custom_cabinets):
+    """
+    Given: a project with custom cabinets having sequence numbers
+    When: generating a report
+    Then: custom cabinet parts have correct sequence number symbols
+    """
+    project = project_with_custom_cabinets
+    rg = ReportGenerator()
+    output = rg.generate(project, output_dir=str(tmp_path), auto_open=False)
+    doc = Document(output)
+
+    # Get body tables
+    header_tables = doc.sections[0].header.tables
+    footer_tables = doc.sections[0].footer.tables
+    body_tables = [t for t in doc.tables if t not in header_tables + footer_tables]
+
+    # Check that sequence numbers are properly displayed
+    formatki_table = body_tables[0]
+
+    seq_1_found = False  # Catalog cabinet (sequence 1)
+    seq_2_found = False  # Custom cabinet (sequence 2)
+
+    for row in formatki_table.rows[1:]:  # Skip header
+        cells = row.cells
+        seq = cells[0].text.strip()
+
+        if seq == "①":  # Sequence 1
+            seq_1_found = True
+        elif seq == "②":  # Sequence 2
+            seq_2_found = True
+
+    assert seq_1_found, "Sequence number ① not found (catalog cabinet)"
+    assert seq_2_found, "Sequence number ② not found (custom cabinet)"

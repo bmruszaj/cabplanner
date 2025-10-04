@@ -3,10 +3,11 @@ Styling system for the Cabplanner application.
 This module provides modern styling for all UI elements.
 """
 
-# --- Shared color constants ---
-PRIMARY = "#2979FF"
-PRIMARY_LIGHT = "#448AFF"
-PRIMARY_DARK = "#1565C0"
+# --- Shared color constants (Teal palette) ---
+PRIMARY = "#0A766C"  # accent / outlines / links
+PRIMARY_LIGHT = "#2DD4BF"  # subtle tints/hover
+PRIMARY_DARK = "#064E46"  # solid fills with white text
+
 HOVER_GRAY = "#E0E0E0"
 CARD_HOVER = "#EEEEEE"
 BG_LIGHT = "#F5F5F5"
@@ -22,9 +23,9 @@ TEXT_DARK = "#E0E0E0"
 
 # --- Common styles (applied in both themes) ---
 COMMON_THEME = f"""
-/* Button hover & pressed */
+/* Primary buttons: keep brand color on hover/press */
 QPushButton:hover {{
-    background-color: {HOVER_GRAY};
+    background-color: {PRIMARY_DARK};
 }}
 QPushButton:pressed {{
     background-color: {PRIMARY_DARK};
@@ -43,7 +44,7 @@ QFrame#projectCard:hover {{
     background: {CARD_HOVER};
 }}
 
-/* Selection in tables */
+/* Row hover in tables */
 QTableView::item:hover {{
     background-color: {HOVER_GRAY};
 }}
@@ -142,28 +143,28 @@ QPushButton:disabled {{
     color: {DISABLED_TEXT};
 }}
 
-/* Secondary Buttons */
-QPushButton.secondary {{
+/* Secondary Buttons (property: class="secondary") */
+QPushButton[class="secondary"] {{
     background-color: {BG_LIGHT_ALT};
     color: {PRIMARY};
     border: 1px solid {PRIMARY};
 }}
-QPushButton.secondary:pressed {{
-    background-color: {HOVER_GRAY};
-}}
-
 QPushButton[class="secondary"]:hover {{
     background-color: {HOVER_GRAY};
 }}
-
-/* Danger Buttons */
-QPushButton.danger {{
-    background-color: #F44336;
+QPushButton[class="secondary"]:pressed {{
+    background-color: {HOVER_GRAY};
 }}
-QPushButton.danger:hover {{
+
+/* Danger Buttons (property: class="danger") */
+QPushButton[class="danger"] {{
+    background-color: #F44336;
+    color: white;
+}}
+QPushButton[class="danger"]:hover {{
     background-color: #D32F2F;
 }}
-QPushButton.danger:pressed {{
+QPushButton[class="danger"]:pressed {{
     background-color: #B71C1C;
 }}
 
@@ -190,11 +191,33 @@ QCheckBox::indicator {{
     height: 18px;
     border: 1px solid {BORDER_MEDIUM};
     border-radius: 3px;
+    background-color: {BG_LIGHT_ALT};
+}}
+QCheckBox::indicator:hover {{
+    border-color: {PRIMARY};
 }}
 QCheckBox::indicator:checked {{
     background-color: {PRIMARY};
     border-color: {PRIMARY};
-    image: url(:/icons/check.png);
+    image: url(:/icons/check_white.png); /* ensure this resource exists */
+}}
+
+/* Checkable GroupBox indicator */
+QGroupBox::indicator {{
+    width: 18px;
+    height: 18px;
+    border: 1px solid {BORDER_MEDIUM};
+    border-radius: 3px;
+    background-color: {BG_LIGHT_ALT};
+    margin-right: 6px;
+}}
+QGroupBox::indicator:hover {{
+    border-color: {PRIMARY};
+}}
+QGroupBox::indicator:checked {{
+    background-color: {PRIMARY};
+    border-color: {PRIMARY};
+    image: url(:/icons/check_white.png);
 }}
 
 /* Tabs */
@@ -278,17 +301,42 @@ QDialog, QMessageBox {{
 }}
 /* Selected state */
 QFrame#projectCard[selected="true"] {{
-    /* same hover background, but stronger outline */
     background-color: #EEEEEE;
-    border: 2px solid #2979FF;
+    border: 2px solid {PRIMARY};
 }}
 
+/* Cabinet Card Styles */
+QFrame#cabinetCard {{
+    background-color: {BG_LIGHT_ALT};
+    border: 1px solid {BORDER_LIGHT};
+    border-radius: 8px;
+    padding: 12px;
+    margin: 4px;
+}}
+QFrame#cabinetCard:hover {{
+    border-color: {PRIMARY};
+    border-width: 2px;
+    background-color: {CARD_HOVER};
+}}
 
-
+/* Dashboard widget */
 #dashboardWidget {{
     background-color: {BG_LIGHT_ALT};
     border-radius: 8px;
     padding: 16px;
+}}
+
+/* Minimal primary-highlight validation */
+QSpinBox[error="true"], QDoubleSpinBox[error="true"] {{
+    border: 2px solid {PRIMARY};
+    border-radius: 4px;
+}}
+QGroupBox[invalid="true"] {{
+    border-left: 3px solid {PRIMARY};
+}}
+QGroupBox[invalid="true"]::title {{
+    color: {PRIMARY};
+    font-weight: 600;
 }}
 """
 )
@@ -387,24 +435,28 @@ QPushButton:disabled {{
     color: #757575;
 }}
 
-/* Secondary Buttons */
-QPushButton.secondary {{
+/* Secondary Buttons (property: class="secondary") */
+QPushButton[class="secondary"] {{
     background-color: #333333;
     color: {PRIMARY};
     border: 1px solid {PRIMARY};
 }}
-QPushButton.secondary:pressed {{
+QPushButton[class="secondary"]:hover {{
+    background-color: #424242;
+}}
+QPushButton[class="secondary"]:pressed {{
     background-color: #424242;
 }}
 
-/* Danger Buttons */
-QPushButton.danger {{
+/* Danger Buttons (property: class="danger") */
+QPushButton[class="danger"] {{
     background-color: #F44336;
+    color: white;
 }}
-QPushButton.danger:hover {{
+QPushButton[class="danger"]:hover {{
     background-color: #D32F2F;
 }}
-QPushButton.danger:pressed {{
+QPushButton[class="danger"]:pressed {{
     background-color: #B71C1C;
 }}
 
@@ -434,7 +486,28 @@ QCheckBox::indicator {{
     border-radius: 3px;
     background-color: #333333;
 }}
+QCheckBox::indicator:hover {{
+    border-color: {PRIMARY};
+}}
 QCheckBox::indicator:checked {{
+    background-color: {PRIMARY};
+    border-color: {PRIMARY};
+    image: url(:/icons/check_white.png);
+}}
+
+/* Checkable GroupBox indicator */
+QGroupBox::indicator {{
+    width: 18px;
+    height: 18px;
+    border: 1px solid #424242;
+    border-radius: 3px;
+    background-color: #333333;
+    margin-right: 6px;
+}}
+QGroupBox::indicator:hover {{
+    border-color: {PRIMARY};
+}}
+QGroupBox::indicator:checked {{
     background-color: {PRIMARY};
     border-color: {PRIMARY};
     image: url(:/icons/check_white.png);
@@ -521,17 +594,45 @@ QDialog, QMessageBox {{
 }}
 QFrame#projectCard[selected="true"] {{
     background-color: #333333;
-    border: 2px solid #2979FF;
+    border: 2px solid {PRIMARY};
 }}
+
+/* Cabinet Card Styles */
+QFrame#cabinetCard {{
+    background-color: {BG_DARK_ALT};
+    border: 1px solid #424242;
+    border-radius: 8px;
+    padding: 12px;
+    margin: 4px;
+}}
+QFrame#cabinetCard:hover {{
+    border-color: {PRIMARY};
+    border-width: 2px;
+    background-color: #333333;
+}}
+
 #dashboardWidget {{
     background-color: {BG_DARK_ALT};
     border-radius: 8px;
     padding: 16px;
 }}
+
+/* Minimal primary-highlight validation */
+QSpinBox[error="true"], QDoubleSpinBox[error="true"] {{
+    border: 2px solid {PRIMARY};
+    border-radius: 4px;
+}}
+QGroupBox[invalid="true"] {{
+    border-left: 3px solid {PRIMARY};
+}}
+QGroupBox[invalid="true"]::title {{
+    color: {PRIMARY};
+    font-weight: 600;
+}}
 """
 )
 
 
-def get_theme(is_dark_mode=False):
+def get_theme(is_dark_mode: bool = False) -> str:
     """Return the appropriate theme based on the mode."""
     return DARK_THEME if is_dark_mode else LIGHT_THEME

@@ -31,10 +31,24 @@ ICON_PATHS = {
     # Action icons
     "add": ICON_DIR / "add.png",
     "edit": ICON_DIR / "edit.png",
+    "edit_white": ICON_DIR / "edit_white.png",
+    "export_white": ICON_DIR / "export_white.png",
+    "duplicate": ICON_DIR / "edit.png",  # Use edit icon for duplicate
     "remove": ICON_DIR / "remove.png",
     "search": ICON_DIR / "search.png",
     "filter": ICON_DIR / "filter.png",
-    "sort": ICON_DIR / "sort.png",
+    "menu": ICON_DIR / "menu.png",
+    "table": ICON_DIR / "menu.png",  # Use menu icon for table view
+    "close": ICON_DIR / "close.png",
+    "help": ICON_DIR / "help.png",
+    "arrow_left": ICON_DIR / "arrow_left.png",
+    "arrow_right": ICON_DIR / "arrow_right.png",
+    "image": ICON_DIR / "image.png",
+    "project": ICON_DIR / "project.png",
+    "refresh": ICON_DIR / "refresh.png",
+    "cancel": ICON_DIR / "cancel.png",
+    "parts": ICON_DIR / "parts.png",
+    "accessories": ICON_DIR / "accessories.png",
     # Status icons
     "success": ICON_DIR / "success.png",
     "warning": ICON_DIR / "warning.png",

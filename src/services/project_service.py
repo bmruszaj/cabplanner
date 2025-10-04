@@ -2,9 +2,15 @@ from datetime import datetime, timezone
 from typing import List, Optional, Dict, Any
 
 from sqlalchemy import func, select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
-from src.db_schema.orm_models import Project, ProjectCabinet
+from src.db_schema.orm_models import (
+    Project,
+    ProjectCabinet,
+    ProjectCabinetPart,
+    ProjectCabinetAccessorySnapshot,
+    CabinetTemplate,
+)
 
 
 def get_circled_number(n: int) -> str:
@@ -18,11 +24,16 @@ class ProjectService:
         self.db = db_session
 
     def list_projects(self) -> List[Project]:
-        stmt = select(Project).order_by(Project.created_at)
+        stmt = select(Project).order_by(Project.created_at.desc(), Project.id.desc())
         return list(self.db.scalars(stmt).all())
 
     def get_project(self, project_id: int) -> Optional[Project]:
         return self.db.get(Project, project_id)
+
+    def get_project_by_order_number(self, order_number: str) -> Optional[Project]:
+        """Get project by order number (used for uniqueness checking)"""
+        stmt = select(Project).where(Project.order_number == order_number)
+        return self.db.scalar(stmt)
 
     def create_project(self, **fields) -> Project:
         project = Project(**fields)
@@ -57,9 +68,13 @@ class ProjectService:
         stmt = (
             select(ProjectCabinet)
             .filter_by(project_id=project_id)
+            .options(joinedload(ProjectCabinet.parts))  # Load snapshot parts
+            .options(
+                joinedload(ProjectCabinet.accessory_snapshots)
+            )  # Load snapshot accessories
             .order_by(ProjectCabinet.sequence_number)
         )
-        return list(self.db.scalars(stmt).all())
+        return list(self.db.scalars(stmt).unique().all())
 
     def get_cabinet(self, cabinet_id: int) -> Optional[ProjectCabinet]:
         return self.db.get(ProjectCabinet, cabinet_id)
@@ -74,10 +89,6 @@ class ProjectService:
         front_color: str,
         handle_type: str,
         quantity: int = 1,
-        adhoc_width_mm: Optional[float] = None,
-        adhoc_height_mm: Optional[float] = None,
-        adhoc_depth_mm: Optional[float] = None,
-        formula_offset_mm: Optional[float] = None,
     ) -> ProjectCabinet:
         cab = ProjectCabinet(
             project_id=project_id,
@@ -87,14 +98,14 @@ class ProjectService:
             front_color=front_color,
             handle_type=handle_type,
             quantity=quantity,
-            adhoc_width_mm=adhoc_width_mm,
-            adhoc_height_mm=adhoc_height_mm,
-            adhoc_depth_mm=adhoc_depth_mm,
-            formula_offset_mm=formula_offset_mm,
-            created_at=datetime.now(timezone.utc),
-            updated_at=datetime.now(timezone.utc),
         )
         self.db.add(cab)
+        self.db.flush()  # Get the ID without committing
+
+        # Materialize parts from catalog template if it's a standard cabinet
+        if type_id:
+            self._materialize_standard_cabinet_parts(cab, type_id)
+
         self.db.commit()
         self.db.refresh(cab)
         return cab
@@ -129,11 +140,228 @@ class ProjectService:
         )
         return current_max + 1
 
+    def add_custom_cabinet(
+        self,
+        project_id: int,
+        *,
+        sequence_number: int,
+        body_color: str,
+        front_color: str,
+        handle_type: str,
+        quantity: int = 1,
+        custom_parts: List[Dict[str, Any]],
+        custom_accessories: List[Dict[str, Any]] = None,
+        calc_context: Dict[str, Any] = None,
+    ) -> ProjectCabinet:
+        """Add a custom cabinet with calculated parts."""
+        cab = ProjectCabinet(
+            project_id=project_id,
+            sequence_number=sequence_number,
+            type_id=None,  # Custom cabinet
+            body_color=body_color,
+            front_color=front_color,
+            handle_type=handle_type,
+            quantity=quantity,
+        )
+        self.db.add(cab)
+        self.db.flush()  # Get the ID without committing
+
+        # Materialize custom parts
+        self._materialize_custom_cabinet_parts(cab, custom_parts, calc_context)
+
+        # Materialize custom accessories if provided
+        if custom_accessories:
+            self._materialize_custom_cabinet_accessories(cab, custom_accessories)
+
+        self.db.commit()
+        self.db.refresh(cab)
+        return cab
+
+    def _materialize_standard_cabinet_parts(
+        self, cabinet: ProjectCabinet, type_id: int
+    ):
+        """Materialize parts from a catalog template into ProjectCabinetPart snapshots."""
+        template = self.db.get(CabinetTemplate, type_id)
+        if not template:
+            return
+
+        for part in template.parts:
+            snapshot_part = ProjectCabinetPart(
+                project_cabinet_id=cabinet.id,
+                part_name=part.part_name,
+                height_mm=part.height_mm,
+                width_mm=part.width_mm,
+                pieces=part.pieces,
+                wrapping=part.wrapping,
+                comments=part.comments,
+                material=part.material,
+                thickness_mm=part.thickness_mm,
+                processing_json=part.processing_json,
+                source_template_id=template.id,
+                source_part_id=part.id,
+                calc_context_json=None,  # Not needed for standard cabinets
+            )
+            self.db.add(snapshot_part)
+
+    def _materialize_custom_cabinet_parts(
+        self,
+        cabinet: ProjectCabinet,
+        parts_data: List[Dict[str, Any]],
+        calc_context: Dict[str, Any] = None,
+    ):
+        """Materialize custom calculated parts into ProjectCabinetPart snapshots."""
+        for part_data in parts_data:
+            snapshot_part = ProjectCabinetPart(
+                project_cabinet_id=cabinet.id,
+                part_name=part_data.get("part_name", ""),
+                height_mm=part_data.get("height_mm", 0),
+                width_mm=part_data.get("width_mm", 0),
+                pieces=part_data.get("pieces", 1),
+                wrapping=part_data.get("wrapping"),
+                comments=part_data.get("comments"),
+                material=part_data.get("material"),
+                thickness_mm=part_data.get("thickness_mm"),
+                processing_json=part_data.get("processing_json"),
+                source_template_id=None,  # Custom cabinet
+                source_part_id=None,  # Custom cabinet
+                calc_context_json=calc_context,  # Store calculation context
+            )
+            self.db.add(snapshot_part)
+
+    def _materialize_custom_cabinet_accessories(
+        self, cabinet: ProjectCabinet, accessories_data: List[Dict[str, Any]]
+    ):
+        """Materialize custom accessories into ProjectCabinetAccessorySnapshot."""
+        for acc_data in accessories_data:
+            snapshot_accessory = ProjectCabinetAccessorySnapshot(
+                project_cabinet_id=cabinet.id,
+                name=acc_data.get("name", ""),
+                sku=acc_data.get("sku", ""),
+                count=acc_data.get("count", 1),
+                source_accessory_id=acc_data.get("source_accessory_id"),  # Can be None
+            )
+            self.db.add(snapshot_accessory)
+
+    def update_cabinet_parts(
+        self, cabinet_id: int, parts_data: List[Dict[str, Any]]
+    ) -> bool:
+        """Update the parts for a cabinet (edit the snapshot)."""
+        cabinet = self.get_cabinet(cabinet_id)
+        if not cabinet:
+            return False
+
+        # Remove existing parts
+        for part in cabinet.parts:
+            self.db.delete(part)
+
+        # Add updated parts
+        for part_data in parts_data:
+            snapshot_part = ProjectCabinetPart(
+                project_cabinet_id=cabinet.id,
+                part_name=part_data.get("part_name", ""),
+                height_mm=part_data.get("height_mm", 0),
+                width_mm=part_data.get("width_mm", 0),
+                pieces=part_data.get("pieces", 1),
+                wrapping=part_data.get("wrapping"),
+                comments=part_data.get("comments"),
+                material=part_data.get("material"),
+                thickness_mm=part_data.get("thickness_mm"),
+                processing_json=part_data.get("processing_json"),
+                source_template_id=part_data.get("source_template_id"),
+                source_part_id=part_data.get("source_part_id"),
+                calc_context_json=part_data.get("calc_context_json"),
+            )
+            self.db.add(snapshot_part)
+
+        cabinet.updated_at = datetime.now(timezone.utc)
+        self.db.commit()
+        return True
+
+    def add_accessory_to_cabinet(
+        self,
+        cabinet_id: int,
+        name: str,
+        sku: str = None,
+        count: int = 1,
+        source_accessory_id: int = None,
+    ) -> bool:
+        """Add an accessory to a cabinet."""
+        cabinet = self.get_cabinet(cabinet_id)
+        if not cabinet:
+            return False
+
+        # Validate input parameters
+        if count <= 0:
+            return False  # Only positive counts allowed
+
+        if not name:
+            return False  # Name is required
+
+        # Create accessory snapshot
+        snapshot_accessory = ProjectCabinetAccessorySnapshot(
+            project_cabinet_id=cabinet.id,
+            name=name,
+            sku=sku or "",
+            count=count,
+            source_accessory_id=source_accessory_id,
+        )
+        self.db.add(snapshot_accessory)
+
+        cabinet.updated_at = datetime.now(timezone.utc)
+
+        try:
+            self.db.commit()
+            return True
+        except Exception:
+            self.db.rollback()
+            return False
+
+    def remove_accessory_from_cabinet(self, accessory_snapshot_id: int) -> bool:
+        """Remove an accessory from a cabinet."""
+        accessory_snapshot = (
+            self.db.query(ProjectCabinetAccessorySnapshot)
+            .filter_by(id=accessory_snapshot_id)
+            .first()
+        )
+
+        if not accessory_snapshot:
+            return False
+
+        cabinet = accessory_snapshot.project_cabinet
+        self.db.delete(accessory_snapshot)
+
+        cabinet.updated_at = datetime.now(timezone.utc)
+        self.db.commit()
+        return True
+
+    def update_accessory_quantity(
+        self, accessory_snapshot_id: int, new_count: int
+    ) -> bool:
+        """Update the quantity of an accessory in a cabinet."""
+        accessory_snapshot = (
+            self.db.query(ProjectCabinetAccessorySnapshot)
+            .filter_by(id=accessory_snapshot_id)
+            .first()
+        )
+
+        if not accessory_snapshot:
+            return False
+
+        # Validate new count
+        if new_count <= 0:
+            return False  # Only positive counts allowed
+
+        accessory_snapshot.count = new_count
+        accessory_snapshot.project_cabinet.updated_at = datetime.now(timezone.utc)
+
+        self.db.commit()
+        return True
+
     def get_aggregated_project_elements(
         self, project_id: int
     ) -> Dict[str, List[Dict[str, Any]]]:
         """
-        Get all elements in a project, preserving each individual cabinet and its sequence number.
+        Get all elements in a project from snapshot data.
         Returns a dictionary with lists for formatki, fronty, hdf, and akcesoria.
         """
         project = self.get_project(project_id)
@@ -146,24 +374,17 @@ class ProjectService:
         akcesoria = []
 
         for cab in project.cabinets:
-            ct = cab.cabinet_type
             qty = cab.quantity
-            seq = cab.sequence_number  # Keep sequence number for reference
+            seq = cab.sequence_number
             seq_symbol = get_circled_number(seq)
 
-            # Handle standard catalog cabinets
-            if ct:
-                self._process_catalog_cabinet(
-                    cab, ct, qty, seq, seq_symbol, formatki, fronty, hdf
-                )
-            # Handle ad-hoc cabinets
-            elif cab.adhoc_width_mm and cab.adhoc_height_mm and cab.adhoc_depth_mm:
-                self._process_adhoc_cabinet(
-                    cab, qty, seq, seq_symbol, formatki, fronty, hdf
-                )
+            # Process all parts from snapshot (works for both standard and custom)
+            self._process_cabinet_parts_snapshot(
+                cab, qty, seq, seq_symbol, formatki, fronty, hdf
+            )
 
-            # Process accessories for all cabinet types
-            self._process_accessories(cab, qty, seq, seq_symbol, akcesoria)
+            # Process accessories from snapshot
+            self._process_accessories_snapshot(cab, qty, seq, seq_symbol, akcesoria)
 
         return {
             "formatki": formatki,
@@ -172,140 +393,81 @@ class ProjectService:
             "akcesoria": akcesoria,
         }
 
-    def _process_catalog_cabinet(
-        self, cab, ct, qty, seq, seq_symbol, formatki, fronty, hdf
+    def _process_cabinet_parts_snapshot(
+        self, cab, qty, seq, seq_symbol, formatki, fronty, hdf
     ):
-        """Process elements from a catalog cabinet, preserving individual cabinet identity"""
-        # Process panels (formatki)
-        for attr, name in [
-            ("bok", "Bok"),
-            ("wieniec", "Wieniec"),
-            ("polka", "Półka"),
-            ("listwa", "Listwa"),
-        ]:
-            count = getattr(ct, f"{attr}_count", 0) or 0
-            width = getattr(ct, f"{attr}_w_mm", None)
-            height = getattr(ct, f"{attr}_h_mm", None)
-            if count > 0 and width and height:
+        """Process elements from cabinet parts snapshot (works for both standard and custom)"""
+        # Process all parts from the snapshot
+        for part in cab.parts:
+            part_qty = part.pieces * qty
+
+            # Determine material from part data (with fallback logic)
+            material = part.material
+            if not material:
+                if "front" in part.part_name.lower():
+                    material = "FRONT"
+                elif "hdf" in part.part_name.lower():
+                    material = "HDF"
+                else:
+                    material = "PLYTA"  # Default for panels
+
+            # Determine category based on material
+            if material == "FRONT":
+                fronty.append(
+                    {
+                        "seq": seq_symbol,
+                        "name": part.part_name,
+                        "quantity": part_qty,
+                        "width": part.width_mm,
+                        "height": part.height_mm,
+                        "color": cab.front_color,
+                        "notes": f"Handle: {cab.handle_type}",
+                    }
+                )
+            elif material == "HDF":
+                hdf.append(
+                    {
+                        "seq": seq_symbol,
+                        "name": part.part_name,
+                        "quantity": part_qty,
+                        "width": part.width_mm,
+                        "height": part.height_mm,
+                        "color": "",
+                        "notes": part.comments or "",
+                    }
+                )
+            else:
+                # Default to formatki (panels)
                 formatki.append(
                     {
                         "seq": seq_symbol,
-                        "name": name,
-                        "quantity": count * qty,
-                        "width": int(width),
-                        "height": int(height),
+                        "name": part.part_name,
+                        "quantity": part_qty,
+                        "width": part.width_mm,
+                        "height": part.height_mm,
                         "color": cab.body_color,
-                        "notes": "",
+                        "notes": part.comments or "",
                     }
                 )
 
-        # Process fronts
-        fcount = getattr(ct, "front_count", 0) or 0
-        fw = getattr(ct, "front_w_mm", None)
-        fh = getattr(ct, "front_h_mm", None)
-        if fcount > 0 and fw and fh:
-            fronty.append(
-                {
-                    "seq": seq_symbol,
-                    "name": "Front",
-                    "quantity": fcount * qty,
-                    "width": int(fw),
-                    "height": int(fh),
-                    "color": cab.front_color,
-                    "notes": f"Handle: {cab.handle_type}",
-                }
-            )
-
-        # Process HDF backs
-        if getattr(ct, "hdf_plecy", False):
-            bw = getattr(ct, "bok_w_mm", 0)
-            bh = getattr(ct, "bok_h_mm", 0)
-            hdf.append(
-                {
-                    "seq": seq_symbol,
-                    "name": "HDF Plecy",
-                    "quantity": qty,
-                    "width": int(bw or 0),
-                    "height": int(bh or 0),
-                    "color": "",
-                    "notes": "",
-                }
-            )
-
-    def _process_adhoc_cabinet(self, cab, qty, seq, seq_symbol, formatki, fronty, hdf):
-        """Process elements from an ad-hoc cabinet, preserving individual cabinet identity"""
-        width = cab.adhoc_width_mm
-        height = cab.adhoc_height_mm
-        depth = cab.adhoc_depth_mm
-
-        # Sides (boki)
-        formatki.append(
-            {
-                "seq": seq_symbol,
-                "name": "Bok",
-                "quantity": 2 * qty,
-                "width": int(depth),
-                "height": int(height),
-                "color": cab.body_color,
-                "notes": "Ad-hoc",
-            }
-        )
-
-        # Top/bottom (wieńce)
-        formatki.append(
-            {
-                "seq": seq_symbol,
-                "name": "Wieniec",
-                "quantity": 2 * qty,
-                "width": int(width),
-                "height": int(depth),
-                "color": cab.body_color,
-                "notes": "Ad-hoc",
-            }
-        )
-
-        # Shelf (półka)
-        formatki.append(
-            {
-                "seq": seq_symbol,
-                "name": "Półka",
-                "quantity": qty,
-                "width": int(width - 36),  # Account for sides
-                "height": int(depth - 20),  # Account for back clearance
-                "color": cab.body_color,
-                "notes": "Ad-hoc",
-            }
-        )
-
-        # Front
-        fronty.append(
-            {
-                "seq": seq_symbol,
-                "name": "Front",
-                "quantity": qty,
-                "width": int(width),
-                "height": int(height),
-                "color": cab.front_color,
-                "notes": f"Handle: {cab.handle_type} (Ad-hoc)",
-            }
-        )
-
-        # HDF back
-        hdf.append(
-            {
-                "seq": seq_symbol,
-                "name": "HDF Plecy",
-                "quantity": qty,
-                "width": int(width - 6),  # Slight adjustment
-                "height": int(height - 6),  # Slight adjustment
-                "color": "",
-                "notes": "Ad-hoc",
-            }
-        )
-
-    def _process_accessories(self, cab, qty, seq, seq_symbol, akcesoria):
-        """Process accessories for a cabinet, preserving individual cabinet identity"""
+    def _process_accessories_snapshot(self, cab, qty, seq, seq_symbol, akcesoria):
+        """Process accessories from snapshot (works for both standard and custom)"""
         seq_label = f"Lp. {seq}"
+
+        # Process accessory snapshots
+        for acc_snapshot in cab.accessory_snapshots:
+            total = acc_snapshot.count * qty
+            akcesoria.append(
+                {
+                    "name": acc_snapshot.name,
+                    "sku": acc_snapshot.sku,
+                    "quantity": total,
+                    "notes": seq_label,
+                    "sequence": seq,
+                }
+            )
+
+        # Legacy support: also process old-style accessories if they exist
         for link in getattr(cab, "accessories", []):
             acc = link.accessory
             total = link.count * qty

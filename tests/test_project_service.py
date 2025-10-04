@@ -6,6 +6,7 @@ from sqlalchemy.orm import sessionmaker
 
 from src.db_schema.orm_models import Base
 from src.services.project_service import ProjectService
+from src.services.template_service import TemplateService
 
 
 @pytest.fixture(scope="module")
@@ -38,6 +39,11 @@ def service(session):
     return ProjectService(session)
 
 
+@pytest.fixture
+def template_service(session):
+    return TemplateService(session)
+
+
 def test_create_and_get_project(service):
     # GIVEN a fresh ProjectService
     # WHEN creating a new project
@@ -68,9 +74,11 @@ def test_list_projects_order(service):
 
     # WHEN listing all projects
     lst = service.list_projects()
-    # THEN they should appear in creation order
+
+    # THEN they should appear in reverse creation order (newest first)
+    # When created_at is the same, sort by id DESC (higher id = newer)
     ids = [p.id for p in lst]
-    assert ids.index(p1.id) < ids.index(p2.id)
+    assert ids.index(p2.id) < ids.index(p1.id)
 
 
 def test_update_project(service):
@@ -105,10 +113,14 @@ def test_delete_project(service):
     assert result_second is False
 
 
-def test_cabinet_sequence_and_crud(service):
-    # GIVEN a project with no cabinets
+def test_cabinet_sequence_and_crud(service, template_service):
+    # GIVEN a project with no cabinets and a cabinet template
     proj = service.create_project(name="CabTest", kitchen_type="X", order_number="42")
     pid = proj.id
+
+    # Create a cabinet template to use
+    template = template_service.create_template(kitchen_type="X", nazwa="TestCabinet")
+    template_id = template.id
 
     # WHEN querying next sequence number
     next_seq_initial = service.get_next_cabinet_sequence(pid)
@@ -119,7 +131,7 @@ def test_cabinet_sequence_and_crud(service):
     cab1 = service.add_cabinet(
         pid,
         sequence_number=next_seq_initial,
-        type_id=None,
+        type_id=template_id,
         body_color="white",
         front_color="black",
         handle_type="T-Bar",
@@ -137,7 +149,7 @@ def test_cabinet_sequence_and_crud(service):
     cab2 = service.add_cabinet(
         pid,
         sequence_number=5,
-        type_id=None,
+        type_id=template_id,
         body_color="red",
         front_color="blue",
         handle_type="Knob",
@@ -189,17 +201,24 @@ def test_list_cabinets_empty(service):
 
 
 @pytest.mark.parametrize("count", [0, 1, 2, 5])
-def test_next_sequence_after_manual_insert(service, count):
+def test_next_sequence_after_manual_insert(service, template_service, count):
     # GIVEN a project with manually inserted cabinets at fixed gaps
     proj = service.create_project(
-        name=f"Manual{count}", kitchen_type="M", order_number="M"
+        name=f"Manual{count}", kitchen_type="M", order_number=f"M{count}"
     )
     pid = proj.id
+
+    # Create a cabinet template to use
+    template = template_service.create_template(
+        kitchen_type="M", nazwa=f"TestCabinet{count}"
+    )
+    template_id = template.id
+
     for i in range(1, count + 1):
         service.add_cabinet(
             pid,
             sequence_number=i * 10,
-            type_id=None,
+            type_id=template_id,
             body_color="c",
             front_color="f",
             handle_type="h",

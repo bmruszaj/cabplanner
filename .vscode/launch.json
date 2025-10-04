@@ -1,0 +1,13 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+      {
+        "name": "Run Cabplanner",
+        "type": "python",
+        "request": "launch",
+        "module": "src.main_app",
+        "cwd": "${workspaceFolder}"
+      }
+    ]
+  }
+  
