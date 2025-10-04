@@ -15,16 +15,28 @@ $piArgs = @(
   '--noconfirm'
   '--onedir'
   '--windowed'
+
+  # App assets
   '--icon'; 'icon.ico'
   '--add-data'; 'icon.ico;.'
   '--add-data'; 'alembic.ini;.'
   '--add-data'; 'scripts;scripts'
   '--add-data'; '.version;.'
   '--add-data'; 'src;src'
+
+  # Include entire packages
+  '--collect-all'; 'PySide6'
+  '--collect-all'; 'shiboken6'
+
+  # Hidden imports
   '--hidden-import'; 'docx'
   '--hidden-import'; 'logging.config'
   '--hidden-import'; 'requests'
+
+  # Submodules
   '--collect-submodules'; 'alembic'
+
+  # Output
   '--name'; 'cabplanner'
   'src/main_app.py'
 )
