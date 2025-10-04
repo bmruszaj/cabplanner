@@ -40,6 +40,9 @@ $piArgs = @(
   # Submodules
   '--collect-submodules'; 'alembic'
 
+  # Version info
+  '--version-file'; 'cabplanner_version_info.txt'
+
   # Output
   '--name'; 'cabplanner'
   'src/main_app.py'

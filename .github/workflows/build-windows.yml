@@ -43,6 +43,19 @@ jobs:
           # For release tag, ensure consistent format
           echo "RELEASE_TAG=v$VERSION" >> $env:GITHUB_ENV
 
+      - name: Generate version resource
+        shell: pwsh
+        run: |
+          Set-ExecutionPolicy Bypass -Scope Process -Force
+          ./scripts/generate-version-info.ps1 `
+            -VersionFile .version `
+            -OutFile cabplanner_version_info.txt `
+            -CompanyName "Cabplanner Team" `
+            -ProductName "Cabplanner" `
+            -FileDescription "Cabplanner - Cabinet Design Planner" `
+            -LegalCopyright "(C) 2025 Cabplanner Team"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
       - name: Run PyInstaller build script
         shell: pwsh
         run: ./scripts/build.ps1

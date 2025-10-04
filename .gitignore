@@ -15,6 +15,7 @@ cabplanner.db
 
 # Version control
 .version
+cabplanner_version_info.txt
 
 # SQLite journal files
 *.db-journal
