@@ -72,6 +72,16 @@ def check_database_compatibility(db_path: Path) -> tuple[bool, str]:
                     f"Wersja schematu bazy ({current_rev[:8]}...) nie jest zgodna z aktualną wersją aplikacji",
                 )
 
+            # Check if cabinet_types table has the correct schema (name column instead of nazwa)
+            result = conn.execute(text("PRAGMA table_info(cabinet_types)"))
+            columns = {row[1] for row in result.fetchall()}
+            
+            if "nazwa" in columns and "name" not in columns:
+                return (
+                    False,
+                    "Schemat bazy danych jest nieaktualny (kolumna 'nazwa' zamiast 'name')",
+                )
+
         return True, "Database is compatible"
 
     except Exception as e:
