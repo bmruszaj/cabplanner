@@ -894,7 +894,20 @@ class MainWindow(QMainWindow):
             )
 
     def on_delete_project(self):
-        """Delete currently selected project"""
+        """Delete currently selected project (only works from project list view)"""
+        # Check if we're in the project details view - if so, don't delete the project
+        # The Delete key in project details should delete the selected cabinet instead
+        if (
+            self.project_details_widget is not None
+            and self.stack.currentWidget() == self.project_details_widget
+        ):
+            # We're in project details view - delegate to cabinet deletion
+            if hasattr(self.project_details_widget, "details_view"):
+                view = self.project_details_widget.details_view
+                if hasattr(view, "_delete_selected_cabinet"):
+                    view._delete_selected_cabinet()
+            return
+
         project = self._get_current_project()
         if not project:
             self.status.showMessage(self.tr("Wybierz projekt do usunięcia"))

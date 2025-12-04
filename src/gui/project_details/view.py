@@ -634,6 +634,19 @@ class ProjectDetailsView(QDialog):
         # Emit the selection signal
         self.sig_cabinet_selected.emit(cabinet_id)
 
+    def _get_selected_cabinet_id(self) -> int | None:
+        """Get the ID of the currently selected cabinet card."""
+        for card_id, card in self._cards_by_id.items():
+            if card.is_card_selected():
+                return card_id
+        return None
+
+    def _delete_selected_cabinet(self) -> None:
+        """Delete the currently selected cabinet (called from keyboard shortcut)."""
+        cabinet_id = self._get_selected_cabinet_id()
+        if cabinet_id is not None:
+            self._on_delete_request(cabinet_id)
+
     def _on_sequence_changed_request(self, cabinet_id: int, new_sequence: int) -> None:
         """Handle sequence change request from card - delegate to controller."""
         if self.controller:
