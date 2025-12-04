@@ -74,6 +74,9 @@ class ReportGenerator:
             self._add_header(section, project)
             self._add_footer(section)
 
+            # Get sorting preference from settings
+            sort_by_color = self._get_sort_preference()
+
             # Get data for report
             if self.project_service and project.id:
                 # Get aggregated elements from service
@@ -93,6 +96,13 @@ class ReportGenerator:
                 formatki, fronty, hdf, akcesoria = self._extract_elements_directly(
                     project
                 )
+
+            # Sort parts based on preference
+            if sort_by_color:
+                formatki = self._sort_by_color(formatki)
+                fronty = self._sort_by_color(fronty)
+                hdf = self._sort_by_color(hdf)
+            # else: keep original order (by LP/sequence)
 
             # Add sections
             self._add_parts_section(doc, "FORMATKI", formatki)
@@ -119,6 +129,28 @@ class ReportGenerator:
         except Exception as e:
             logger.error(f"Error generating report: {str(e)}", exc_info=True)
             raise ReportGenerationError(f"Failed to generate report: {str(e)}")
+
+    def _get_sort_preference(self) -> bool:
+        """Get sorting preference from settings. Returns True if sorting by color."""
+        if not self.db_session:
+            return True  # Default to color sorting
+
+        try:
+            from src.services.settings_service import SettingsService
+
+            settings = SettingsService(self.db_session)
+            sort_setting = settings.get_setting_value("report_sort_by", "Kolor")
+            return sort_setting == "Kolor"
+        except Exception as e:
+            logger.warning(f"Could not get sort preference: {e}, defaulting to color")
+            return True
+
+    def _sort_by_color(self, items: List[SimpleNamespace]) -> List[SimpleNamespace]:
+        """Sort items by color, then by name within each color group."""
+        return sorted(
+            items,
+            key=lambda x: (getattr(x, "color", "") or "", getattr(x, "name", "") or ""),
+        )
 
     def _dict_to_namespace_list(self, dict_list: List[Dict]) -> List[SimpleNamespace]:
         """Convert a list of dictionaries to a list of SimpleNamespace objects"""
