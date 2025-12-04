@@ -481,10 +481,12 @@ class ProjectDetailsView(QDialog):
 
         # Find cards to remove (cabinet was deleted)
         current_cabinet_ids = {cabinet.id for cabinet in ordered_cabinets}
-        cards_to_remove = [cid for cid in self._cards_by_id if cid not in current_cabinet_ids]
-        
+        cards_to_remove = [
+            cid for cid in self._cards_by_id if cid not in current_cabinet_ids
+        ]
+
         self._dbg(f"_reorder_existing_cards: removing {len(cards_to_remove)} cards")
-        
+
         # Remove cards for deleted cabinets
         for cabinet_id in cards_to_remove:
             card = self._cards_by_id.pop(cabinet_id)
@@ -968,6 +970,7 @@ class ProjectDetailsView(QDialog):
             def do_refresh():
                 if self.controller:
                     self.controller.load_data()
+
             QTimer.singleShot(0, do_refresh)
         except Exception:
             logger.exception("Error refreshing after cabinet addition from catalog")

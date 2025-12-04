@@ -35,9 +35,7 @@ class TestCustomCabinetIntegration:
 
         # Verify catalog template exists
         assert (
-            session.query(CabinetTemplate)
-            .filter(CabinetTemplate.name == "D60")
-            .first()
+            session.query(CabinetTemplate).filter(CabinetTemplate.name == "D60").first()
             is not None
         )
 

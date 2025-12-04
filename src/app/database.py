@@ -2,7 +2,10 @@ import logging
 from pathlib import Path
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker, Session
-from src.db_migration import upgrade_database, IncompatibleDatabaseError, check_database_compatibility
+from src.db_migration import (
+    upgrade_database,
+    IncompatibleDatabaseError,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -13,12 +16,12 @@ def handle_incompatible_database(db_path: Path, reason: str) -> bool:
     Returns True if user confirmed deletion and database was deleted.
     """
     from PySide6.QtWidgets import QMessageBox, QApplication
-    
+
     # Ensure we have a QApplication
     app = QApplication.instance()
     if app is None:
         return False
-    
+
     msg = QMessageBox()
     msg.setIcon(QMessageBox.Warning)
     msg.setWindowTitle("Niekompatybilna baza danych")
@@ -33,7 +36,7 @@ def handle_incompatible_database(db_path: Path, reason: str) -> bool:
     msg.setDefaultButton(QMessageBox.No)
     msg.button(QMessageBox.Yes).setText("Usuń i kontynuuj")
     msg.button(QMessageBox.No).setText("Anuluj")
-    
+
     if msg.exec() == QMessageBox.Yes:
         try:
             db_path.unlink()
@@ -42,9 +45,7 @@ def handle_incompatible_database(db_path: Path, reason: str) -> bool:
         except Exception as e:
             logger.error("Failed to delete database: %s", e)
             QMessageBox.critical(
-                None,
-                "Błąd",
-                f"Nie udało się usunąć bazy danych:\n{e}"
+                None, "Błąd", f"Nie udało się usunąć bazy danych:\n{e}"
             )
             return False
     else:
@@ -60,7 +61,7 @@ def ensure_db_and_migrate(base: Path) -> tuple[Path, bool]:
     logger.info("Using database at: %s", db_path)
 
     logger.info("Upgrading database schema (Alembic)...")
-    
+
     try:
         upgrade_database(db_path)
     except IncompatibleDatabaseError as e:

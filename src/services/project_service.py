@@ -236,7 +236,10 @@ class ProjectService:
         except Exception as e:
             # Log but don't fail - accessories are optional
             import logging
-            logging.getLogger(__name__).warning(f"Failed to materialize accessories: {e}")
+
+            logging.getLogger(__name__).warning(
+                f"Failed to materialize accessories: {e}"
+            )
 
     def _materialize_custom_cabinet_parts(
         self,

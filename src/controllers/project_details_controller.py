@@ -184,6 +184,7 @@ class ProjectDetailsController(QObject):
             cabinet_id: ID of the cabinet to delete
         """
         import logging
+
         logger = logging.getLogger(__name__)
         logger.debug(f"[CONTROLLER] on_cabinet_deleted: cabinet_id={cabinet_id}")
         try:
@@ -196,11 +197,15 @@ class ProjectDetailsController(QObject):
             # Remove from local cache
             old_count = len(self.cabinets)
             self.cabinets = [c for c in self.cabinets if c.id != cabinet_id]
-            logger.debug(f"[CONTROLLER] cache updated: {old_count} -> {len(self.cabinets)} cabinets")
+            logger.debug(
+                f"[CONTROLLER] cache updated: {old_count} -> {len(self.cabinets)} cabinets"
+            )
 
             # Re-emit sorted data
             ordered_cabinets = sort_cabinets(self.cabinets)
-            logger.debug(f"[CONTROLLER] emitting data_loaded with {len(ordered_cabinets)} cabinets")
+            logger.debug(
+                f"[CONTROLLER] emitting data_loaded with {len(ordered_cabinets)} cabinets"
+            )
             self.data_loaded.emit(ordered_cabinets)
 
         except Exception as e:
