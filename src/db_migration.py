@@ -76,7 +76,7 @@ def check_database_compatibility(db_path: Path) -> tuple[bool, str]:
             # Check if cabinet_types table has the correct schema (name column instead of nazwa)
             result = conn.execute(text("PRAGMA table_info(cabinet_types)"))
             columns = {row[1] for row in result.fetchall()}
-            
+
             if "nazwa" in columns and "name" not in columns:
                 return (
                     False,
@@ -88,7 +88,7 @@ def check_database_compatibility(db_path: Path) -> tuple[bool, str]:
     except Exception as e:
         logger.warning(f"Error checking database compatibility: {e}")
         return False, f"Nie można zweryfikować bazy danych: {e}"
-    
+
     finally:
         # Ensure engine is disposed to release file lock
         if engine is not None:
