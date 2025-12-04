@@ -588,7 +588,8 @@ class CabinetEditorDialog(QDialog):
         # Load forms
         self.instance_form.load(project_instance, cabinet_type)
         self.type_form.load(cabinet_type)
-        self.parts_form.load(cabinet_type)
+        # Load parts from project instance snapshot (not from catalog template)
+        self.parts_form.load_custom_parts(list(project_instance.parts))
         self.accessories_form.load(project_instance, cabinet_type)
 
         # Switch to instance tab
