@@ -151,7 +151,7 @@ class TestReportGeneratorCustomCabinets:
         session.commit()
 
         # Create catalog template
-        catalog_template = CabinetTemplate(nazwa="G40", kitchen_type="LOFT")
+        catalog_template = CabinetTemplate(name="G40", kitchen_type="LOFT")
         session.add(catalog_template)
         session.commit()
 

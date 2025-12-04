@@ -39,7 +39,7 @@ class CabinetTableModel(QAbstractTableModel):
                 return cabinet.sequence_number
             elif col == 1:
                 return (
-                    cabinet.cabinet_type.nazwa
+                    cabinet.cabinet_type.name
                     if cabinet.cabinet_type
                     else "Niestandardowy"
                 )

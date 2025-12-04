@@ -49,7 +49,7 @@ def upgrade() -> None:
         "cabinet_types",
         sa.Column("id", sa.Integer(), nullable=False),
         sa.Column("kitchen_type", sa.String(length=60), nullable=False),
-        sa.Column("nazwa", sa.String(length=255), nullable=False),
+        sa.Column("name", sa.String(length=255), nullable=False),
         sa.Column(
             "created_at",
             sa.DateTime(timezone=True),
@@ -63,7 +63,7 @@ def upgrade() -> None:
             nullable=False,
         ),
         sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint("nazwa", name="uq_cabinettype_nazwa"),
+        sa.UniqueConstraint("name", name="uq_cabinettype_name"),
     )
     with op.batch_alter_table("cabinet_types", schema=None) as batch_op:
         batch_op.create_index(
@@ -277,6 +277,43 @@ def upgrade() -> None:
         ),
         sa.PrimaryKeyConstraint("drawer_template_id", "accessory_id"),
     )
+    op.create_table(
+        "cabinet_template_accessories",
+        sa.Column("id", sa.Integer(), nullable=False),
+        sa.Column("cabinet_type_id", sa.Integer(), nullable=False),
+        sa.Column("accessory_id", sa.Integer(), nullable=False),
+        sa.Column("count", sa.Integer(), nullable=False, server_default="1"),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("(CURRENT_TIMESTAMP)"),
+            nullable=False,
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("(CURRENT_TIMESTAMP)"),
+            nullable=False,
+        ),
+        sa.ForeignKeyConstraint(
+            ["cabinet_type_id"], ["cabinet_types.id"], ondelete="CASCADE"
+        ),
+        sa.ForeignKeyConstraint(
+            ["accessory_id"], ["accessories.id"], ondelete="RESTRICT"
+        ),
+        sa.PrimaryKeyConstraint("id"),
+        sa.UniqueConstraint(
+            "cabinet_type_id", "accessory_id", name="uq_cabinet_template_accessory"
+        ),
+    )
+    with op.batch_alter_table("cabinet_template_accessories", schema=None) as batch_op:
+        batch_op.create_index(
+            "ix_cabinet_template_accessories_cabinet", ["cabinet_type_id"], unique=False
+        )
+        batch_op.create_index(
+            "ix_cabinet_template_accessories_accessory", ["accessory_id"], unique=False
+        )
+
     op.create_table(
         "project_cabinets",
         sa.Column("id", sa.Integer(), nullable=False),
@@ -515,6 +552,11 @@ def downgrade() -> None:
 
     op.drop_table("project_cabinets")
     op.drop_table("drawer_template_accessories")
+    with op.batch_alter_table("cabinet_template_accessories", schema=None) as batch_op:
+        batch_op.drop_index("ix_cabinet_template_accessories_accessory")
+        batch_op.drop_index("ix_cabinet_template_accessories_cabinet")
+
+    op.drop_table("cabinet_template_accessories")
     with op.batch_alter_table("cabinet_template_drawers", schema=None) as batch_op:
         batch_op.drop_index("ix_ct_drawers_cabinet")
 

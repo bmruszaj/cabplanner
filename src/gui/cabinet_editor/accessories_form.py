@@ -206,7 +206,7 @@ class AccessoryQuantityDialog(QDialog):
 
         self.quantity_spinbox = QSpinBox()
         self.quantity_spinbox.setRange(1, 100)
-        self.quantity_spinbox.setValue(self.accessory_link.count)
+        self.quantity_spinbox.setValue(self.accessory.count)
         quantity_layout.addWidget(self.quantity_spinbox)
 
         layout.addLayout(quantity_layout)
@@ -497,12 +497,11 @@ class AccessoriesForm(QWidget):
             self.info_label.setText(
                 f"Znaleziono {len(accessories)} akcesoriów w projekcie"
             )
-        elif self.cabinet_type:
-            # Catalog type mode - show catalog-level accessories (if any)
-            # For now, we'll show an empty list since catalog types don't have accessories yet
-            accessories = []
+        elif self.cabinet_type and hasattr(self.cabinet_type, "accessories"):
+            # Catalog type mode - show catalog-level accessories from template
+            accessories = list(self.cabinet_type.accessories)
             self.info_label.setText(
-                "Akcesoria na poziomie katalogu - możesz dodawać nowe"
+                f"Znaleziono {len(accessories)} akcesoriów w katalogu"
             )
         else:
             self.info_label.setText("Brak akcesoriów do wyświetlenia")
@@ -522,20 +521,24 @@ class AccessoriesForm(QWidget):
             self.project_cabinet, "accessory_snapshots"
         ):
             existing_accessories = list(self.project_cabinet.accessory_snapshots)
-        elif self.cabinet_type:
-            existing_accessories = []
+        elif self.cabinet_type and hasattr(self.cabinet_type, "accessories"):
+            # Load accessories from cabinet template
+            existing_accessories = list(self.cabinet_type.accessories)
 
         # Filter out accessories marked for removal
-        filtered_accessories = [
-            acc
-            for acc in existing_accessories
-            if acc.id not in self.pending_accessories_to_remove
-        ]
+        # For CabinetTemplateAccessory, use accessory_id; for snapshots, use id
+        filtered_accessories = []
+        for acc in existing_accessories:
+            # Get the appropriate ID for this accessory type
+            acc_id = getattr(acc, "id", None) or getattr(acc, "accessory_id", None)
+            if acc_id not in self.pending_accessories_to_remove:
+                filtered_accessories.append(acc)
 
         # Apply quantity changes
         for acc in filtered_accessories:
-            if acc.id in self.pending_quantity_changes:
-                acc.count = self.pending_quantity_changes[acc.id]
+            acc_id = getattr(acc, "id", None) or getattr(acc, "accessory_id", None)
+            if acc_id in self.pending_quantity_changes:
+                acc.count = self.pending_quantity_changes[acc_id]
 
         # Add pending new accessories (create temporary objects for display)
         from types import SimpleNamespace

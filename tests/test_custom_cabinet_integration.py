@@ -29,14 +29,14 @@ class TestCustomCabinetIntegration:
         session.commit()
 
         # Create existing catalog template with same name "D60"
-        catalog_template = CabinetTemplate(nazwa="D60", kitchen_type="LOFT")
+        catalog_template = CabinetTemplate(name="D60", kitchen_type="LOFT")
         session.add(catalog_template)
         session.commit()
 
         # Verify catalog template exists
         assert (
             session.query(CabinetTemplate)
-            .filter(CabinetTemplate.nazwa == "D60")
+            .filter(CabinetTemplate.name == "D60")
             .first()
             is not None
         )
@@ -104,7 +104,7 @@ class TestCustomCabinetIntegration:
 
         # Verify catalog template still exists and wasn't affected
         catalog_templates = (
-            session.query(CabinetTemplate).filter(CabinetTemplate.nazwa == "D60").all()
+            session.query(CabinetTemplate).filter(CabinetTemplate.name == "D60").all()
         )
         assert len(catalog_templates) == 1  # Only the original catalog template
 
@@ -122,7 +122,7 @@ class TestCustomCabinetIntegration:
         session.commit()
 
         # Create catalog template D60
-        catalog_template = CabinetTemplate(nazwa="D60", kitchen_type="LOFT")
+        catalog_template = CabinetTemplate(name="D60", kitchen_type="LOFT")
         session.add(catalog_template)
         session.commit()
 
@@ -172,7 +172,7 @@ class TestCustomCabinetIntegration:
         # Verify catalog cabinet
         catalog_cabs = [cab for cab in project_cabinets if cab.type_id is not None]
         assert len(catalog_cabs) == 1
-        assert catalog_cabs[0].cabinet_type.nazwa == "D60"
+        assert catalog_cabs[0].cabinet_type.name == "D60"
 
         # Verify custom cabinet
         custom_cabs = [cab for cab in project_cabinets if cab.type_id is None]

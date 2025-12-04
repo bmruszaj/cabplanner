@@ -152,12 +152,12 @@ class TestPresetImporter:
 
         # Check that templates were created
         templates = template_service.list_templates()
-        template_names = [t.nazwa for t in templates]
+        template_names = [t.name for t in templates]
         assert "PresetD60" in template_names
         assert "PresetG40" in template_names
 
         # Check PresetD60 template
-        preset_d60 = next(t for t in templates if t.nazwa == "PresetD60")
+        preset_d60 = next(t for t in templates if t.name == "PresetD60")
 
         # Check parts were added
         d60_parts = template_service.list_parts(preset_d60.id)
@@ -182,7 +182,7 @@ class TestPresetImporter:
 
         # Check that templates were created
         templates = template_service.list_templates()
-        template_names = [t.nazwa for t in templates]
+        template_names = [t.name for t in templates]
         assert "PresetD70" in template_names
         assert "PresetG50" in template_names
 
@@ -200,11 +200,11 @@ class TestPresetImporter:
 
         # Check that template was created despite comments
         templates = template_service.list_templates()
-        template_names = [t.nazwa for t in templates]
+        template_names = [t.name for t in templates]
         assert "PresetD80" in template_names
 
         # Check parts were added (comments ignored)
-        preset_d80 = next(t for t in templates if t.nazwa == "PresetD80")
+        preset_d80 = next(t for t in templates if t.name == "PresetD80")
         d80_parts = template_service.list_parts(preset_d80.id)
         assert len(d80_parts) == 2
 
@@ -222,7 +222,7 @@ class TestPresetImporter:
 
         # Check that template was created despite empty lines
         templates = template_service.list_templates()
-        template_names = [t.nazwa for t in templates]
+        template_names = [t.name for t in templates]
         assert "PresetD90" in template_names
 
     def test_import_presets_from_lines_custom_kitchen_type(
@@ -237,7 +237,7 @@ class TestPresetImporter:
 
         # Check that template was created with custom kitchen type
         templates = template_service.list_templates()
-        custom_templates = [t for t in templates if t.nazwa == "CustomD60"]
+        custom_templates = [t for t in templates if t.name == "CustomD60"]
         assert len(custom_templates) == 1
         assert custom_templates[0].kitchen_type == "CUSTOM"
 
@@ -256,7 +256,7 @@ class TestPresetImporter:
 
         # Check that parts were added to existing template
         templates = template_service.list_templates()
-        duplicate_templates = [t for t in templates if t.nazwa == "DuplicateTest"]
+        duplicate_templates = [t for t in templates if t.name == "DuplicateTest"]
         assert len(duplicate_templates) == 1  # Should reuse existing template
 
         # Check both parts exist
@@ -276,7 +276,7 @@ class TestPresetImporter:
 
         # Check that good lines were processed
         templates = template_service.list_templates()
-        malformed_templates = [t for t in templates if t.nazwa == "MalformedTest"]
+        malformed_templates = [t for t in templates if t.name == "MalformedTest"]
         if (
             malformed_templates
         ):  # May or may not create template depending on implementation

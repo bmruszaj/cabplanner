@@ -357,24 +357,27 @@ class CatalogWindow(QDialog):
                 handle_type=options["handle_type"],
             )
 
-            # Emit signal
-            self.sig_added_to_project.emit(
-                cabinet_type_id, self.target_project.id, quantity, options
-            )
+            # Store data for signal emission after dialog closes
+            self._pending_add_data = (cabinet_type_id, self.target_project.id, quantity, options)
 
-            # Show success message
-            item = self.browser_widget.current_item()
-            item_name = item.name if item else f"Cabinet #{cabinet_type_id}"
-            QMessageBox.information(
-                self,
-                "Success",
-                f"Added {quantity}x '{item_name}' to project successfully",
-            )
+            # Close the dialog first - signal will be emitted in done()
+            self.accept()
 
         except Exception as e:
             QMessageBox.critical(
                 self, "Error", f"Failed to add cabinet to project: {str(e)}"
             )
+
+    def done(self, result):
+        """Override done to emit signal after dialog is closed."""
+        # Emit pending signal if any
+        if hasattr(self, '_pending_add_data') and self._pending_add_data:
+            data = self._pending_add_data
+            self._pending_add_data = None
+            # Use QTimer to defer signal emission to after dialog is fully closed
+            from PySide6.QtCore import QTimer
+            QTimer.singleShot(0, lambda: self.sig_added_to_project.emit(*data))
+        super().done(result)
 
     def _on_cabinet_created(self, cabinet_type):
         """Handle cabinet creation signal."""
@@ -383,5 +386,5 @@ class CatalogWindow(QDialog):
         QMessageBox.information(
             self,
             "Sukces",
-            f"Nowa szafka '{cabinet_type.nazwa}' została dodana do katalogu",
+            f"Nowa szafka '{cabinet_type.name}' została dodana do katalogu",
         )

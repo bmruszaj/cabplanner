@@ -6,7 +6,12 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from src.db_schema.orm_models import CabinetTemplate, CabinetPart
+from src.db_schema.orm_models import (
+    CabinetTemplate,
+    CabinetPart,
+    CabinetTemplateAccessory,
+    Accessory,
+)
 
 
 class TemplateService:
@@ -25,8 +30,8 @@ class TemplateService:
     def get_template(self, template_id: int) -> Optional[CabinetTemplate]:
         return self.db.get(CabinetTemplate, template_id)
 
-    def create_template(self, *, kitchen_type: str, nazwa: str) -> CabinetTemplate:
-        tpl = CabinetTemplate(kitchen_type=kitchen_type, nazwa=nazwa)
+    def create_template(self, *, kitchen_type: str, name: str) -> CabinetTemplate:
+        tpl = CabinetTemplate(kitchen_type=kitchen_type, name=name)
         self.db.add(tpl)
         try:
             self.db.commit()
@@ -35,9 +40,9 @@ class TemplateService:
         except IntegrityError as e:
             self.db.rollback()
             # Handle specific constraint violations
-            if "UNIQUE constraint failed: cabinet_types.nazwa" in str(e):
+            if "UNIQUE constraint failed: cabinet_types.name" in str(e):
                 raise ValueError(
-                    f"Typ szafki o nazwie '{nazwa}' już istnieje. Wybierz inną nazwę."
+                    f"Typ szafki o nazwie '{name}' już istnieje. Wybierz inną nazwę."
                 )
             elif "UNIQUE constraint failed" in str(e):
                 raise ValueError(
@@ -67,9 +72,9 @@ class TemplateService:
         except IntegrityError as e:
             self.db.rollback()
             # Handle specific constraint violations
-            if "UNIQUE constraint failed: cabinet_types.nazwa" in str(e):
+            if "UNIQUE constraint failed: cabinet_types.name" in str(e):
                 raise ValueError(
-                    f"Typ szafki o nazwie '{fields.get('nazwa', '')}' już istnieje. Wybierz inną nazwę."
+                    f"Typ szafki o nazwie '{fields.get('name', '')}' już istnieje. Wybierz inną nazwę."
                 )
             elif "UNIQUE constraint failed" in str(e):
                 raise ValueError(
@@ -119,5 +124,82 @@ class TemplateService:
         if not part:
             return False
         self.db.delete(part)
+        self.db.commit()
+        return True
+
+    # Accessories
+    def add_accessory(
+        self,
+        *,
+        cabinet_type_id: int,
+        accessory_id: int,
+        count: int = 1,
+    ) -> CabinetTemplateAccessory:
+        """Add an accessory link to a cabinet template."""
+        link = CabinetTemplateAccessory(
+            cabinet_type_id=cabinet_type_id,
+            accessory_id=accessory_id,
+            count=count,
+        )
+        self.db.add(link)
+        self.db.commit()
+        self.db.refresh(link)
+        return link
+
+    def add_accessory_by_sku(
+        self,
+        *,
+        cabinet_type_id: int,
+        name: str,
+        sku: str,
+        count: int = 1,
+    ) -> CabinetTemplateAccessory:
+        """
+        Add an accessory to a cabinet template by SKU.
+        Creates the accessory if it doesn't exist.
+        """
+        # Find or create accessory
+        stmt = select(Accessory).filter_by(sku=sku)
+        accessory = self.db.scalars(stmt).first()
+        if not accessory:
+            accessory = Accessory(name=name, sku=sku)
+            self.db.add(accessory)
+            self.db.flush()
+
+        # Check if link already exists
+        existing_link = self.db.get(
+            CabinetTemplateAccessory, (cabinet_type_id, accessory.id)
+        )
+        if existing_link:
+            # Update count if link exists
+            existing_link.count = count
+            self.db.commit()
+            self.db.refresh(existing_link)
+            return existing_link
+
+        # Create new link
+        link = CabinetTemplateAccessory(
+            cabinet_type_id=cabinet_type_id,
+            accessory_id=accessory.id,
+            count=count,
+        )
+        self.db.add(link)
+        self.db.commit()
+        self.db.refresh(link)
+        return link
+
+    def list_accessories(self, cabinet_type_id: int) -> List[CabinetTemplateAccessory]:
+        """List all accessories linked to a cabinet template."""
+        stmt = select(CabinetTemplateAccessory).filter(
+            CabinetTemplateAccessory.cabinet_type_id == cabinet_type_id
+        )
+        return list(self.db.scalars(stmt).all())
+
+    def delete_accessory(self, cabinet_type_id: int, accessory_id: int) -> bool:
+        """Remove an accessory link from a cabinet template."""
+        link = self.db.get(CabinetTemplateAccessory, (cabinet_type_id, accessory_id))
+        if not link:
+            return False
+        self.db.delete(link)
         self.db.commit()
         return True

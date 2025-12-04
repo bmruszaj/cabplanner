@@ -38,7 +38,7 @@ def sample_project_orm():
     # CabinetTemplate with basic info
     ct = CabinetTemplate(
         kitchen_type="LOFT",
-        nazwa="Standard",
+        name="Standard",
     )
 
     # Add cabinet parts with different materials to trigger all report sections
@@ -257,7 +257,7 @@ def project_with_custom_cabinets():
     # Create catalog template for regular cabinet
     catalog_template = CabinetTemplate(
         kitchen_type="LOFT",
-        nazwa="D40",
+        name="D40",
     )
 
     # Add parts to catalog template

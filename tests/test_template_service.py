@@ -41,12 +41,12 @@ def test_create_and_get_cabinet_type(service):
     # WHEN creating a new CabinetTemplate
     ctype = service.create_template(
         kitchen_type="LOFT",
-        nazwa="Wall Unit",
+        name="Wall Unit",
     )
     # THEN the created CabinetTemplate should have correct fields
     assert ctype.id is not None
     assert ctype.kitchen_type == "LOFT"
-    assert ctype.nazwa == "Wall Unit"
+    assert ctype.name == "Wall Unit"
     assert isinstance(ctype.created_at, datetime)
     assert isinstance(ctype.updated_at, datetime)
 
@@ -55,13 +55,13 @@ def test_create_and_get_cabinet_type(service):
     # THEN the fetched CabinetTemplate should match the created one
     assert fetched is not None
     assert fetched.id == ctype.id
-    assert fetched.nazwa == "Wall Unit"
+    assert fetched.name == "Wall Unit"
 
 
 def test_list_cabinet_types_no_filter(service):
     # GIVEN multiple CabinetTemplate entries with various kitchen_types
-    a = service.create_template(kitchen_type="PARIS", nazwa="Base Unit")
-    b = service.create_template(kitchen_type="WINO", nazwa="Tall Unit")
+    a = service.create_template(kitchen_type="PARIS", name="Base Unit")
+    b = service.create_template(kitchen_type="WINO", name="Tall Unit")
 
     # WHEN listing all cabinet templates without a filter
     all_types = service.list_templates()
@@ -73,9 +73,9 @@ def test_list_cabinet_types_no_filter(service):
 
 def test_list_cabinet_types_with_filter(service):
     # GIVEN CabinetTemplate entries with kitchen_type "FILTER" and others
-    x1 = service.create_template(kitchen_type="FILTER", nazwa="X1")
-    x2 = service.create_template(kitchen_type="FILTER", nazwa="X2")
-    service.create_template(kitchen_type="OTHER", nazwa="O1")
+    x1 = service.create_template(kitchen_type="FILTER", name="X1")
+    x2 = service.create_template(kitchen_type="FILTER", name="X2")
+    service.create_template(kitchen_type="OTHER", name="O1")
 
     # WHEN listing cabinet templates filtered by kitchen_type="FILTER"
     filtered = service.list_templates(kitchen_type="FILTER")
@@ -87,30 +87,30 @@ def test_list_cabinet_types_with_filter(service):
 
 def test_update_cabinet_type(service):
     # GIVEN an existing CabinetTemplate
-    ct = service.create_template(kitchen_type="UPD", nazwa="Orig")
+    ct = service.create_template(kitchen_type="UPD", name="Orig")
     ct_id = ct.id
-    old_name = ct.nazwa
+    old_name = ct.name
 
     # WHEN updating its nazwa
-    updated = service.update_template(ct_id, nazwa="NewName")
+    updated = service.update_template(ct_id, name="NewName")
     # THEN the CabinetTemplate should reflect the new values
     assert updated is not None
     assert updated.id == ct_id
-    assert updated.nazwa == "NewName"
-    assert updated.nazwa != old_name
+    assert updated.name == "NewName"
+    assert updated.name != old_name
 
 
 def test_update_nonexistent_returns_none(service):
     # GIVEN no CabinetTemplate with ID -1
     # WHEN attempting to update a non-existent entry
-    result = service.update_template(-1, nazwa="Nope")
+    result = service.update_template(-1, name="Nope")
     # THEN the result should be None
     assert result is None
 
 
 def test_delete_cabinet_type(service):
     # GIVEN a CabinetTemplate to delete
-    ct = service.create_template(kitchen_type="DEL", nazwa="ToDelete")
+    ct = service.create_template(kitchen_type="DEL", name="ToDelete")
     ct_id = ct.id
 
     # WHEN deleting it the first time
@@ -131,3 +131,116 @@ def test_get_nonexistent_returns_none(service):
     result = service.get_template(-999)
     # THEN the result should be None
     assert result is None
+
+
+# -- Accessory tests --
+
+
+def test_add_accessory_by_sku_creates_accessory(service):
+    # GIVEN a cabinet template
+    ct = service.create_template(kitchen_type="LOFT", name="AccTestCabinet1")
+
+    # WHEN adding an accessory by SKU that doesn't exist yet
+    link = service.add_accessory_by_sku(
+        cabinet_type_id=ct.id,
+        name="Uchwyt Złoty",
+        sku="UCH-GOLD-001",
+        count=2,
+    )
+
+    # THEN the link should be created with correct values
+    assert link is not None
+    assert link.cabinet_type_id == ct.id
+    assert link.count == 2
+
+    # AND the accessory should have been created
+    assert link.accessory.name == "Uchwyt Złoty"
+    assert link.accessory.sku == "UCH-GOLD-001"
+
+
+def test_add_accessory_by_sku_uses_existing_accessory(service):
+    # GIVEN a cabinet template and an existing accessory
+    ct = service.create_template(kitchen_type="LOFT", name="AccTestCabinet2")
+
+    # First create an accessory
+    first_link = service.add_accessory_by_sku(
+        cabinet_type_id=ct.id,
+        name="Handle A",
+        sku="HANDLE-A-001",
+        count=1,
+    )
+    first_accessory_id = first_link.accessory.id
+
+    # Create another cabinet template
+    ct2 = service.create_template(kitchen_type="LOFT", name="AccTestCabinet3")
+
+    # WHEN adding an accessory with the same SKU to another cabinet
+    second_link = service.add_accessory_by_sku(
+        cabinet_type_id=ct2.id,
+        name="Handle A Different Name",  # Name may differ
+        sku="HANDLE-A-001",
+        count=3,
+    )
+
+    # THEN the same accessory should be reused
+    assert second_link.accessory.id == first_accessory_id
+    assert second_link.count == 3
+
+
+def test_list_accessories_for_cabinet_template(service):
+    # GIVEN a cabinet template with some accessories
+    ct = service.create_template(kitchen_type="WINO", name="AccTestCabinet4")
+
+    service.add_accessory_by_sku(
+        cabinet_type_id=ct.id, name="Prowadnica", sku="PROW-001", count=4
+    )
+    service.add_accessory_by_sku(
+        cabinet_type_id=ct.id, name="Zawias", sku="ZAW-001", count=2
+    )
+
+    # WHEN listing accessories
+    accessories = service.list_accessories(ct.id)
+
+    # THEN we should have both accessories
+    assert len(accessories) == 2
+    skus = {a.accessory.sku for a in accessories}
+    assert skus == {"PROW-001", "ZAW-001"}
+
+
+def test_delete_accessory_from_cabinet_template(service):
+    # GIVEN a cabinet template with an accessory
+    ct = service.create_template(kitchen_type="PARIS", name="AccTestCabinet5")
+    link = service.add_accessory_by_sku(
+        cabinet_type_id=ct.id, name="Uchwyt", sku="UCH-DEL-001", count=1
+    )
+    accessory_id = link.accessory.id
+
+    # WHEN deleting the accessory link
+    result = service.delete_accessory(ct.id, accessory_id)
+
+    # THEN deletion should succeed
+    assert result is True
+
+    # AND the link should no longer exist
+    accessories = service.list_accessories(ct.id)
+    assert len(accessories) == 0
+
+
+def test_update_accessory_count(service):
+    # GIVEN a cabinet template with an accessory
+    ct = service.create_template(kitchen_type="LOFT", name="AccTestCabinet6")
+    service.add_accessory_by_sku(
+        cabinet_type_id=ct.id, name="Rączka", sku="RACZ-UPD-001", count=1
+    )
+
+    # WHEN adding the same accessory again with a different count
+    updated_link = service.add_accessory_by_sku(
+        cabinet_type_id=ct.id, name="Rączka", sku="RACZ-UPD-001", count=5
+    )
+
+    # THEN the count should be updated
+    assert updated_link.count == 5
+
+    # AND there should still be only one link
+    accessories = service.list_accessories(ct.id)
+    assert len(accessories) == 1

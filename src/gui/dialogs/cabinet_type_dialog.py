@@ -387,7 +387,7 @@ class CabinetTypeDialog(QDialog):
             self._load_cabinet_type_data(self.cabinet_type)
         elif prefill_cabinet is not None:
             self.setWindowTitle(
-                f"Nowy typ szafki (na podstawie: {prefill_cabinet.nazwa})"
+                f"Nowy typ szafki (na podstawie: {prefill_cabinet.name})"
             )
             self._load_cabinet_type_data(prefill_cabinet, is_prefill=True)
         else:
@@ -971,7 +971,7 @@ class CabinetTypeDialog(QDialog):
 
     def _load_cabinet_type_data(self, source: Any, is_prefill: bool = False) -> None:
         """Load cabinet type data into the form fields."""
-        self.nazwa_edit.setText("" if is_prefill else str(source.nazwa))
+        self.nazwa_edit.setText("" if is_prefill else str(source.name))
 
         idx = self.kitchen_type_combo.findText(str(source.kitchen_type))
         if idx >= 0:

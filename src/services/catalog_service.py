@@ -67,14 +67,14 @@ class CatalogCabinetType:
 
         return cls(
             id=ct.id,
-            name=ct.nazwa,
+            name=ct.name,
             sku=sku,
             width_mm=width_mm,
             height_mm=height_mm,
             depth_mm=depth_mm,
             preview_path=None,  # TODO: Add preview path support
             kitchen_type=ct.kitchen_type,
-            description=f"{ct.nazwa} - {ct.kitchen_type} series",
+            description=f"{ct.name} - {ct.kitchen_type} series",
         )
 
 
@@ -118,7 +118,7 @@ class CatalogService:
             cabinet_types = [
                 ct
                 for ct in cabinet_types
-                if query_lower in ct.nazwa.lower()
+                if query_lower in ct.name.lower()
                 or query_lower in ct.kitchen_type.lower()
             ]
 
@@ -150,13 +150,13 @@ class CatalogService:
         """
         # Extract required fields
         kitchen_type = data.get("kitchen_type", "LOFT")
-        nazwa = data.get("name", "Nowy typ")
+        name = data.get("name", "Nowy typ")
 
         try:
             # Create cabinet type through service
             cabinet_type = self.cabinet_type_service.create_template(
                 kitchen_type=kitchen_type,
-                nazwa=nazwa,
+                name=name,
             )
             return CatalogCabinetType.from_cabinet_type(cabinet_type)
         except ValueError as e:
@@ -185,7 +185,7 @@ class CatalogService:
         # Part-level changes should go through part APIs.
         update_fields = {}
         if "name" in data and data["name"] is not None:
-            update_fields["nazwa"] = data["name"]
+            update_fields["name"] = data["name"]
         if "kitchen_type" in data and data["kitchen_type"] is not None:
             update_fields["kitchen_type"] = data["kitchen_type"]
 
@@ -241,7 +241,7 @@ class CatalogService:
         # Create duplicate with modified name
         duplicate_data = {
             "kitchen_type": original.kitchen_type,
-            "name": f"{original.nazwa} (Copy)",
+            "name": f"{original.name} (Copy)",
         }
 
         return self.create_type(duplicate_data)

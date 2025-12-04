@@ -316,7 +316,7 @@ class TestProjectDetailsController:
 
         # Create a template to use as catalog item
         template = template_service.create_template(
-            nazwa="CatalogTemplate", kitchen_type="LOFT"
+            name="CatalogTemplate", kitchen_type="LOFT"
         )
 
         initial_count = len(controller.cabinets)
@@ -509,7 +509,7 @@ class TestProjectDetailsController:
 
         # Create a catalog template
         catalog_template = template_service.create_template(
-            nazwa="Catalog Base D60", kitchen_type="LOFT"
+            name="Catalog Base D60", kitchen_type="LOFT"
         )
 
         # Add cabinet with explicit type_id (catalog cabinet)

@@ -50,7 +50,7 @@ class FormulaService:
 
         template = (
             self.session.query(CabinetTemplate)
-            .filter(CabinetTemplate.nazwa == template_name.strip())
+            .filter(CabinetTemplate.name == template_name.strip())
             .first()
         )
         return template is not None

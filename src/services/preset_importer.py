@@ -21,7 +21,7 @@ KNOWN_PART_TOKENS = [
 
 def _split_name_and_part(tokens: list[str]) -> tuple[str, str, list[str]]:
     """
-    Split tokens into (nazwa, part_name, rest_tokens_starting_with_first_number).
+    Split tokens into (name, part_name, rest_tokens_starting_with_first_number).
 
     Heuristic:
     - Find index i where tokens[i] starts a known part token (case-insensitive match on prefix).
@@ -113,8 +113,8 @@ def import_presets_from_lines(
         if len(tokens) < 4:
             continue
 
-        nazwa, part_name, rest = _split_name_and_part(tokens)
-        if not nazwa or not part_name or not rest:
+        cabinet_name, part_name, rest = _split_name_and_part(tokens)
+        if not cabinet_name or not part_name or not rest:
             continue
 
         height, width, pieces, wrapping, comments = _parse_numbers_and_meta(rest)
@@ -122,17 +122,17 @@ def import_presets_from_lines(
         # Normalize HDF
         is_hdf = part_name.strip().lower() == "hdf"
 
-        # Get or create cabinet type by nazwa
+        # Get or create cabinet type by name
         # Simple approach: try exact name match; otherwise create new
         existing = None
         for ct in svc.list_templates():
-            if ct.nazwa == nazwa:
+            if ct.name == cabinet_name:
                 existing = ct
                 break
         if existing is None:
             existing = svc.create_template(
                 kitchen_type=default_kitchen_type,
-                nazwa=nazwa,
+                name=cabinet_name,
             )
 
         # Use material based on is_hdf flag

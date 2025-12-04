@@ -36,7 +36,7 @@ class TestCustomCabinetArchitecture:
         project = test_project
 
         # Create a sample catalog template
-        template = CabinetTemplate(nazwa="D60", kitchen_type="LOFT")
+        template = CabinetTemplate(name="D60", kitchen_type="LOFT")
         session.add(template)
         session.commit()
 
@@ -82,7 +82,7 @@ class TestCustomCabinetArchitecture:
         project = test_project
 
         # Create a catalog template with name "D60"
-        catalog_template = CabinetTemplate(nazwa="D60", kitchen_type="LOFT")
+        catalog_template = CabinetTemplate(name="D60", kitchen_type="LOFT")
         session.add(catalog_template)
         session.commit()
 
@@ -164,7 +164,7 @@ class TestCustomCabinetArchitecture:
         project = test_project
 
         # Create catalog template
-        template = CabinetTemplate(nazwa="G40", kitchen_type="LOFT")
+        template = CabinetTemplate(name="G40", kitchen_type="LOFT")
         session.add(template)
         session.commit()
 

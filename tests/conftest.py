@@ -97,7 +97,7 @@ def sample_project(project_service):
 @pytest.fixture
 def sample_template(template_service):
     """Create a sample cabinet template."""
-    return template_service.create_template(kitchen_type="LOFT", nazwa="TestTemplate")
+    return template_service.create_template(kitchen_type="LOFT", name="TestTemplate")
 
 
 @pytest.fixture
@@ -165,11 +165,11 @@ def sample_project_cabinets(session, sample_project, template_service):
 
     # Create some test templates first
     template1 = template_service.create_template(
-        nazwa="TestTemplate1", kitchen_type="MODERN"
+        name="TestTemplate1", kitchen_type="MODERN"
     )
 
     template2 = template_service.create_template(
-        nazwa="TestTemplate2", kitchen_type="TRADITIONAL"
+        name="TestTemplate2", kitchen_type="TRADITIONAL"
     )
 
     # Create project cabinets

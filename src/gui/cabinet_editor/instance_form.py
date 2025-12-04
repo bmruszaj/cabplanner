@@ -345,7 +345,7 @@ class InstanceForm(QWidget):
 
         # Update type info
         if cabinet_type:
-            type_info = f"{cabinet_type.nazwa}"
+            type_info = f"{cabinet_type.name}"
             if hasattr(cabinet_type, "sku") and cabinet_type.sku:
                 type_info += f" (SKU: {cabinet_type.sku})"
             self.type_info_label.setText(type_info)

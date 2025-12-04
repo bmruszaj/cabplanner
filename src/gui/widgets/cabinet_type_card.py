@@ -33,7 +33,7 @@ class CabinetTypeCard(QFrame):
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.setCursor(Qt.PointingHandCursor)
         self.setFocusPolicy(Qt.StrongFocus)
-        self.setAccessibleName(f"Typ szafki {self.cabinet_type.nazwa}")
+        self.setAccessibleName(f"Typ szafki {self.cabinet_type.name}")
         self._init_ui()
 
     def _init_ui(self) -> None:
@@ -41,7 +41,7 @@ class CabinetTypeCard(QFrame):
         layout = QVBoxLayout(self)
 
         header_layout = QHBoxLayout()
-        name_label = QLabel(f"<b>{self.cabinet_type.nazwa}</b>")
+        name_label = QLabel(f"<b>{self.cabinet_type.name}</b>")
         name_label.setStyleSheet("font-size: 14pt;")
         header_layout.addWidget(name_label)
 

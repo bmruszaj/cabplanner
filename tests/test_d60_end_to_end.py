@@ -33,7 +33,7 @@ class TestCustomCabinetD60EndToEnd:
         session.commit()
 
         # Create existing catalog template "D60" to simulate real conflict
-        catalog_d60 = CabinetTemplate(nazwa="D60", kitchen_type="LOFT")
+        catalog_d60 = CabinetTemplate(name="D60", kitchen_type="LOFT")
         session.add(catalog_d60)
         session.commit()
 
@@ -138,7 +138,7 @@ class TestCustomCabinetD60EndToEnd:
 
         # Step 6: Verify catalog template still exists unchanged
         catalog_templates = (
-            session.query(CabinetTemplate).filter(CabinetTemplate.nazwa == "D60").all()
+            session.query(CabinetTemplate).filter(CabinetTemplate.name == "D60").all()
         )
         assert len(catalog_templates) == 1  # Only original catalog template
         assert catalog_templates[0].id == catalog_d60.id

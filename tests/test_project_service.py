@@ -119,7 +119,7 @@ def test_cabinet_sequence_and_crud(service, template_service):
     pid = proj.id
 
     # Create a cabinet template to use
-    template = template_service.create_template(kitchen_type="X", nazwa="TestCabinet")
+    template = template_service.create_template(kitchen_type="X", name="TestCabinet")
     template_id = template.id
 
     # WHEN querying next sequence number
@@ -210,7 +210,7 @@ def test_next_sequence_after_manual_insert(service, template_service, count):
 
     # Create a cabinet template to use
     template = template_service.create_template(
-        kitchen_type="M", nazwa=f"TestCabinet{count}"
+        kitchen_type="M", name=f"TestCabinet{count}"
     )
     template_id = template.id
 

@@ -484,6 +484,8 @@ class CabinetEditorDialog(QDialog):
                 forms_to_save.append((self.type_form, "type"))
             if self.parts_form.is_dirty():
                 forms_to_save.append((self.parts_form, "parts"))
+            if self.accessories_form.is_dirty():
+                forms_to_save.append((self.accessories_form, "accessories"))
 
         for form, form_type in forms_to_save:
             total_dirty += 1
@@ -546,6 +548,23 @@ class CabinetEditorDialog(QDialog):
                         form.reset_dirty()
                         saved_count += 1
 
+                    elif form_type == "accessories":
+                        # Apply pending accessories changes for catalog template
+                        accessories_changes = form.values()
+                        success = self._apply_template_accessories_changes(
+                            accessories_changes
+                        )
+                        if success:
+                            form.reset_dirty()
+                            saved_count += 1
+                        else:
+                            QMessageBox.critical(
+                                self,
+                                "Błąd zapisu",
+                                "Nie udało się zapisać akcesoriów.",
+                            )
+                            return False
+
             except Exception as e:
                 QMessageBox.critical(
                     self,
@@ -563,7 +582,7 @@ class CabinetEditorDialog(QDialog):
         self.mode = "instance"
 
         # Update title
-        self.title_label.setText(f"Edytor: {cabinet_type.nazwa}")
+        self.title_label.setText(f"Edytor: {cabinet_type.name}")
         self.subtitle_label.setText("Edycja instancji szafki w projekcie")
 
         # Load forms
@@ -588,7 +607,7 @@ class CabinetEditorDialog(QDialog):
         self.mode = "type"
 
         # Update title
-        self.title_label.setText(f"Edytor: {cabinet_type.nazwa}")
+        self.title_label.setText(f"Edytor: {cabinet_type.name}")
         self.subtitle_label.setText("Edycja typu szafki w katalogu")
 
         # Load forms
@@ -701,6 +720,36 @@ class CabinetEditorDialog(QDialog):
 
         except Exception as e:
             print(f"Error applying accessories changes: {e}")
+            return False
+
+    def _apply_template_accessories_changes(self, accessories_changes: dict) -> bool:
+        """Apply pending accessories changes for catalog template."""
+        try:
+            if not self.cabinet_type or not self.catalog_service:
+                return False
+
+            template_service = self.catalog_service.cabinet_type_service
+
+            # Apply accessories to add
+            for acc_data in accessories_changes.get("accessories_to_add", []):
+                template_service.add_accessory_by_sku(
+                    cabinet_type_id=self.cabinet_type.id,
+                    name=acc_data["name"],
+                    sku=acc_data["sku"] or f"AUTO-{acc_data['name'][:10]}",
+                    count=acc_data["count"],
+                )
+
+            # Apply accessories to remove
+            for acc_id in accessories_changes.get("accessories_to_remove", []):
+                template_service.delete_accessory(self.cabinet_type.id, acc_id)
+
+            # Note: Quantity changes for template accessories would need
+            # additional implementation in template_service if needed
+
+            return True
+
+        except Exception as e:
+            print(f"Error applying template accessories changes: {e}")
             return False
 
     def closeEvent(self, event):

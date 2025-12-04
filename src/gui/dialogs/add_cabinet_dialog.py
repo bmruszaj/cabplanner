@@ -927,16 +927,14 @@ class AddCabinetDialog(QDialog):
                     comments=part_data.get("comments"),
                 )
 
-            # Add accessories (create them first if they don't exist)
+            # Add accessories to cabinet template
             for accessory_data in self.accessories:
-                # Get or create accessory
-                self.accessory_service.get_or_create(
-                    name=accessory_data["name"], sku=accessory_data["sku"]
+                self.catalog_service.cabinet_type_service.add_accessory_by_sku(
+                    cabinet_type_id=cabinet_type.id,
+                    name=accessory_data["name"],
+                    sku=accessory_data["sku"],
+                    count=accessory_data.get("count", 1),
                 )
-
-                # Note: We can't add accessories to cabinet types directly in the current schema
-                # They would need to be added when the cabinet is used in a project
-                # For now, we'll just create the accessories in the catalog
 
             QMessageBox.information(
                 self,

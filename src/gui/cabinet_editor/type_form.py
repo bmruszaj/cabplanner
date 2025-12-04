@@ -343,7 +343,7 @@ class TypeForm(QWidget):
 
         try:
             # Load basic info
-            self.name_edit.setText(cabinet_type.nazwa or "")
+            self.name_edit.setText(cabinet_type.name or "")
             self.sku_edit.setText(getattr(cabinet_type, "sku", "") or "")
 
             # Load kitchen type

@@ -105,6 +105,7 @@ class ProjectService:
         # Materialize parts from catalog template if it's a standard cabinet
         if type_id:
             self._materialize_standard_cabinet_parts(cab, type_id)
+            self._materialize_standard_cabinet_accessories(cab, type_id)
 
         self.db.commit()
         self.db.refresh(cab)
@@ -202,6 +203,40 @@ class ProjectService:
                 calc_context_json=None,  # Not needed for standard cabinets
             )
             self.db.add(snapshot_part)
+
+    def _materialize_standard_cabinet_accessories(
+        self, cabinet: ProjectCabinet, type_id: int
+    ):
+        """Materialize accessories from a catalog template into ProjectCabinetAccessorySnapshot."""
+        try:
+            template = self.db.get(CabinetTemplate, type_id)
+            if not template:
+                return
+
+            # Check if template has accessories relationship and it's not empty
+            if not hasattr(template, "accessories") or not template.accessories:
+                return
+
+            # Iterate over accessories - use list() to materialize the query
+            accessories_list = list(template.accessories)
+            for template_accessory in accessories_list:
+                # Get accessory details from the linked Accessory object
+                accessory = template_accessory.accessory
+                if not accessory:
+                    continue
+
+                snapshot_accessory = ProjectCabinetAccessorySnapshot(
+                    project_cabinet_id=cabinet.id,
+                    name=accessory.name,
+                    sku=accessory.sku,
+                    count=template_accessory.count,
+                    source_accessory_id=accessory.id,
+                )
+                self.db.add(snapshot_accessory)
+        except Exception as e:
+            # Log but don't fail - accessories are optional
+            import logging
+            logging.getLogger(__name__).warning(f"Failed to materialize accessories: {e}")
 
     def _materialize_custom_cabinet_parts(
         self,

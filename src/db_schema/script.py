@@ -568,10 +568,10 @@ for r in rows:
     )
 
 transform = """
-INSERT INTO cabinet_types (kitchen_type, nazwa, created_at, updated_at)
+INSERT INTO cabinet_types (kitchen_type, name, created_at, updated_at)
 SELECT DISTINCT 'LOFT', s.nazwa, NOW(), NOW()
 FROM seed_parts_raw s
-WHERE NOT EXISTS (SELECT 1 FROM cabinet_types ct WHERE ct.nazwa = s.nazwa);
+WHERE NOT EXISTS (SELECT 1 FROM cabinet_types ct WHERE ct.name = s.nazwa);
 
 WITH src AS (
     SELECT
@@ -598,7 +598,7 @@ WITH src AS (
         END AS thickness_mm,
         CASE WHEN s.comments IS NOT NULL THEN jsonb_build_object('note', s.comments) ELSE NULL END AS processing_json
     FROM seed_parts_raw s
-    JOIN cabinet_types ct ON ct.nazwa = s.nazwa
+    JOIN cabinet_types ct ON ct.name = s.nazwa
 )
 INSERT INTO cabinet_parts
     (cabinet_type_id, part_name, height_mm, width_mm, pieces, wrapping, comments, material, thickness_mm, processing_json, created_at, updated_at)

@@ -12,6 +12,8 @@ from src.db_schema.orm_models import (
     ProjectCabinetAccessorySnapshot,
     CabinetTemplate,
     CabinetPart,
+    CabinetTemplateAccessory,
+    Accessory,
 )
 from src.services.project_service import ProjectService
 from src.services.formula_service import FormulaService
@@ -333,7 +335,7 @@ class TestAccessoryIntegration:
         # GIVEN: A standard cabinet template
         # First create a simple template
         template = CabinetTemplate(
-            nazwa="StandardD60",
+            name="StandardD60",
             kitchen_type="Standard",
         )
         session.add(template)
@@ -382,6 +384,87 @@ class TestAccessoryIntegration:
         assert accessory.name == "Standard Hinge"
         assert accessory.sku == "STD-HNG-001"
         assert accessory.count == 4
+
+    def test_template_accessories_are_copied_to_project_cabinet(
+        self, session, project_service, test_project
+    ):
+        """Test that accessories from cabinet template are automatically copied to project cabinet"""
+        # GIVEN: A cabinet template with accessories defined
+        template = CabinetTemplate(
+            name="TemplateWithAccessories",
+            kitchen_type="Standard",
+        )
+        session.add(template)
+        session.flush()
+
+        # Add a part to the template
+        template_part = CabinetPart(
+            cabinet_type_id=template.id,
+            part_name="Side Panel",
+            width_mm=560,
+            height_mm=720,
+            pieces=2,
+            material="PLYTA",
+            thickness_mm=18,
+        )
+        session.add(template_part)
+
+        # Create accessories and link them to the template
+        accessory1 = Accessory(name="Template Hinge", sku="TPL-HNG-001")
+        accessory2 = Accessory(name="Template Handle", sku="TPL-HDL-001")
+        session.add(accessory1)
+        session.add(accessory2)
+        session.flush()
+
+        # Link accessories to the template
+        link1 = CabinetTemplateAccessory(
+            cabinet_type_id=template.id,
+            accessory_id=accessory1.id,
+            count=4,
+        )
+        link2 = CabinetTemplateAccessory(
+            cabinet_type_id=template.id,
+            accessory_id=accessory2.id,
+            count=2,
+        )
+        session.add(link1)
+        session.add(link2)
+        session.commit()
+
+        # WHEN: Creating a cabinet from this template
+        sequence_number = project_service.get_next_cabinet_sequence(test_project.id)
+        cabinet = project_service.add_cabinet(
+            project_id=test_project.id,
+            sequence_number=sequence_number,
+            type_id=template.id,
+            body_color="#ffffff",
+            front_color="#ffffff",
+            handle_type="Standard",
+            quantity=1,
+        )
+
+        # THEN: The cabinet should have accessories copied from the template
+        session.refresh(cabinet)
+        assert len(cabinet.accessory_snapshots) == 2
+
+        # Verify accessory details
+        accessory_names = {acc.name for acc in cabinet.accessory_snapshots}
+        assert "Template Hinge" in accessory_names
+        assert "Template Handle" in accessory_names
+
+        hinge_snapshot = next(
+            acc for acc in cabinet.accessory_snapshots if acc.name == "Template Hinge"
+        )
+        assert hinge_snapshot.sku == "TPL-HNG-001"
+        assert hinge_snapshot.count == 4
+        assert hinge_snapshot.source_accessory_id == accessory1.id
+
+        handle_snapshot = next(
+            acc for acc in cabinet.accessory_snapshots if acc.name == "Template Handle"
+        )
+        assert handle_snapshot.sku == "TPL-HDL-001"
+        assert handle_snapshot.count == 2
+        assert handle_snapshot.source_accessory_id == accessory2.id
 
     def test_accessory_data_integrity_across_sessions(
         self, engine, project_service_factory, test_project

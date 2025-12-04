@@ -10,7 +10,7 @@ OUTPUT_PATH = SEED_DIR / "seed_cabinets_option_b.simple.sql"
 
 def parse_seed_parts_raw_inserts(sql_text: str):
     pattern = re.compile(
-        r"INSERT INTO\s+seed_parts_raw\s*\(nazwa,\s*part_name,\s*height_mm,\s*width_mm,\s*pieces,\s*wrapping,\s*comments\)\s*VALUES\s*\((.*?)\);",
+        r"INSERT INTO\s+seed_parts_raw\s*\(name,\s*part_name,\s*height_mm,\s*width_mm,\s*pieces,\s*wrapping,\s*comments\)\s*VALUES\s*\((.*?)\);",
         re.IGNORECASE | re.DOTALL,
     )
     rows = []
@@ -36,9 +36,9 @@ def parse_seed_parts_raw_inserts(sql_text: str):
             parts.append("".join(buf).strip())
         if len(parts) != 7:
             continue
-        nazwa, part_name, h, w, pcs, wrap, comm = parts
+        name, part_name, h, w, pcs, wrap, comm = parts
         rows.append({
-            "nazwa": nazwa,
+            "name": name,
             "part_name": part_name,
             "height_mm": h,
             "width_mm": w,
@@ -58,11 +58,11 @@ def main():
     seen = set()
     type_inserts = []
     for r in rows:
-        nazwa = r["nazwa"]
-        if nazwa not in seen:
-            seen.add(nazwa)
+        name = r["name"]
+        if name not in seen:
+            seen.add(name)
             type_inserts.append(
-                f"INSERT OR IGNORE INTO cabinet_types (kitchen_type, nazwa, created_at, updated_at) VALUES ('LOFT', {nazwa}, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);"
+                f"INSERT OR IGNORE INTO cabinet_types (kitchen_type, name, created_at, updated_at) VALUES ('LOFT', {name}, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);"
             )
 
     # Build part inserts using subselect for type id
@@ -70,7 +70,7 @@ def main():
     for r in rows:
         part_inserts.append(
             "INSERT INTO cabinet_parts (cabinet_type_id, part_name, height_mm, width_mm, pieces, wrapping, comments, material, thickness_mm, processing_json, created_at, updated_at) VALUES "
-            f"((SELECT id FROM cabinet_types WHERE nazwa = {r['nazwa']}), {r['part_name']}, {r['height_mm']}, {r['width_mm']}, {r['pieces']}, {r['wrapping']}, {r['comments']}, NULL, NULL, NULL, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);"
+            f"((SELECT id FROM cabinet_types WHERE name = {r['name']}), {r['part_name']}, {r['height_mm']}, {r['width_mm']}, {r['pieces']}, {r['wrapping']}, {r['comments']}, NULL, NULL, NULL, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);"
         )
 
     OUTPUT_PATH.write_text("\n".join(type_inserts + part_inserts) + "\n", encoding="utf-8")

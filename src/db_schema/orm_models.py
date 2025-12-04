@@ -102,14 +102,14 @@ class Project(Base):
 class CabinetTemplate(Base):
     """
     Catalog template for a cabinet model (e.g., D60, G60).
-    LOWER/UPPER classification is inferred from `nazwa` in code (no DB column).
+    LOWER/UPPER classification is inferred from `name` in code (no DB column).
     """
 
     __tablename__ = "cabinet_types"
 
     id = Column(Integer, primary_key=True)
     kitchen_type = Column(String(60), nullable=False, default="LOFT")
-    nazwa = Column(String(255), nullable=False)
+    name = Column(String(255), nullable=False)
 
     created_at = Column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
@@ -136,9 +136,16 @@ class CabinetTemplate(Base):
         order_by="CabinetTemplateDrawer.position",
     )
 
+    # Default accessories for this cabinet template
+    accessories = relationship(
+        "CabinetTemplateAccessory",
+        back_populates="cabinet_type",
+        cascade="all, delete-orphan",
+    )
+
     __table_args__ = (
-        # If you want same name in different kitchen types, swap to ("nazwa", "kitchen_type")
-        UniqueConstraint("nazwa", name="uq_cabinettype_nazwa"),
+        # If you want same name in different kitchen types, swap to ("name", "kitchen_type")
+        UniqueConstraint("name", name="uq_cabinettype_name"),
         Index("ix_cabinet_types_kitchen_type", "kitchen_type"),
     )
 
@@ -227,6 +234,36 @@ class Accessory(Base):
         UniqueConstraint("sku", name="uq_accessory_sku"),
         Index("ix_accessories_sku", "sku"),
     )
+
+
+class CabinetTemplateAccessory(Base):
+    """
+    Default accessory lines attached to a CabinetTemplate.
+    Helps auto-populate hardware when a cabinet is created in a project.
+    """
+
+    __tablename__ = "cabinet_template_accessories"
+
+    cabinet_type_id = Column(
+        Integer, ForeignKey("cabinet_types.id", ondelete="CASCADE"), primary_key=True
+    )
+    accessory_id = Column(
+        Integer, ForeignKey("accessories.id", ondelete="RESTRICT"), primary_key=True
+    )
+    count = Column(Integer, nullable=False, default=1)
+
+    created_at = Column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+    cabinet_type = relationship("CabinetTemplate", back_populates="accessories")
+    accessory = relationship("Accessory")
 
 
 class ProjectCabinetPart(Base):

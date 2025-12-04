@@ -7,10 +7,10 @@ from src.services.catalog_service import CatalogCabinetType
 def sample_catalog_templates(template_service):
     """Create sample cabinet templates for testing."""
     templates = [
-        template_service.create_template(kitchen_type="LOFT", nazwa="CatalogD60"),
-        template_service.create_template(kitchen_type="LOFT", nazwa="CatalogG40"),
-        template_service.create_template(kitchen_type="PARIS", nazwa="CatalogD80"),
-        template_service.create_template(kitchen_type="WINO", nazwa="CatalogN60"),
+        template_service.create_template(kitchen_type="LOFT", name="CatalogD60"),
+        template_service.create_template(kitchen_type="LOFT", name="CatalogG40"),
+        template_service.create_template(kitchen_type="PARIS", name="CatalogD80"),
+        template_service.create_template(kitchen_type="WINO", name="CatalogN60"),
     ]
 
     # Add some parts to templates
