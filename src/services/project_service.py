@@ -496,17 +496,16 @@ class ProjectService:
 
     def _process_accessories_snapshot(self, cab, qty, seq, seq_symbol, akcesoria):
         """Process accessories from snapshot (works for both standard and custom)"""
-        seq_label = f"Lp. {seq}"
-
         # Process accessory snapshots
         for acc_snapshot in cab.accessory_snapshots:
             total = acc_snapshot.count * qty
             akcesoria.append(
                 {
+                    "seq": seq_symbol,
                     "name": acc_snapshot.name,
                     "sku": acc_snapshot.sku,
                     "quantity": total,
-                    "notes": seq_label,
+                    "notes": "",
                     "sequence": seq,
                 }
             )
@@ -517,10 +516,11 @@ class ProjectService:
             total = link.count * qty
             akcesoria.append(
                 {
+                    "seq": seq_symbol,
                     "name": acc.name,
                     "sku": acc.sku,
                     "quantity": total,
-                    "notes": seq_label,
+                    "notes": "",
                     "sequence": seq,
                 }
             )
