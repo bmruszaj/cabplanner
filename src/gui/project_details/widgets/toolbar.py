@@ -58,11 +58,10 @@ class Toolbar(QWidget):
 
     def _create_add_buttons(self, parent_layout: QHBoxLayout):
         """Create the add buttons section."""
-        # Add from catalog button
+        # Add from catalog button - uses default primary style from global theme
         self.add_catalog_btn = QPushButton("Katalog")
         self.add_catalog_btn.setIcon(get_icon("catalog"))
         self.add_catalog_btn.setIconSize(ICON_SIZE)
-        self.add_catalog_btn.setProperty("class", "primary-btn")
         self.add_catalog_btn.setToolTip("Dodaj z katalogu")
         self.add_catalog_btn.clicked.connect(self.sig_add_from_catalog.emit)
         parent_layout.addWidget(self.add_catalog_btn)
@@ -94,22 +93,22 @@ class Toolbar(QWidget):
         toggle_layout.setContentsMargins(0, 0, 0, 0)
         toggle_layout.setSpacing(2)
 
-        # Cards view button
+        # Cards view button - uses secondary style
         self.cards_btn = QPushButton("Karty")
         self.cards_btn.setIcon(get_icon("dashboard"))
         self.cards_btn.setIconSize(ICON_SIZE)
-        self.cards_btn.setProperty("class", "toggle-btn")
+        self.cards_btn.setProperty("class", "secondary")
         self.cards_btn.setCheckable(True)
         self.cards_btn.setChecked(True)
         self.cards_btn.setToolTip("Widok kart")
         self.cards_btn.clicked.connect(lambda: self._set_view_mode(VIEW_MODE_CARDS))
         toggle_layout.addWidget(self.cards_btn)
 
-        # Table view button
+        # Table view button - uses secondary style
         self.table_btn = QPushButton("Tabela")
         self.table_btn.setIcon(get_icon("table"))  # Using table icon (mapped to menu)
         self.table_btn.setIconSize(ICON_SIZE)
-        self.table_btn.setProperty("class", "toggle-btn")
+        self.table_btn.setProperty("class", "secondary")
         self.table_btn.setCheckable(True)
         self.table_btn.setToolTip("Widok tabeli")
         self.table_btn.clicked.connect(lambda: self._set_view_mode(VIEW_MODE_TABLE))
@@ -136,39 +135,11 @@ class Toolbar(QWidget):
 
     def _apply_styling(self):
         """Apply styling to the toolbar."""
+        # Only style the toolbar container
+        # Button styles (primary/secondary) come from global theme
         self.setStyleSheet("""
             Toolbar {
                 background-color: #ffffff;
                 border-bottom: 1px solid #e0e0e0;
-            }
-            QPushButton[class="primary-btn"] {
-                background-color: #0078d4;
-                color: white;
-                border: none;
-                border-radius: 6px;
-                padding: 8px 16px;
-                font-weight: 500;
-            }
-            QPushButton[class="primary-btn"]:hover {
-                background-color: #106ebe;
-            }
-            QPushButton[class="toggle-btn"] {
-                background-color: #f3f4f6;
-                border: 1px solid #d1d5db;
-                border-radius: 6px;
-                padding: 6px 12px;
-                color: #374151;
-                min-width: 60px;
-            }
-            QPushButton[class="toggle-btn"]:checked {
-                background-color: #0078d4;
-                color: white;
-                border-color: #0078d4;
-            }
-            QPushButton[class="toggle-btn"]:hover {
-                background-color: #e5e7eb;
-            }
-            QPushButton[class="toggle-btn"]:checked:hover {
-                background-color: #106ebe;
             }
         """)

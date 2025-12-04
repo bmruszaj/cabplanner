@@ -78,7 +78,7 @@ class HeaderBar(QWidget):
     def _create_back_button(self, parent_layout: QHBoxLayout):
         """Create the back navigation button."""
         self.back_btn = QPushButton("← Projekty")
-        self.back_btn.setProperty("class", "back-button")
+        self.back_btn.setProperty("class", "secondary")  # Use global secondary style
         self.back_btn.setToolTip("Wróć do listy projektów")
         self.back_btn.setCursor(Qt.PointingHandCursor)
         self.back_btn.clicked.connect(self.sig_back.emit)
@@ -137,38 +137,22 @@ class HeaderBar(QWidget):
         self.client_btn.clicked.connect(self.sig_client.emit)
         parent_layout.addWidget(self.client_btn)
 
-        # Export button
+        # Export button - uses default primary style from global theme
         self.export_btn = QPushButton("Eksport")
         self.export_btn.setIcon(get_icon("export"))
         self.export_btn.setIconSize(ICON_SIZE)
-        self.export_btn.setProperty("class", "primary")
         self.export_btn.setToolTip("Eksportuj projekt do Word")
         self.export_btn.clicked.connect(self.sig_export.emit)
         parent_layout.addWidget(self.export_btn)
 
     def _apply_styling(self):
         """Apply styling to the header bar."""
+        # Only style the header container and labels
+        # Button styles come from global theme (primary/secondary)
         self.setStyleSheet("""
             HeaderBar {
                 background-color: #ffffff;
                 border-bottom: 2px solid #e2e8f0;
-            }
-            QPushButton[class="back-button"] {
-                background-color: transparent;
-                border: 1px solid #cbd5e1;
-                border-radius: 6px;
-                padding: 8px 16px;
-                color: #475569;
-                font-weight: 500;
-                font-size: 13px;
-            }
-            QPushButton[class="back-button"]:hover {
-                background-color: #f1f5f9;
-                border-color: #94a3b8;
-                color: #1e293b;
-            }
-            QPushButton[class="back-button"]:pressed {
-                background-color: #e2e8f0;
             }
             QLabel[class="project-title"] {
                 color: #0f172a;
@@ -177,29 +161,6 @@ class HeaderBar(QWidget):
             QLabel[class="metadata"] {
                 color: #64748b;
                 font-size: 12px;
-            }
-            QPushButton[class="secondary"] {
-                background-color: #f8fafc;
-                border: 1px solid #e2e8f0;
-                border-radius: 6px;
-                padding: 8px 16px;
-                color: #475569;
-                font-weight: 500;
-            }
-            QPushButton[class="secondary"]:hover {
-                background-color: #f1f5f9;
-                border-color: #cbd5e1;
-            }
-            QPushButton[class="primary"] {
-                background-color: #0d9488;
-                border: none;
-                border-radius: 6px;
-                padding: 8px 16px;
-                color: white;
-                font-weight: 500;
-            }
-            QPushButton[class="primary"]:hover {
-                background-color: #0f766e;
             }
         """)
 

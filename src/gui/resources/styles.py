@@ -137,6 +137,7 @@ QPushButton {{
     border-radius: 4px;
     padding: 8px 16px;
     min-width: 80px;
+    min-height: 10px;
 }}
 QPushButton:disabled {{
     background-color: {DISABLED_BG};
