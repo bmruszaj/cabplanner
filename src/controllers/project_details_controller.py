@@ -183,21 +183,29 @@ class ProjectDetailsController(QObject):
         Args:
             cabinet_id: ID of the cabinet to delete
         """
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.debug(f"[CONTROLLER] on_cabinet_deleted: cabinet_id={cabinet_id}")
         try:
             success = self.project_service.delete_cabinet(cabinet_id)
+            logger.debug(f"[CONTROLLER] delete_cabinet success={success}")
             if not success:
                 self.validation_error.emit("Nie udało się usunąć szafy")
                 return
 
             # Remove from local cache
+            old_count = len(self.cabinets)
             self.cabinets = [c for c in self.cabinets if c.id != cabinet_id]
+            logger.debug(f"[CONTROLLER] cache updated: {old_count} -> {len(self.cabinets)} cabinets")
 
             # Re-emit sorted data
             ordered_cabinets = sort_cabinets(self.cabinets)
+            logger.debug(f"[CONTROLLER] emitting data_loaded with {len(ordered_cabinets)} cabinets")
             self.data_loaded.emit(ordered_cabinets)
 
         except Exception as e:
             error_msg = f"Błąd podczas usuwania szafy: {str(e)}"
+            logger.exception(f"[CONTROLLER] delete error: {e}")
             self.validation_error.emit(error_msg)
 
     def _replace_cabinet_in_cache(self, updated_cabinet: ProjectCabinet):

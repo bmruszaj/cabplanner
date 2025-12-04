@@ -398,6 +398,7 @@ class ProjectDetailsView(QDialog):
         # Cabinet card signals - delegate to controller
         self.sig_cabinet_sequence_changed.connect(self._on_sequence_changed_request)
         self.sig_cabinet_qty_changed.connect(self._on_quantity_changed_request)
+        self.sig_cabinet_delete.connect(self._on_delete_request)
 
         # Cabinet edit signal - handle locally
         self.sig_cabinet_edit.connect(self._handle_cabinet_edit)
@@ -462,21 +463,39 @@ class ProjectDetailsView(QDialog):
         self, ordered_cabinets: List[ProjectCabinet]
     ) -> bool:
         """Check if we can reorder existing cards instead of rebuilding all."""
-        if len(ordered_cabinets) != len(self._cards_by_id):
-            return False  # Different number of cards
+        # If more cabinets than cards, we need to create new ones - full rebuild
+        if len(ordered_cabinets) > len(self._cards_by_id):
+            return False
 
         # Check if all cabinets have existing cards
         for cabinet in ordered_cabinets:
             if cabinet.id not in self._cards_by_id:
                 return False
 
+        # Can reorder even if some cards were deleted (we'll remove them)
         return True
 
     def _reorder_existing_cards(self, ordered_cabinets: List[ProjectCabinet]) -> None:
         """Reorder existing cards and update their data."""
-        if not ordered_cabinets:
-            return
         self._dbg("_reorder_existing_cards: starting...")
+
+        # Find cards to remove (cabinet was deleted)
+        current_cabinet_ids = {cabinet.id for cabinet in ordered_cabinets}
+        cards_to_remove = [cid for cid in self._cards_by_id if cid not in current_cabinet_ids]
+        
+        self._dbg(f"_reorder_existing_cards: removing {len(cards_to_remove)} cards")
+        
+        # Remove cards for deleted cabinets
+        for cabinet_id in cards_to_remove:
+            card = self._cards_by_id.pop(cabinet_id)
+            self.card_layout.removeWidget(card)
+            card.deleteLater()
+
+        # If no cabinets left, just clear and return
+        if not ordered_cabinets:
+            self._clear_flow_layout_without_deleting()
+            self._update_view_state()
+            return
 
         # Freeze updates during rebuild
         self.card_container.setUpdatesEnabled(False)
@@ -622,6 +641,14 @@ class ProjectDetailsView(QDialog):
         """Handle quantity change request from card - delegate to controller."""
         if self.controller:
             self.controller.on_quantity_changed(cabinet_id, new_quantity)
+
+    def _on_delete_request(self, cabinet_id: int) -> None:
+        """Handle delete request from card - delegate to controller."""
+        self._dbg(f"_on_delete_request: cabinet_id={cabinet_id}")
+        if self.controller:
+            self.controller.on_cabinet_deleted(cabinet_id)
+        else:
+            self._dbg("_on_delete_request: no controller!")
 
     def _on_table_double_click(self, index):
         """Handle double-click on table view row to edit cabinet."""
@@ -842,7 +869,7 @@ class ProjectDetailsView(QDialog):
 
         # Get cabinet name (from template if standard, from context if custom)
         if cabinet.cabinet_type:
-            cabinet_name = cabinet.cabinet_type.nazwa
+            cabinet_name = cabinet.cabinet_type.name
 
         return {
             "id": cabinet.id,
@@ -937,10 +964,11 @@ class ProjectDetailsView(QDialog):
     ):
         """Handle cabinet added from catalog."""
         try:
-            # Refresh the view to show the new cabinet
-            if self.controller:
-                self.controller.load_data()
-            self.refresh_data()
+            # Defer refresh to next event loop iteration to avoid blocking
+            def do_refresh():
+                if self.controller:
+                    self.controller.load_data()
+            QTimer.singleShot(0, do_refresh)
         except Exception:
             logger.exception("Error refreshing after cabinet addition from catalog")
 
@@ -1039,7 +1067,7 @@ class ProjectDetailsView(QDialog):
                 # Name (from cabinet type)
                 name = ""
                 if hasattr(cabinet, "cabinet_type") and cabinet.cabinet_type:
-                    name = getattr(cabinet.cabinet_type, "nazwa", "") or str(
+                    name = getattr(cabinet.cabinet_type, "name", "") or str(
                         cabinet.cabinet_type.id
                     )
                 name_item = QStandardItem(name)

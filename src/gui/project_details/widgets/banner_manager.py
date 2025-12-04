@@ -81,7 +81,14 @@ class BannerManager(QWidget):
         """Remove a specific banner from the display."""
         if banner in self.banners:
             self.banners.remove(banner)
-            banner.setParent(None)
+            try:
+                # Check if the C++ object still exists before manipulating
+                if banner is not None:
+                    banner.setParent(None)
+                    banner.deleteLater()
+            except RuntimeError:
+                # Widget already deleted, ignore
+                pass
 
     def clear_all(self):
         """Remove all active banners."""
