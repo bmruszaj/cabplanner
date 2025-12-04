@@ -37,6 +37,7 @@ def check_database_compatibility(db_path: Path) -> tuple[bool, str]:
     if not db_path.exists():
         return True, "No database exists yet"
 
+    engine = None
     try:
         config = get_alembic_config(db_path)
         script = ScriptDirectory.from_config(config)
@@ -87,6 +88,11 @@ def check_database_compatibility(db_path: Path) -> tuple[bool, str]:
     except Exception as e:
         logger.warning(f"Error checking database compatibility: {e}")
         return False, f"Nie można zweryfikować bazy danych: {e}"
+    
+    finally:
+        # Ensure engine is disposed to release file lock
+        if engine is not None:
+            engine.dispose()
 
 
 def upgrade_database(db_path: Path) -> None:
