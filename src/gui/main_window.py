@@ -1123,8 +1123,8 @@ class MainWindow(QMainWindow):
             QTimer.singleShot(100, load_data_deferred)  # Give time for heavy UI setup
             _dbg("Data loading scheduled")
 
-            # Show back button and hide view toggle buttons
-            self.btn_back.setVisible(True)
+            # Hide old back button and view toggle buttons (back is now in header)
+            self.btn_back.setVisible(False)
             self.btn_cards.setVisible(False)
             self.btn_table.setVisible(False)
 
@@ -1162,9 +1162,10 @@ class MainWindow(QMainWindow):
                 hasattr(self.project_details_widget, "details_view")
                 and self.project_details_widget.details_view is not None
             ):
+                details_view = self.project_details_widget.details_view
                 # Connect export signal to use default_project_path
                 try:
-                    self.project_details_widget.details_view.sig_export.connect(
+                    details_view.sig_export.connect(
                         lambda: self._perform_report_action(
                             self.current_project_for_details, "open"
                         )
@@ -1172,6 +1173,13 @@ class MainWindow(QMainWindow):
                     logger.debug("Connected project details export signal")
                 except Exception as e:
                     logger.error(f"Failed to connect export signal: {e}")
+
+                # Connect back signal to return to project list
+                try:
+                    details_view.sig_back.connect(self.on_back_to_list)
+                    logger.debug("Connected project details back signal")
+                except Exception as e:
+                    logger.error(f"Failed to connect back signal: {e}")
             else:
                 # Try again in 50ms if details_view isn't ready yet
                 QTimer.singleShot(50, connect_when_ready)

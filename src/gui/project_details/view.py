@@ -29,7 +29,6 @@ from src.gui.cabinet_catalog.window import CatalogWindow
 from src.services.catalog_service import CatalogService
 from .constants import (
     CARD_WIDTH,
-    HEADER_HEIGHT,
     TOOLBAR_HEIGHT,
     VIEW_MODE_CARDS,
     VIEW_MODE_TABLE,
@@ -137,6 +136,7 @@ class ProjectDetailsView(QDialog):
     sig_add_from_catalog = Signal()
     sig_add_custom = Signal()
     sig_export = Signal()
+    sig_back = Signal()  # Back to project list
 
     sig_client_save = Signal(dict)
     sig_client_open_requested = Signal()
@@ -275,7 +275,7 @@ class ProjectDetailsView(QDialog):
         self._dbg("Creating header bar...")
         # Header bar
         self.header_bar = HeaderBar()
-        self.header_bar.setFixedHeight(HEADER_HEIGHT)
+        # Don't set fixed height - let it size naturally for better layout
         main_layout.addWidget(self.header_bar)
 
         # Toolbar
@@ -382,8 +382,8 @@ class ProjectDetailsView(QDialog):
 
         # Header bar signals
         self.header_bar.sig_export.connect(self._handle_export)
-
         self.header_bar.sig_client.connect(self._on_client_open_requested)
+        self.header_bar.sig_back.connect(self.sig_back.emit)
 
         # Toolbar signals
         self.toolbar.sig_add_from_catalog.connect(self._handle_add_from_catalog)
