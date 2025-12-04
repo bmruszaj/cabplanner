@@ -2,9 +2,54 @@ import logging
 from pathlib import Path
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker, Session
-from src.db_migration import upgrade_database
+from src.db_migration import upgrade_database, IncompatibleDatabaseError, check_database_compatibility
 
 logger = logging.getLogger(__name__)
+
+
+def handle_incompatible_database(db_path: Path, reason: str) -> bool:
+    """
+    Show dialog asking user to delete incompatible database.
+    Returns True if user confirmed deletion and database was deleted.
+    """
+    from PySide6.QtWidgets import QMessageBox, QApplication
+    
+    # Ensure we have a QApplication
+    app = QApplication.instance()
+    if app is None:
+        return False
+    
+    msg = QMessageBox()
+    msg.setIcon(QMessageBox.Warning)
+    msg.setWindowTitle("Niekompatybilna baza danych")
+    msg.setText("Wykryto niekompatybilną bazę danych")
+    msg.setInformativeText(
+        f"{reason}\n\n"
+        f"Lokalizacja: {db_path}\n\n"
+        "Czy chcesz usunąć starą bazę danych i rozpocząć od nowa?\n\n"
+        "UWAGA: Wszystkie zapisane projekty i ustawienia zostaną utracone!"
+    )
+    msg.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
+    msg.setDefaultButton(QMessageBox.No)
+    msg.button(QMessageBox.Yes).setText("Usuń i kontynuuj")
+    msg.button(QMessageBox.No).setText("Anuluj")
+    
+    if msg.exec() == QMessageBox.Yes:
+        try:
+            db_path.unlink()
+            logger.info("User confirmed deletion of incompatible database: %s", db_path)
+            return True
+        except Exception as e:
+            logger.error("Failed to delete database: %s", e)
+            QMessageBox.critical(
+                None,
+                "Błąd",
+                f"Nie udało się usunąć bazy danych:\n{e}"
+            )
+            return False
+    else:
+        logger.info("User declined to delete incompatible database")
+        return False
 
 
 def ensure_db_and_migrate(base: Path) -> tuple[Path, bool]:
@@ -15,7 +60,18 @@ def ensure_db_and_migrate(base: Path) -> tuple[Path, bool]:
     logger.info("Using database at: %s", db_path)
 
     logger.info("Upgrading database schema (Alembic)...")
-    upgrade_database(db_path)
+    
+    try:
+        upgrade_database(db_path)
+    except IncompatibleDatabaseError as e:
+        logger.warning("Incompatible database detected: %s", e)
+        if handle_incompatible_database(e.db_path, str(e)):
+            # User deleted old database, try again
+            is_first_run = True
+            upgrade_database(db_path)
+        else:
+            # User declined, exit application
+            raise SystemExit("Nie można kontynuować z niekompatybilną bazą danych")
 
     return db_path, is_first_run
 
