@@ -235,6 +235,8 @@ class ReportGenerator:
                         width=part.width_mm,
                         height=part.height_mm,
                         color=cab.front_color,
+                        thickness=getattr(part, "thickness_mm", None),
+                        wrapping=getattr(part, "wrapping", "") or "",
                         notes=f"Handle: {cab.handle_type}",
                     )
                 )
@@ -247,6 +249,8 @@ class ReportGenerator:
                         width=part.width_mm,
                         height=part.height_mm,
                         color="",
+                        thickness=getattr(part, "thickness_mm", None),
+                        wrapping=getattr(part, "wrapping", "") or "",
                         notes=part.comments or "",
                     )
                 )
@@ -260,6 +264,8 @@ class ReportGenerator:
                         width=part.width_mm,
                         height=part.height_mm,
                         color=cab.body_color,
+                        thickness=getattr(part, "thickness_mm", None),
+                        wrapping=getattr(part, "wrapping", "") or "",
                         notes=part.comments or "",
                     )
                 )
@@ -355,7 +361,16 @@ class ReportGenerator:
         cols = (
             ["Lp.", "Nazwa akcesorium", "SKU/Kod", "Ilość", "Uwagi"]
             if accessory
-            else ["Lp.", "Nazwa", "Ilość", "Wymiary (mm)", "Kolor/Materiał", "Uwagi"]
+            else [
+                "Lp.",
+                "Nazwa",
+                "Ilość",
+                "Wymiary (mm)",
+                "Grub.",
+                "Okleina",
+                "Kolor",
+                "Uwagi",
+            ]
         )
         table = doc.add_table(rows=1, cols=len(cols))
         hdr = table.rows[0].cells
@@ -376,8 +391,11 @@ class ReportGenerator:
                 cells[1].text = part.name
                 cells[2].text = str(part.quantity)
                 cells[3].text = f"{part.width} x {part.height}"
-                cells[4].text = getattr(part, "color", "") or ""
-                cells[5].text = getattr(part, "notes", "") or ""
+                thickness = getattr(part, "thickness", None)
+                cells[4].text = str(thickness) if thickness else ""
+                cells[5].text = getattr(part, "wrapping", "") or ""
+                cells[6].text = getattr(part, "color", "") or ""
+                cells[7].text = getattr(part, "notes", "") or ""
 
     def _add_notes(self, doc: DocxDocument, project: Project) -> None:
         if getattr(project, "blaty_note", None):

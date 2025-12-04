@@ -164,9 +164,9 @@ def test_body_tables_count_and_headers(tmp_path, sample_project_orm):
     body_tables = [t for t in doc.tables if t not in header_tables + footer_tables]
 
     expected_hdr = [
-        ["Lp.", "Nazwa", "Ilość", "Wymiary (mm)", "Kolor/Materiał", "Uwagi"],
-        ["Lp.", "Nazwa", "Ilość", "Wymiary (mm)", "Kolor/Materiał", "Uwagi"],
-        ["Lp.", "Nazwa", "Ilość", "Wymiary (mm)", "Kolor/Materiał", "Uwagi"],
+        ["Lp.", "Nazwa", "Ilość", "Wymiary (mm)", "Grub.", "Okleina", "Kolor", "Uwagi"],
+        ["Lp.", "Nazwa", "Ilość", "Wymiary (mm)", "Grub.", "Okleina", "Kolor", "Uwagi"],
+        ["Lp.", "Nazwa", "Ilość", "Wymiary (mm)", "Grub.", "Okleina", "Kolor", "Uwagi"],
         ["Lp.", "Nazwa akcesorium", "SKU/Kod", "Ilość", "Uwagi"],
     ]
     for table, hdr in zip(body_tables, expected_hdr):
@@ -406,7 +406,9 @@ def test_custom_cabinets_in_report(tmp_path, project_with_custom_cabinets):
         seq = cells[0].text.strip()
         name = cells[1].text.strip()
         quantity = cells[2].text.strip()
-        color = cells[4].text.strip()  # Color column
+        color = cells[
+            6
+        ].text.strip()  # Color column (index changed: Lp, Nazwa, Ilość, Wymiary, Grub., Okleina, Kolor, Uwagi)
 
         if seq == "①" and "Catalog Front" in name:
             catalog_front_found = True

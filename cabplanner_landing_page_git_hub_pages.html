@@ -1,0 +1,411 @@
+<!doctype html>
+<html lang="pl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Cabplanner – Planowanie zabudów meblowych dla profesjonalistów</title>
+  <meta name="description" content="Cabplanner to program do mebli na wymiar dla ekip stolarskich. Planowanie zabudów meblowych, biblioteka szafek, konfigurator ad-hoc i raport do Worda z listą cięć – demo na zaproszenie." />
+  <link rel="canonical" href="https://cabplanner.app/" />
+  <meta name="robots" content="index,follow" />
+  <link rel="icon" href="./web-assets/favicon.svg" type="image/svg+xml" />
+
+  <!-- Open Graph -->
+  <meta property="og:title" content="Cabplanner – Program do mebli na wymiar" />
+  <meta property="og:description" content="Planowanie zabudów meblowych, biblioteka szafek i raport do Worda z listą cięć, frontów i akcesoriów." />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://cabplanner.app" />
+  <meta property="og:image" content="https://cabplanner.app/web-assets/og-cover.png" />
+
+  <!-- Twitter -->
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Cabplanner – Program do mebli na wymiar" />
+  <meta name="twitter:description" content="Program do planowania zabudów meblowych z biblioteką szafek i raportem do Worda (lista cięć, akcesoria)." />
+  <meta name="twitter:image" content="https://cabplanner.app/web-assets/og-cover.png" />
+
+  <!-- Tailwind via CDN for szybkie prototypowanie -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            primary: {
+              DEFAULT: '#0A766C',
+              50:'#e4f3f0',100:'#c0e4dc',200:'#8cd0c2',300:'#54bba7',400:'#2ca28d',500:'#118572',600:'#0a766c',700:'#075c54',800:'#05433d',900:'#032b27'
+            }
+          }
+        }
+      },
+      darkMode: 'class'
+    }
+  </script>
+
+  <style>
+    html { scroll-behavior: smooth; }
+    .glass { backdrop-filter: blur(10px); background: rgba(255,255,255,.65); }
+    .dark .glass { background: rgba(17,24,39,.65); }
+  </style>
+
+  <!-- Schema.org -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "Cabplanner",
+    "applicationCategory": "BusinessApplication",
+    "operatingSystem": "Windows",
+  "description": "Program do mebli na wymiar dla ekip stolarskich: projekty, biblioteka szafek, raporty .docx z listą cięć, eksport/import bazy i automatyczne aktualizacje.",
+    "offers": {
+      "@type":"Offer",
+      "availability":"https://schema.org/LimitedAvailability",
+      "description":"Dostęp do wersji demonstracyjnej po kontakcie z autorem"
+    },
+    "downloadUrl": "https://cabplanner.app/demo",
+    "softwareVersion": "1.0.0",
+    "license":"All rights reserved © 2025 Bartłomiej Ruszaj",
+    "contactPoint": {
+      "@type": "ContactPoint",
+      "email": "bmruszaj@gmail.com",
+      "contactType": "sales"
+    }
+  }
+  </script>
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    "mainEntity": [
+      {
+        "@type": "Question",
+        "name": "Na jakich systemach działa?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Cabplanner działa na Windows (EXE). Wersje dla macOS/Linux mogą pojawić się później."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Czy mogę pobrać wersję demo?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Demo udostępniamy po wypełnieniu formularza kontaktowego lub krótkiej wiadomości na maila. Otrzymasz instrukcję instalacji i przykładową bazę."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Jak wygląda licencja komercyjna?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Licencja obejmuje stanowiska robocze Twojego zespołu, wdrożenie i wsparcie. Warunki omawiamy indywidualnie."
+        }
+      }
+    ]
+  }
+  </script>
+</head>
+<body class="bg-white text-gray-800 dark:bg-gray-950 dark:text-gray-100">
+  <!-- Nav -->
+  <header class="fixed top-0 inset-x-0 z-50">
+    <div class="mx-auto max-w-7xl px-4">
+      <div class="mt-3 flex items-center justify-between rounded-2xl glass px-4 py-3 shadow">
+        <a href="#top" class="flex items-center gap-2 font-semibold">
+          <img src="./web-assets/logo.png" alt="Cabplanner" class="h-7 w-7"/>
+          <span>Cabplanner</span>
+        </a>
+        <nav class="hidden md:flex items-center gap-6 text-sm">
+          <a href="#features" class="hover:text-primary-600">Funkcje</a>
+          <a href="#how" class="hover:text-primary-600">Jak działa</a>
+          <a href="#license" class="hover:text-primary-600">Licencjonowanie</a>
+          <a href="#faq" class="hover:text-primary-600">FAQ</a>
+          <a href="#contact" class="hover:text-primary-600">Kontakt</a>
+        </nav>
+        <button id="menuBtn" class="md:hidden inline-flex items-center rounded-xl border px-3 py-1.5">Menu</button>
+      </div>
+    </div>
+    <div id="mobileMenu" class="md:hidden hidden mx-auto max-w-7xl px-4">
+      <div class="mt-2 rounded-2xl glass p-4 shadow">
+        <div class="grid gap-2 text-sm">
+          <a href="#features" class="py-1">Funkcje</a>
+          <a href="#how" class="py-1">Jak działa</a>
+          <a href="#license" class="py-1">Licencjonowanie</a>
+          <a href="#faq" class="py-1">FAQ</a>
+          <a href="#contact" class="py-1">Kontakt</a>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Hero -->
+  <section id="top" class="relative isolate pt-36">
+    <div class="mx-auto max-w-7xl px-4">
+      <div class="grid md:grid-cols-2 items-center gap-10">
+        <div>
+          <h1 class="text-4xl md:text-5xl font-extrabold leading-tight">Planowanie zabudów meblowych dla profesjonalistów.
+            <span class="text-primary-600">Precyzyjnie. Powtarzalnie. Bez chaosu.</span>
+          </h1>
+          <p class="mt-5 text-lg text-gray-600 dark:text-gray-300">Cabplanner to aplikacja desktopowa na Windows, która wspiera zespoły stolarskie w pracy projektowej. Organizuj projekty, korzystaj z biblioteki szafek i formuł, dodawaj korpusy ad‑hoc, a na końcu generuj raport .docx z pełną specyfikacją.</p>
+          <ul class="mt-4 text-sm text-gray-600 dark:text-gray-300 grid gap-2">
+            <li>• Ofertę przygotujesz w <strong>10–15 min</strong></li>
+            <li>• Raport .docx z listą cięć i akcesoriów – <strong>1 klik</strong></li>
+            <li>• <strong>0 błędów</strong> z powodu ręcznych arkuszy</li>
+          </ul>
+          <div class="mt-8 flex flex-wrap items-center gap-3" id="contact-cta">
+            <a href="#contact" class="inline-flex items-center justify-center rounded-xl bg-primary px-5 py-3 font-semibold text-white shadow hover:opacity-90">Umów demo</a>
+            <a href="mailto:bmruszaj@gmail.com?subject=Cabplanner%20-%20zapytanie" class="inline-flex items-center justify-center rounded-xl border px-5 py-3 font-semibold hover:bg-gray-50 dark:hover:bg-gray-900">Napisz mail</a>
+          </div>
+          <p class="mt-3 text-xs text-gray-500">Testowane w 3 pracowniach pilotażowych (12+ ofert/mies.).</p>
+          <p class="mt-1 text-xs text-gray-500">Kod nie jest open source. Cabplanner jest licencjonowany indywidualnie – zostaw e-mail, a odezwę się z terminem demo.</p>
+        </div>
+        <div class="relative">
+          <div class="rounded-3xl border shadow overflow-hidden">
+            <img src="./web-assets/hero-illustration.svg" alt="Ilustracja interfejsu Cabplanner" class="w-full h-auto" />
+          </div>
+          <div class="absolute -bottom-6 -left-6 hidden md:block rounded-3xl border bg-white dark:bg-gray-900 p-4 shadow">
+            <p class="text-sm font-medium">Eksport do Worda</p>
+            <p class="text-xs text-gray-500">Formatki, fronty, HDF, akcesoria</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Logos / social proof (opcjonalnie) -->
+  <section aria-label="Social" class="mt-20">
+    <div class="mx-auto max-w-7xl px-4">
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-6 place-items-center opacity-70">
+  <img class="h-6" src="./web-assets/logo-windows.svg" alt="Windows"/>
+  <img class="h-6" src="./web-assets/logo-docx.svg" alt="Word .docx"/>
+  <img class="h-6" src="./web-assets/logo-sqlite.svg" alt="SQLite"/>
+  <img class="h-6" src="./web-assets/logo-pyside.svg" alt="PySide6"/>
+      </div>
+    </div>
+  </section>
+
+  <!-- Features -->
+  <section id="features" class="mt-24">
+    <div class="mx-auto max-w-7xl px-4">
+      <div class="text-center">
+        <h2 class="text-3xl md:text-4xl font-bold">Najważniejsze funkcje</h2>
+        <p class="mt-2 text-gray-600 dark:text-gray-300">Zaprojektowane pod szybkie wyceny i czytelne raporty.</p>
+      </div>
+      <div class="mt-10 grid md:grid-cols-3 gap-6">
+        <div class="rounded-2xl border p-6 shadow-sm">
+          <h3 class="font-semibold">Projekty i klienci</h3>
+          <p class="mt-2 text-sm text-gray-600 dark:text-gray-300">Centralna lista realizacji z numeracją, notatkami i statusem montażu.</p>
+        </div>
+        <div class="rounded-2xl border p-6 shadow-sm">
+          <h3 class="font-semibold">Biblioteka szafek</h3>
+          <p class="mt-2 text-sm">Gotowe szablony z wymiarami i wariantami frontów, filtrowanie po kolekcjach.</p>
+        </div>
+        <div class="rounded-2xl border p-6 shadow-sm">
+          <h3 class="font-semibold">Konfiguracja ad‑hoc</h3>
+          <p class="mt-2 text-sm">Dodawaj niestandardowe korpusy z podglądem wymiarów i walidacją błędów.</p>
+        </div>
+        <div class="rounded-2xl border p-6 shadow-sm">
+          <h3 class="font-semibold">Akcesoria i checklisty</h3>
+          <p class="mt-2 text-sm">Integracja akcesoriów w przepływie projektu, kontrola duplikatów i stanów.</p>
+        </div>
+        <div class="rounded-2xl border p-6 shadow-sm">
+          <h3 class="font-semibold">Raport do Worda (.docx)</h3>
+          <p class="mt-2 text-sm">Generowanie dokumentu z logo firmy, formatkami, frontami, HDF, listą cięć i akcesoriów oraz podsumowaniem kosztów.</p>
+        </div>
+        <div class="rounded-2xl border p-6 shadow-sm">
+          <h3 class="font-semibold">Silnik formuł</h3>
+          <p class="mt-2 text-sm">Parametry bazowe, offsety milimetrowe i testy jednostkowe dla każdego wariantu.</p>
+        </div>
+        <div class="rounded-2xl border p-6 shadow-sm">
+          <h3 class="font-semibold">Eksport/Import bazy</h3>
+          <p class="mt-2 text-sm">Migruj dane SQLite między stanowiskami i rób kopie zapasowe jednym kliknięciem.</p>
+        </div>
+        <div class="rounded-2xl border p-6 shadow-sm">
+          <h3 class="font-semibold">Aktualizator</h3>
+          <p class="mt-2 text-sm">Wbudowany mechanizm pobiera aktualizacje z prywatnego kanału i weryfikuje podpis instalatora.</p>
+        </div>
+        <div class="rounded-2xl border p-6 shadow-sm">
+          <h3 class="font-semibold">Branding zespołu</h3>
+          <p class="mt-2 text-sm">Motyw z własnym logo, kolorami projektu i nagłówkiem dokumentu.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- How it works -->
+  <section id="how" class="mt-24">
+    <div class="mx-auto max-w-7xl px-4">
+      <div class="grid md:grid-cols-3 gap-6 items-start">
+        <div class="md:col-span-1">
+          <h2 class="text-3xl font-bold">Jak działa Cabplanner</h2>
+          <p class="mt-2 text-gray-600 dark:text-gray-300">Od pierwszej rozmowy z klientem do gotowej specyfikacji.</p>
+        </div>
+        <div class="md:col-span-2 grid gap-4">
+          <div class="rounded-2xl border p-6">
+            <h3 class="font-semibold">1) Utwórz projekt</h3>
+            <p class="text-sm mt-1">Dodaj klienta, załóż numerację, zdefiniuj założenia kolorystyczne i zakres montażu.</p>
+          </div>
+          <div class="rounded-2xl border p-6">
+            <h3 class="font-semibold">2) Dodaj szafki</h3>
+            <p class="text-sm mt-1">Łącz biblioteki bazowe z elementami ad‑hoc, kontroluj akcesoria i waliduj kolizje.</p>
+          </div>
+          <div class="rounded-2xl border p-6">
+            <h3 class="font-semibold">3) Eksport i aktualizacja</h3>
+            <p class="text-sm mt-1">Generuj dokument .docx, archiwizuj bazę SQLite i udostępniaj aktualny status zespołowi.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- CTA strip -->
+  <section class="mt-20">
+    <div class="mx-auto max-w-7xl px-4">
+      <div class="rounded-3xl bg-primary/10 p-8 md:p-10 border">
+        <div class="flex flex-col md:flex-row items-center justify-between gap-6">
+          <div>
+            <h3 class="text-2xl font-bold">Chcesz zobaczyć Cabplanner w akcji?</h3>
+            <p class="text-sm text-gray-600 dark:text-gray-300">Umów krótkie demo, porozmawiajmy o procesie w Twojej pracowni.</p>
+          </div>
+          <a href="#contact" class="inline-flex items-center justify-center rounded-xl bg-primary px-5 py-3 font-semibold text-white shadow hover:opacity-90">Umów demo</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Pricing -->
+  <section id="license" class="mt-24">
+    <div class="mx-auto max-w-7xl px-4 text-center">
+      <h2 class="text-3xl md:text-4xl font-bold">Licencjonowanie</h2>
+      <p class="mt-2 text-gray-600 dark:text-gray-300">Cabplanner jest dostępny w formie zamkniętej. Wersję demonstracyjną otrzymasz po kontakcie.</p>
+      <div class="mt-8 grid md:grid-cols-2 gap-6">
+        <div class="rounded-2xl border p-8 text-left">
+          <h3 class="text-xl font-semibold">Demo (na zaproszenie)</h3>
+          <ul class="mt-4 space-y-2 text-sm">
+            <li>• Pełna funkcjonalność z przykładową bazą</li>
+            <li>• Konsultacja wdrożeniowa online</li>
+            <li>• Feedback od zespołów pilotażowych</li>
+            <li>• Aktualizacje dostarczane przez prywatny kanał</li>
+          </ul>
+          <a href="#contact" class="mt-6 inline-flex rounded-xl bg-primary px-5 py-3 font-semibold text-white shadow hover:opacity-90">Poproś o demo</a>
+        </div>
+        <div class="rounded-2xl border p-8 text-left">
+          <h3 class="text-xl font-semibold">Licencja komercyjna</h3>
+          <ul class="mt-4 space-y-2 text-sm">
+            <li>• Wdrożenie na stanowiskach produkcyjnych</li>
+            <li>• Migracja aktualnej bazy szafek</li>
+            <li>• Konfiguracja raportów pod wizual ID</li>
+            <li>• Wsparcie i roadmapa na żywo</li>
+          </ul>
+          <a href="#contact" class="mt-6 inline-flex rounded-xl border px-5 py-3 font-semibold hover:bg-gray-50 dark:hover:bg-gray-900">Zapytaj o ofertę</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Testimonials / Quotes (opcjonalnie) -->
+  <section class="mt-24">
+    <div class="mx-auto max-w-7xl px-4">
+      <div class="rounded-3xl border p-8 md:p-10">
+        <blockquote class="text-lg md:text-xl leading-relaxed">
+          „Wreszcie mogę zrobić ofertę w 10 minut i wysłać klientowi elegancki dokument. Zero walki z Excelem.”
+        </blockquote>
+        <p class="mt-4 text-sm text-gray-600 dark:text-gray-300">— Użytkownik pilotażowy</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- FAQ -->
+  <section id="faq" class="mt-24">
+    <div class="mx-auto max-w-7xl px-4">
+      <h2 class="text-3xl font-bold text-center">FAQ</h2>
+      <div class="mt-8 grid md:grid-cols-2 gap-6">
+        <div class="rounded-2xl border p-6">
+          <h3 class="font-semibold">Na jakich systemach działa?</h3>
+          <p class="mt-2 text-sm">Windows (EXE). Wersje dla macOS/Linux mogą pojawić się później.</p>
+        </div>
+        <div class="rounded-2xl border p-6">
+          <h3 class="font-semibold">Czy mogę pobrać wersję demo?</h3>
+          <p class="mt-2 text-sm">Tak – demo udostępniamy po wypełnieniu formularza kontaktowego lub krótkiej wiadomości na maila. Otrzymasz instrukcję instalacji i przykładową bazę.</p>
+        </div>
+        <div class="rounded-2xl border p-6">
+          <h3 class="font-semibold">Jak wygląda licencja komercyjna?</h3>
+          <p class="mt-2 text-sm">Licencja obejmuje stanowiska robocze Twojego zespołu, wdrożenie i wsparcie. Warunki omawiamy indywidualnie.</p>
+        </div>
+        <div class="rounded-2xl border p-6">
+          <h3 class="font-semibold">Czy moje dane są bezpieczne?</h3>
+          <p class="mt-2 text-sm">Cabplanner pracuje lokalnie na SQLite. Możesz eksportować i szyfrować kopie zapasowe według procedur firmy.</p>
+        </div>
+        <div class="rounded-2xl border p-6">
+          <h3 class="font-semibold">Jak zgłosić błąd lub pomysł?</h3>
+          <p class="mt-2 text-sm">Wyślij opis na <a class="underline" href="mailto:bmruszaj@gmail.com?subject=Cabplanner%20-%20zg%C5%82oszenie">bmruszaj@gmail.com</a> lub dodaj notatkę w formularzu kontaktowym.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Contact -->
+  <section id="contact" class="mt-24">
+    <div class="mx-auto max-w-7xl px-4">
+      <div class="rounded-3xl border p-8 md:p-10">
+        <div class="grid md:grid-cols-2 gap-6 items-start">
+          <div>
+            <h3 class="text-2xl font-bold">Porozmawiajmy o wdrożeniu</h3>
+            <p class="mt-2 text-sm text-gray-600 dark:text-gray-300">Opisz zespół, proces ofertowania, wymagania dot. raportów. Odezwiemy się z terminem demo i propozycją wdrożenia.</p>
+            <ul class="mt-4 space-y-2 text-sm text-gray-600 dark:text-gray-300">
+              <li>• Demo na żywo (Teams/Meet)</li>
+              <li>• Wycena licencji i wsparcia</li>
+              <li>• Możliwość NDA lub audytu bezpieczeństwa</li>
+            </ul>
+            <p class="mt-4 text-xs text-gray-500 dark:text-gray-400">Bezpośrednio: <a class="underline" href="mailto:bmruszaj@gmail.com">bmruszaj@gmail.com</a></p>
+          </div>
+          <form class="space-y-4" action="https://formsubmit.co/bmruszaj@gmail.com" method="POST">
+            <input type="hidden" name="_subject" value="Cabplanner - zapytanie z landing page" />
+            <input type="hidden" name="_captcha" value="false" />
+            <div class="space-y-2">
+              <label for="contact-name" class="text-sm font-medium">Imię i firma</label>
+              <input id="contact-name" name="name" type="text" required placeholder="np. Anna, Studio Mebli XYZ" class="w-full rounded-xl border px-4 py-3 bg-white dark:bg-gray-950" />
+            </div>
+            <div class="space-y-2">
+              <label for="contact-email" class="text-sm font-medium">E-mail</label>
+              <input id="contact-email" name="email" type="email" required placeholder="np. anna@firmadom.pl" class="w-full rounded-xl border px-4 py-3 bg-white dark:bg-gray-950" />
+            </div>
+            <div class="space-y-2">
+              <label for="contact-need" class="text-sm font-medium">Potrzeby zespołu</label>
+              <textarea id="contact-need" name="need" rows="4" required placeholder="Krótko opisz liczbę stanowisk, format raportów, dodatkowe wymagania." class="w-full rounded-xl border px-4 py-3 bg-white dark:bg-gray-950"></textarea>
+            </div>
+            <button type="submit" class="w-full rounded-xl bg-primary px-5 py-3 font-semibold text-white shadow hover:opacity-90">Wyślij zgłoszenie</button>
+            <p class="text-xs text-gray-500 dark:text-gray-400 text-center">Wysyłając formularz zgadzasz się na kontakt mailowy. Możesz też napisać bezpośrednio na <a class="underline" href="mailto:bmruszaj@gmail.com">bmruszaj@gmail.com</a>.</p>
+          </form>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Mobile sticky CTA -->
+  <div class="fixed bottom-0 inset-x-0 z-40 md:hidden">
+    <a href="#contact" class="block text-center bg-primary text-white py-3 font-semibold">Umów demo</a>
+  </div>
+
+  <!-- Footer -->
+  <footer class="mt-24 mb-10">
+    <div class="mx-auto max-w-7xl px-4">
+      <div class="flex flex-col md:flex-row items-center justify-between gap-4 text-sm opacity-80">
+        <p>© <span id="year"></span> Cabplanner. Wszelkie prawa zastrzeżone.</p>
+        <div class="flex items-center gap-4">
+          <a href="#contact">Kontakt</a>
+          <a href="mailto:bmruszaj@gmail.com">bmruszaj@gmail.com</a>
+        </div>
+      </div>
+    </div>
+  </footer>
+
+  <!-- Scripts -->
+  <script>
+    document.getElementById('year').textContent = new Date().getFullYear();
+    const menuBtn = document.getElementById('menuBtn');
+    const mobileMenu = document.getElementById('mobileMenu');
+    if (menuBtn) {
+      menuBtn.addEventListener('click', () => mobileMenu.classList.toggle('hidden'));
+    }
+  </script>
+
+</body>
+</html>

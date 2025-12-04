@@ -1,0 +1,112 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 600" role="img" aria-labelledby="title desc">
+  <title id="title">Planowanie szafek i raport Word jednym kliknięciem</title>
+  <desc id="desc">Ilustracja przedstawia workflow Cabplanner: wybór szafek do projektu i wygenerowanie raportu .docx jednym kliknięciem.</desc>
+  <defs>
+    <linearGradient id="panel" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#f3fbf8" />
+      <stop offset="1" stop-color="#e1f3ee" />
+    </linearGradient>
+    <linearGradient id="button" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0a766c" />
+      <stop offset="1" stop-color="#11a493" />
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="14" stdDeviation="22" flood-color="#0a766c" flood-opacity="0.08" />
+    </filter>
+    <filter id="shadowLight" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="10" stdDeviation="14" flood-color="#0a766c" flood-opacity="0.06" />
+    </filter>
+  </defs>
+
+  <rect width="900" height="600" rx="48" fill="#ffffff" />
+  <g filter="url(#shadow)" transform="translate(60 80)">
+    <rect width="780" height="440" rx="36" fill="url(#panel)" />
+  </g>
+
+  <!-- Lewy panel: konfiguracja projektu -->
+  <g transform="translate(120 140)" filter="url(#shadowLight)">
+    <rect width="220" height="340" rx="28" fill="#ffffff" />
+    <text x="32" y="52" font-family="Inter, 'Segoe UI', sans-serif" font-size="18" font-weight="600" fill="#0a766c">Projekt</text>
+    <rect x="32" y="70" width="156" height="40" rx="14" fill="#0a766c" opacity="0.08" />
+    <circle cx="50" cy="90" r="8" fill="#0a766c" />
+    <text x="68" y="94" font-family="Inter, 'Segoe UI', sans-serif" font-size="13" fill="#2a5e58">Kuchnia Loft</text>
+
+    <text x="32" y="136" font-family="Inter, 'Segoe UI', sans-serif" font-size="16" font-weight="600" fill="#0a766c">Parametry</text>
+    <g fill="#0a766c" opacity="0.12">
+      <rect x="32" y="154" width="156" height="30" rx="10" />
+      <rect x="32" y="194" width="156" height="30" rx="10" />
+      <rect x="32" y="234" width="156" height="30" rx="10" />
+    </g>
+    <g fill="#0a766c">
+      <circle cx="50" cy="169" r="6" />
+      <circle cx="50" cy="209" r="6" fill-opacity="0.7" />
+      <circle cx="50" cy="249" r="6" fill-opacity="0.4" />
+    </g>
+    <text x="68" y="173" font-family="Inter, 'Segoe UI', sans-serif" font-size="12" fill="#2a5e58">Wymiary i domena</text>
+    <text x="68" y="213" font-family="Inter, 'Segoe UI', sans-serif" font-size="12" fill="#4d7a74">Fronty Paris, laminat dąb</text>
+    <text x="68" y="253" font-family="Inter, 'Segoe UI', sans-serif" font-size="12" fill="#7a9a96">Akcesoria premium</text>
+
+    <rect x="32" y="278" width="156" height="34" rx="12" fill="#0a766c" opacity="0.1" />
+    <text x="48" y="300" font-family="Inter, 'Segoe UI', sans-serif" font-size="13" fill="#2a5e58">Status: w przygotowaniu</text>
+  </g>
+
+  <!-- Środkowy panel: wybór szafek -->
+  <g transform="translate(360 120)" filter="url(#shadowLight)">
+    <rect width="250" height="300" rx="28" fill="#ffffff" />
+    <text x="28" y="48" font-family="Inter, 'Segoe UI', sans-serif" font-size="18" font-weight="600" fill="#0a766c">Wybór szafek</text>
+    <g transform="translate(28 72)">
+      <rect width="92" height="92" rx="18" fill="#0a766c" opacity="0.09" />
+      <rect x="110" width="92" height="92" rx="18" fill="#0a766c" opacity="0.09" />
+      <rect y="108" width="92" height="92" rx="18" fill="#0a766c" opacity="0.14" stroke="#0a766c" stroke-width="2" />
+      <rect x="110" y="108" width="92" height="92" rx="18" fill="#0a766c" opacity="0.09" />
+      <circle cx="46" cy="46" r="18" fill="#0a766c" opacity="0.25" />
+      <path d="M38 120h16l6 18h-28z" fill="#0a766c" opacity="0.45" />
+      <rect x="120" y="18" width="72" height="12" rx="6" fill="#0a766c" opacity="0.2" />
+      <rect x="120" y="42" width="56" height="10" rx="5" fill="#0a766c" opacity="0.15" />
+      <rect x="120" y="132" width="72" height="12" rx="6" fill="#0a766c" opacity="0.2" />
+      <rect x="120" y="156" width="56" height="10" rx="5" fill="#0a766c" opacity="0.15" />
+      <circle cx="46" cy="154" r="18" fill="#0a766c" opacity="0.55" />
+      <polyline points="36 152 44 160 56 140" fill="none" stroke="#ffffff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
+    </g>
+    <rect x="28" y="220" width="194" height="18" rx="9" fill="#0a766c" opacity="0.1" />
+    <rect x="28" y="250" width="194" height="18" rx="9" fill="#0a766c" opacity="0.06" />
+  </g>
+
+  <!-- Strzałka przepływu -->
+  <path d="M630 270h-60c-22 0-32-10-32-32v-8" fill="none" stroke="#0a766c" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="12 12" opacity="0.7" />
+  <path d="M548 214l-10 18h20z" fill="#0a766c" opacity="0.7" />
+
+  <!-- Prawy panel: raport Word -->
+  <g transform="translate(620 140)" filter="url(#shadowLight)">
+    <rect width="220" height="340" rx="28" fill="#ffffff" />
+    <rect x="40" y="40" width="140" height="32" rx="12" fill="#0a766c" opacity="0.1" />
+    <rect x="40" y="86" width="140" height="10" rx="5" fill="#0a766c" opacity="0.2" />
+    <rect x="40" y="108" width="120" height="8" rx="4" fill="#0a766c" opacity="0.15" />
+    <rect x="40" y="130" width="120" height="8" rx="4" fill="#0a766c" opacity="0.15" />
+    <rect x="40" y="152" width="120" height="8" rx="4" fill="#0a766c" opacity="0.15" />
+    <g transform="translate(40 184)">
+      <rect width="34" height="44" rx="10" fill="#0a766c" opacity="0.08" />
+      <rect x="46" width="34" height="44" rx="10" fill="#0a766c" opacity="0.08" />
+      <rect x="92" width="34" height="44" rx="10" fill="#0a766c" opacity="0.08" />
+      <rect x="138" width="34" height="44" rx="10" fill="#0a766c" opacity="0.08" />
+      <rect y="56" width="172" height="10" rx="5" fill="#0a766c" opacity="0.12" />
+      <rect y="76" width="172" height="10" rx="5" fill="#0a766c" opacity="0.12" />
+    </g>
+    <g transform="translate(40 280)">
+      <rect width="172" height="18" rx="9" fill="#0a766c" opacity="0.12" />
+      <rect y="26" width="172" height="18" rx="9" fill="#0a766c" opacity="0.12" />
+    </g>
+    <g transform="translate(40 332)">
+      <rect width="172" height="48" rx="16" fill="url(#button)" />
+      <text x="86" y="32" text-anchor="middle" font-family="Inter, 'Segoe UI', sans-serif" font-size="15" font-weight="600" fill="#ffffff">Generuj raport .docx</text>
+    </g>
+  </g>
+
+  <!-- Dymek: Jeden klik -->
+  <g transform="translate(640 392)">
+    <rect x="0" y="0" width="136" height="44" rx="14" fill="#0a766c" opacity="0.1" />
+    <text x="68" y="28" text-anchor="middle" font-family="Inter, 'Segoe UI', sans-serif" font-size="14" font-weight="600" fill="#0a766c">1 klik = raport</text>
+    <circle cx="134" cy="32" r="8" fill="#0a766c" />
+    <path d="M134 28l6 8h-12z" fill="#ffffff" />
+  </g>
+</svg>

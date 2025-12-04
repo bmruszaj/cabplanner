@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 40" aria-hidden="true">
+  <rect width="120" height="40" rx="8" fill="#f3f4f6"/>
+  <path fill="#0f9d58" d="M24 9h18l-4 22H20z"/>
+  <path fill="#fff" d="M29 15h4v10h-4zm5 0h4v10h-4z" opacity="0.85"/>
+  <text x="56" y="26" font-family="'Segoe UI',sans-serif" font-size="16" fill="#1f2937">SQLite</text>
+</svg>

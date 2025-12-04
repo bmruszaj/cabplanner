@@ -459,6 +459,8 @@ class ProjectService:
                         "width": part.width_mm,
                         "height": part.height_mm,
                         "color": cab.front_color,
+                        "thickness": part.thickness_mm,
+                        "wrapping": part.wrapping or "",
                         "notes": f"Handle: {cab.handle_type}",
                     }
                 )
@@ -471,6 +473,8 @@ class ProjectService:
                         "width": part.width_mm,
                         "height": part.height_mm,
                         "color": "",
+                        "thickness": part.thickness_mm,
+                        "wrapping": part.wrapping or "",
                         "notes": part.comments or "",
                     }
                 )
@@ -484,6 +488,8 @@ class ProjectService:
                         "width": part.width_mm,
                         "height": part.height_mm,
                         "color": cab.body_color,
+                        "thickness": part.thickness_mm,
+                        "wrapping": part.wrapping or "",
                         "notes": part.comments or "",
                     }
                 )
