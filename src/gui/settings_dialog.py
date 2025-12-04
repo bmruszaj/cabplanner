@@ -173,6 +173,17 @@ class SettingsDialog(QDialog):
 
         layout.addWidget(defaults_group)
 
+        # Report settings group
+        report_group = QGroupBox("Ustawienia raportów")
+        report_layout = QFormLayout(report_group)
+
+        # Report parts sorting
+        self.report_sort_by = QComboBox()
+        self.report_sort_by.addItems(["Kolor", "LP (numer szafki)"])
+        report_layout.addRow("Sortowanie elementów w raporcie:", self.report_sort_by)
+
+        layout.addWidget(report_group)
+
         layout.addStretch()
         return tab
 
@@ -330,6 +341,14 @@ class SettingsDialog(QDialog):
                 self.settings_service.get_setting_value("default_project_path", "")
             )
 
+            # Report settings
+            report_sort = self.settings_service.get_setting_value(
+                "report_sort_by", "Kolor"
+            )
+            index = self.report_sort_by.findText(report_sort)
+            if index >= 0:
+                self.report_sort_by.setCurrentIndex(index)
+
             # Appearance settings
             self.dark_mode_check.setChecked(
                 self.settings_service.get_setting_value("dark_mode", False)
@@ -409,6 +428,11 @@ class SettingsDialog(QDialog):
 
             self.settings_service.set_setting(
                 "default_project_path", self.default_project_path.text()
+            )
+
+            # Report settings
+            self.settings_service.set_setting(
+                "report_sort_by", self.report_sort_by.currentText()
             )
 
             # Appearance settings
