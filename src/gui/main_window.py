@@ -535,8 +535,16 @@ class MainWindow(QMainWindow):
         # Update existing cards and create new ones as needed
         self._sync_cards_with_projects(filtered_projects)
 
-        # Performance: invalidate layout to trigger re-layout in next event cycle
+        # Force layout to recalculate and repaint immediately
         self.card_layout.invalidate()
+        self.card_layout.activate()
+        self.card_container.updateGeometry()
+        self.card_container.update()
+
+        # Process pending events to ensure UI is updated
+        from PySide6.QtWidgets import QApplication
+
+        QApplication.processEvents()
 
         # Clear selection if selected project is no longer visible
         self._after_cards_refreshed()
@@ -571,48 +579,68 @@ class MainWindow(QMainWindow):
         # Visible subset - projects that should be shown based on current filters
         visible_ids = {p.id for p in projects}
 
-        # Performance optimization: only toggle cards that change state
-        current_visible = {
-            pid for pid, c in self._project_cards.items() if c.isVisible()
-        }
+        # Check if we need to rebuild the layout order
+        # This happens when new projects are added or order changes
+        current_layout_order = []
+        for i in range(self.card_layout.count()):
+            item = self.card_layout.itemAt(i)
+            if item and item.widget():
+                widget = item.widget()
+                if hasattr(widget, "project") and widget.project:
+                    current_layout_order.append(widget.project.id)
 
-        # Show cards that should be visible but aren't
-        for pid in visible_ids - current_visible:
-            if pid in self._project_cards:
-                self._project_cards[pid].show()
+        desired_order = [p.id for p in projects if p.id in visible_ids]
+        needs_reorder = current_layout_order != desired_order or any(
+            pid not in self._project_cards for pid in visible_ids
+        )
 
-        # Hide cards that are visible but shouldn't be
-        for pid in current_visible - visible_ids:
-            self._project_cards[pid].hide()
-
-        # Create missing cards for visible projects that don't have cards yet
-        # and update existing cards with fresh data
+        # Create missing cards first
         for project in projects:
             if project.id not in self._project_cards:
                 card = self._create_project_card(project)
                 self._project_cards[project.id] = card
-                self.card_layout.addWidget(card)
             else:
                 # Update existing card with fresh data from database
                 self._project_cards[project.id].update_project_data(project)
 
-        # Remove cards only for projects that truly disappeared from the DB
-        # (not just filtered out)
+        # Remove cards for deleted projects
         all_project_ids = {p.id for p in self.table.model().sourceModel()._projects}
         stale_project_ids = [
             pid
             for pid in list(self._project_cards.keys())
             if pid not in all_project_ids
         ]
-
         for project_id in stale_project_ids:
             card = self._project_cards.pop(project_id)
             self.card_layout.removeWidget(card)
             card.setParent(None)
 
+        # Rebuild layout order if needed
+        if needs_reorder:
+            # Remove all cards from layout (but keep widgets)
+            while self.card_layout.count():
+                self.card_layout.takeAt(0)
+
+            # Add cards back in the correct order
+            for project in projects:
+                if project.id in self._project_cards:
+                    card = self._project_cards[project.id]
+                    if project.id in visible_ids:
+                        card.show()
+                        self.card_layout.addWidget(card)
+                    else:
+                        card.hide()
+        else:
+            # Just update visibility
+            for pid in visible_ids:
+                if pid in self._project_cards:
+                    self._project_cards[pid].show()
+            for pid in set(self._project_cards.keys()) - visible_ids:
+                self._project_cards[pid].hide()
+
     def _create_project_card(self, project) -> ProjectCard:
         """UX: Factory method to create a project card with all connections"""
-        card = ProjectCard(project)
+        card = ProjectCard(project, parent=self.card_container)
         card.clicked.connect(lambda c, w=card: self._on_card_clicked(w))
         card.doubleClicked.connect(
             lambda c, w=card: self.open_project_in_window(w.project)
