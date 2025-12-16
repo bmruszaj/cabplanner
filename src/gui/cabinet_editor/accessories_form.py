@@ -383,7 +383,7 @@ class AccessoriesForm(QWidget):
         self.delete_accessory_btn.setEnabled(has_selection)
 
     def _add_accessory(self):
-        """Add a new accessory (kept in memory until save)."""
+        """Add a new accessory directly to the database."""
         if not self.project_cabinet and not self.cabinet_type:
             QMessageBox.warning(self, "Błąd", "Najpierw wybierz szafkę.")
             return
@@ -397,17 +397,37 @@ class AccessoriesForm(QWidget):
                 # Get accessory data from dialog
                 accessory_data = dialog.accessory_data
 
-                # Add to pending changes instead of calling service immediately
-                self.pending_accessories_to_add.append(
-                    {
-                        "name": accessory_data["name"],
-                        "sku": accessory_data["sku"],
-                        "count": accessory_data["quantity"],
-                    }
-                )
-
-                self._mark_dirty()
-                self._refresh_accessories_display()
+                # Save directly to database
+                if self.project_cabinet and self.project_service:
+                    success = self.project_service.add_accessory_to_cabinet(
+                        cabinet_id=self.project_cabinet.id,
+                        name=accessory_data["name"],
+                        sku=accessory_data["sku"],
+                        count=accessory_data["quantity"],
+                    )
+                    if success:
+                        # Reload cabinet from database to get fresh data
+                        refreshed_cabinet = self.project_service.get_cabinet(
+                            self.project_cabinet.id
+                        )
+                        if refreshed_cabinet:
+                            self.project_cabinet = refreshed_cabinet
+                        self._refresh_accessories_display()
+                    else:
+                        QMessageBox.warning(
+                            self, "Błąd", "Nie udało się dodać akcesorium do bazy."
+                        )
+                elif self.cabinet_type:
+                    # For catalog templates, keep pending behavior
+                    self.pending_accessories_to_add.append(
+                        {
+                            "name": accessory_data["name"],
+                            "sku": accessory_data["sku"],
+                            "count": accessory_data["quantity"],
+                        }
+                    )
+                    self._mark_dirty()
+                    self._refresh_accessories_display()
 
             except Exception as e:
                 QMessageBox.critical(
@@ -425,23 +445,37 @@ class AccessoriesForm(QWidget):
             if accessory:
                 dialog = AccessoryQuantityDialog(accessory, parent=self)
                 if dialog.exec() == QDialog.Accepted:
-                    # Update quantity using ProjectService
-                    if self.project_service and hasattr(accessory, "id"):
+                    # Update quantity using ProjectService directly
+                    if (
+                        self.project_cabinet
+                        and self.project_service
+                        and hasattr(accessory, "id")
+                        and accessory.id > 0
+                    ):
                         success = self.project_service.update_accessory_quantity(
                             accessory.id, dialog.new_quantity
                         )
                         if success:
-                            self._mark_dirty()
-                            self._refresh_accessories()
+                            # Reload cabinet from database
+                            refreshed_cabinet = self.project_service.get_cabinet(
+                                self.project_cabinet.id
+                            )
+                            if refreshed_cabinet:
+                                self.project_cabinet = refreshed_cabinet
+                            self._refresh_accessories_display()
                         else:
                             QMessageBox.warning(
                                 self, "Błąd", "Nie udało się zaktualizować ilości."
                             )
-                    else:
-                        # Fallback for legacy accessories or missing service
-                        accessory.count = dialog.new_quantity
+                    elif self.cabinet_type:
+                        # For catalog templates, use pending changes
+                        acc_id = getattr(accessory, "id", None) or getattr(
+                            accessory, "accessory_id", None
+                        )
+                        if acc_id:
+                            self.pending_quantity_changes[acc_id] = dialog.new_quantity
                         self._mark_dirty()
-                        self._refresh_accessories()
+                        self._refresh_accessories_display()
 
     def _delete_accessory(self):
         """Delete the selected accessory."""
@@ -468,22 +502,37 @@ class AccessoriesForm(QWidget):
                 )
 
                 if reply == QMessageBox.Yes:
-                    # Remove accessory using ProjectService
-                    if self.project_service and hasattr(accessory, "id"):
+                    # Remove accessory using ProjectService directly
+                    if (
+                        self.project_cabinet
+                        and self.project_service
+                        and hasattr(accessory, "id")
+                        and accessory.id > 0
+                    ):
                         success = self.project_service.remove_accessory_from_cabinet(
                             accessory.id
                         )
                         if success:
-                            self._mark_dirty()
-                            self._refresh_accessories()
+                            # Reload cabinet from database
+                            refreshed_cabinet = self.project_service.get_cabinet(
+                                self.project_cabinet.id
+                            )
+                            if refreshed_cabinet:
+                                self.project_cabinet = refreshed_cabinet
+                            self._refresh_accessories_display()
                         else:
                             QMessageBox.warning(
                                 self, "Błąd", "Nie udało się usunąć akcesorium."
                             )
-                    else:
-                        # Fallback for legacy accessories or missing service
+                    elif self.cabinet_type:
+                        # For catalog templates, use pending removal
+                        acc_id = getattr(accessory, "id", None) or getattr(
+                            accessory, "accessory_id", None
+                        )
+                        if acc_id:
+                            self.pending_accessories_to_remove.append(acc_id)
                         self._mark_dirty()
-                        self._refresh_accessories()
+                        self._refresh_accessories_display()
 
     def _refresh_accessories(self):
         """Refresh the accessories table (original method - loads from database)."""
@@ -615,6 +664,15 @@ class AccessoriesForm(QWidget):
 
         self._is_dirty = False
         self.sig_dirty_changed.emit(False)
+
+        # Reload project_cabinet from database to get fresh accessory_snapshots
+        # (with proper IDs for newly added accessories)
+        if self.project_cabinet and self.project_service:
+            refreshed_cabinet = self.project_service.get_cabinet(
+                self.project_cabinet.id
+            )
+            if refreshed_cabinet:
+                self.project_cabinet = refreshed_cabinet
 
         # Refresh display to show current state without pending changes
         self._refresh_accessories_display()
