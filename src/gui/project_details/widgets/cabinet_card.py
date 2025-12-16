@@ -392,5 +392,16 @@ class CabinetCard(QFrame):
                 }}
             """)
         else:
-            # Clear any selection styling to use default theme styles
-            self.setStyleSheet("")
+            # Restore default card style explicitly to avoid visual glitches
+            self.setStyleSheet(f"""
+                QFrame#cabinetCard {{
+                    background-color: white;
+                    border: 1px solid #E0E0E0;
+                    border-radius: 8px;
+                }}
+                QFrame#cabinetCard:hover {{
+                    border-color: {PRIMARY};
+                    border-width: 2px;
+                    background-color: {CARD_HOVER};
+                }}
+            """)
