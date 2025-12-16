@@ -20,6 +20,9 @@ cabplanner_version_info.txt
 # SQLite journal files
 *.db-journal
 
+# reports folder
+reports/
+
 # C extensions
 *.so
 
