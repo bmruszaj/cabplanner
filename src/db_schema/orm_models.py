@@ -177,8 +177,7 @@ class CabinetPart(Base):
     # new: explicit material info instead of is_hdf
     material = Column(
         String(32), nullable=True
-    )  # e.g., 'PLYTA', 'HDF', 'FRONT', 'INNE'
-    thickness_mm = Column(Integer, nullable=True)  # e.g., 18, 16, 3
+    )  # e.g., 'PLYTA 12', 'PLYTA 16', 'PLYTA 18', 'HDF', 'FRONT', 'INNE'
 
     # optional: structured machining/processing data
     processing_json = Column(JSON, nullable=True)
@@ -293,8 +292,7 @@ class ProjectCabinetPart(Base):
     # Material info
     material = Column(
         String(32), nullable=True
-    )  # e.g., 'PLYTA', 'HDF', 'FRONT', 'INNE'
-    thickness_mm = Column(Integer, nullable=True)  # e.g., 18, 16, 3
+    )  # e.g., 'PLYTA 12', 'PLYTA 16', 'PLYTA 18', 'HDF', 'FRONT', 'INNE'
 
     # Optional: structured machining/processing data
     processing_json = Column(JSON, nullable=True)
