@@ -28,7 +28,6 @@ class InstanceForm(QWidget):
     """Form for editing project cabinet instance."""
 
     sig_dirty_changed = Signal(bool)
-    sig_edit_type = Signal()  # Request to switch to type tab
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -57,13 +56,6 @@ class InstanceForm(QWidget):
         type_header.addWidget(type_title)
 
         type_header.addStretch()
-
-        self.edit_type_button = QPushButton("Edytuj typ")
-        self.edit_type_button.setIcon(get_icon("edit"))
-        icon_size = int(self.edit_type_button.fontMetrics().height() * 0.8)
-        self.edit_type_button.setIconSize(QSize(icon_size, icon_size))
-        self.edit_type_button.clicked.connect(self.sig_edit_type.emit)
-        type_header.addWidget(self.edit_type_button)
 
         type_layout.addLayout(type_header)
 
@@ -349,15 +341,12 @@ class InstanceForm(QWidget):
             if hasattr(cabinet_type, "sku") and cabinet_type.sku:
                 type_info += f" (SKU: {cabinet_type.sku})"
             self.type_info_label.setText(type_info)
-            self.edit_type_button.setEnabled(True)
         elif hasattr(project_cabinet, "type_id") and project_cabinet.type_id:
             self.type_info_label.setText("Ładowanie informacji o typie...")
-            self.edit_type_button.setEnabled(True)
         else:
             self.type_info_label.setText(
                 "To jest szafka niestandardowa (bez powiązanego typu katalogowego)."
             )
-            self.edit_type_button.setEnabled(False)
 
         # Reset dirty flag
         self._is_dirty = False

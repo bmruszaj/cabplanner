@@ -23,7 +23,6 @@ from src.services.catalog_service import CatalogService
 from src.services.project_service import ProjectService
 
 from .instance_form import InstanceForm
-from .type_form import TypeForm
 from .parts_form import PartsForm
 from .accessories_form import AccessoriesForm
 
@@ -139,10 +138,6 @@ class CabinetEditorDialog(QDialog):
             self.instance_form, get_icon("project"), "Instancja w projekcie"
         )
 
-        # Type tab
-        self.type_form = TypeForm()
-        self.tab_widget.addTab(self.type_form, get_icon("catalog"), "Typ w katalogu")
-
         # Parts tab
         self.parts_form = PartsForm(
             catalog_service=self.catalog_service, project_service=self.project_service
@@ -197,7 +192,6 @@ class CabinetEditorDialog(QDialog):
 
         # Form dirty tracking
         self.instance_form.sig_dirty_changed.connect(self._on_dirty_changed)
-        self.type_form.sig_dirty_changed.connect(self._on_dirty_changed)
         self.parts_form.sig_dirty_changed.connect(self._on_dirty_changed)
         self.accessories_form.sig_dirty_changed.connect(self._on_dirty_changed)
 
@@ -279,12 +273,6 @@ class CabinetEditorDialog(QDialog):
             # Update drawing
             self._update_drawing()
 
-        elif current_tab == self.type_form:
-            self.mode = "type"
-            self.subtitle_label.setText("Edycja typu szafki w katalogu")
-            # Update drawing
-            self._update_drawing()
-
         elif current_tab == self.parts_form:
             self.mode = "parts"
             self.subtitle_label.setText("Edycja części szafki")
@@ -324,8 +312,6 @@ class CabinetEditorDialog(QDialog):
         current_widget = self.tab_widget.currentWidget()
         if current_widget == self.instance_form:
             return self.instance_form
-        elif current_widget == self.type_form:
-            return self.type_form
         elif current_widget == self.parts_form:
             return self.parts_form
         elif current_widget == self.accessories_form:
@@ -374,7 +360,6 @@ class CabinetEditorDialog(QDialog):
         # Check for unsaved changes in all forms
         has_unsaved = (
             self.instance_form.is_dirty()
-            or self.type_form.is_dirty()
             or self.parts_form.is_dirty()
             or self.accessories_form.is_dirty()
         )
@@ -436,19 +421,7 @@ class CabinetEditorDialog(QDialog):
 
             # CATALOG TEMPLATE - use catalog_service
             elif self.cabinet_type:
-                if current_form == self.type_form:
-                    values = current_form.values()
-                    success = self.catalog_service.update_type(
-                        self.cabinet_type.id, values
-                    )
-                    if success:
-                        for key, value in values.items():
-                            if hasattr(self.cabinet_type, key):
-                                setattr(self.cabinet_type, key, value)
-                        current_form.reset_dirty()
-                        return True
-
-                elif current_form == self.parts_form:
+                if current_form == self.parts_form:
                     # Parts in catalog templates are managed through template service
                     # Individual part edits are handled by part dialogs directly
                     current_form.reset_dirty()
@@ -480,8 +453,6 @@ class CabinetEditorDialog(QDialog):
 
         # CATALOG TEMPLATE - use catalog_service
         elif self.cabinet_type:
-            if self.type_form.is_dirty():
-                forms_to_save.append((self.type_form, "type"))
             if self.parts_form.is_dirty():
                 forms_to_save.append((self.parts_form, "parts"))
             if self.accessories_form.is_dirty():
@@ -587,7 +558,6 @@ class CabinetEditorDialog(QDialog):
 
         # Load forms
         self.instance_form.load(project_instance, cabinet_type)
-        self.type_form.load(cabinet_type)
         # Load parts from project instance snapshot (not from catalog template)
         self.parts_form.load_custom_parts(
             list(project_instance.parts), project_instance
@@ -614,7 +584,6 @@ class CabinetEditorDialog(QDialog):
         self.subtitle_label.setText("Edycja typu szafki w katalogu")
 
         # Load forms
-        self.type_form.load(cabinet_type)
         self.parts_form.load(cabinet_type)
         self.accessories_form.load(None, cabinet_type)  # Load with catalog type only
 
@@ -622,8 +591,8 @@ class CabinetEditorDialog(QDialog):
         self.tab_widget.setTabEnabled(0, False)  # Instance tab
         # Keep accessories tab enabled for catalog-level accessory management
 
-        # Switch to type tab
-        self.tab_widget.setCurrentWidget(self.type_form)
+        # Switch to parts tab (first available tab for catalog)
+        self.tab_widget.setCurrentWidget(self.parts_form)
 
         # Update drawing
         self._update_drawing()
