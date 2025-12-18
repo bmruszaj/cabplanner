@@ -286,7 +286,6 @@ class ProjectDetailsController(QObject):
                     width_mm=part_data["width_mm"],
                     pieces=part_data["pieces"],
                     material=part_data.get("material"),
-                    thickness_mm=part_data.get("thickness_mm"),
                     wrapping=part_data.get("wrapping"),
                     comments=part_data.get("comments"),
                 )
