@@ -187,3 +187,111 @@ class TestCatalogService:
         assert hasattr(catalog_type, "id")
         assert hasattr(catalog_type, "name")
         assert hasattr(catalog_type, "kitchen_type")
+
+
+# ==============================================================================
+# Edge Cases Tests
+# ==============================================================================
+
+
+class TestCatalogEdgeCases:
+    """Test edge cases for catalog operations"""
+
+    def test_template_without_parts(self, catalog_service, template_service):
+        """Test that a template with no parts works correctly"""
+        # GIVEN: A template with no parts
+        template = template_service.create_template(
+            name="EmptyTemplate",
+            kitchen_type="MODERN",
+        )
+
+        # THEN: Template should exist
+        catalog_type = catalog_service.get_type(template.id)
+        assert catalog_type is not None
+        assert catalog_type.name == "EmptyTemplate"
+
+        # AND: Parts list should be empty
+        assert template.parts == []
+
+    def test_template_with_unicode_polish_name(self, catalog_service, template_service):
+        """Test template with Polish characters in name"""
+        # GIVEN: Polish characters in template name
+        polish_name = "Szafka Górna Żółta"
+
+        # WHEN: Creating template with Polish name
+        template = template_service.create_template(
+            name=polish_name,
+            kitchen_type="MODERN",
+        )
+
+        # THEN: Polish characters should be preserved
+        catalog_type = catalog_service.get_type(template.id)
+        assert catalog_type.name == polish_name
+
+        # AND: Should be searchable
+        types = catalog_service.list_types(query="Żółta")
+        matching = [t for t in types if t.name == polish_name]
+        assert len(matching) == 1
+
+    def test_template_with_emoji_name(self, catalog_service, template_service):
+        """Test template with emoji in name"""
+        # GIVEN: Emoji in template name
+        emoji_name = "Szafka 🚪 Premium ⭐"
+
+        # WHEN: Creating template with emoji
+        template = template_service.create_template(
+            name=emoji_name,
+            kitchen_type="MODERN",
+        )
+
+        # THEN: Emoji should be preserved
+        catalog_type = catalog_service.get_type(template.id)
+        assert "🚪" in catalog_type.name
+        assert "⭐" in catalog_type.name
+
+    def test_list_many_templates(self, catalog_service, template_service):
+        """Test listing large number of templates (100+)"""
+        # GIVEN: 100 templates
+        num_templates = 100
+        for i in range(num_templates):
+            template_service.create_template(
+                name=f"BulkTemplate{i:03d}",
+                kitchen_type="LOFT",
+            )
+
+        # WHEN: Listing all types
+        types = catalog_service.list_types()
+
+        # THEN: All templates should be listed
+        bulk_types = [t for t in types if t.name.startswith("BulkTemplate")]
+        assert len(bulk_types) >= num_templates
+
+    def test_template_with_many_parts(self, catalog_service, template_service):
+        """Test template with many parts (30+)"""
+        # GIVEN: A template
+        template = template_service.create_template(
+            name="ManyPartsTemplate",
+            kitchen_type="MODERN",
+        )
+
+        # WHEN: Adding 30 parts
+        num_parts = 30
+        for i in range(num_parts):
+            template_service.add_part(
+                cabinet_type_id=template.id,
+                part_name=f"Część {i + 1}",
+                width_mm=100 + i * 10,
+                height_mm=200 + i * 5,
+                pieces=1,
+            )
+
+        # THEN: All parts should be added
+        catalog_type = catalog_service.get_type(template.id)
+        assert catalog_type is not None
+        # Refresh template to get parts
+        from src.db_schema.orm_models import CabinetType
+
+        template_obj = (
+            template_service.db.query(CabinetType).filter_by(id=template.id).first()
+        )
+        assert len(template_obj.parts) == num_parts

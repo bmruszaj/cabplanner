@@ -321,3 +321,167 @@ class TestPartsServiceCRUD:
         # THEN: Cabinet's updated_at should change
         session.refresh(test_cabinet)
         assert test_cabinet.updated_at >= original_updated_at
+
+
+# ==============================================================================
+# Edge Cases Tests
+# ==============================================================================
+
+
+class TestPartsEdgeCases:
+    """Test edge cases for parts operations"""
+
+    @pytest.fixture
+    def test_project(self, session, project_service):
+        """Create a test project for edge case tests"""
+        return project_service.create_project(
+            name="Edge Case Project",
+            order_number="EDGE-001",
+        )
+
+    @pytest.fixture
+    def test_cabinet(self, session, project_service, test_project, template_service):
+        """Create a test cabinet for edge case tests"""
+        template = template_service.create_template(
+            name="EdgeCaseTemplate",
+            kitchen_type="MODERN",
+        )
+        cabinet = ProjectCabinet(
+            project_id=test_project.id,
+            type_id=template.id,
+            sequence_number=1,
+            quantity=1,
+            body_color="#ffffff",
+            front_color="#000000",
+            handle_type="Standard",
+        )
+        session.add(cabinet)
+        session.commit()
+        return cabinet
+
+    def test_cabinet_without_parts(self, session, project_service, test_cabinet):
+        """Test that a cabinet with no parts works correctly"""
+        # GIVEN: A cabinet with no parts
+        session.refresh(test_cabinet)
+
+        # THEN: Cabinet should have empty parts list
+        assert test_cabinet.parts == []
+
+        # AND: Getting parts should return empty list
+        parts = (
+            session.query(ProjectCabinetPart)
+            .filter_by(project_cabinet_id=test_cabinet.id)
+            .all()
+        )
+        assert parts == []
+
+    def test_part_with_unicode_polish_name(
+        self, session, project_service, test_cabinet
+    ):
+        """Test part with Polish characters in name"""
+        # GIVEN: Polish characters
+        polish_name = "Półka górna żółta"
+
+        # WHEN: Adding part with Polish name
+        result = project_service.add_part_to_cabinet(
+            cabinet_id=test_cabinet.id,
+            part_name=polish_name,
+            width_mm=400,
+            height_mm=300,
+            comments="Ścięty róg, łączenie ćwierćwalca",
+        )
+
+        # THEN: Polish characters should be preserved
+        assert result is True
+        session.refresh(test_cabinet)
+        part = test_cabinet.parts[0]
+        assert part.part_name == polish_name
+        assert "Ścięty" in part.comments
+        assert "ćwierćwalca" in part.comments
+
+    def test_part_with_emoji_name(self, session, project_service, test_cabinet):
+        """Test part with emoji in name"""
+        # GIVEN: Emoji in part name
+        emoji_name = "Front 🚪 główny"
+
+        # WHEN: Adding part with emoji
+        result = project_service.add_part_to_cabinet(
+            cabinet_id=test_cabinet.id,
+            part_name=emoji_name,
+            width_mm=400,
+            height_mm=700,
+            comments="Super ✨ jakość",
+        )
+
+        # THEN: Emoji should be preserved
+        assert result is True
+        session.refresh(test_cabinet)
+        part = test_cabinet.parts[0]
+        assert "🚪" in part.part_name
+        assert "✨" in part.comments
+
+    def test_part_with_very_long_comments(self, session, project_service, test_cabinet):
+        """Test part with very long comments (5000+ chars)"""
+        # GIVEN: Very long comments
+        long_comment = "Opis " + "X" * 5000 + " koniec"
+
+        # WHEN: Adding part with long comments
+        result = project_service.add_part_to_cabinet(
+            cabinet_id=test_cabinet.id,
+            part_name="Część z długim opisem",
+            width_mm=300,
+            height_mm=200,
+            comments=long_comment,
+        )
+
+        # THEN: Comments should be preserved
+        assert result is True
+        session.refresh(test_cabinet)
+        part = test_cabinet.parts[0]
+        assert len(part.comments) > 5000
+        assert part.comments.startswith("Opis ")
+        assert part.comments.endswith(" koniec")
+
+    def test_cabinet_with_many_parts(self, session, project_service, test_cabinet):
+        """Test cabinet with large number of parts (50+)"""
+        # GIVEN: Adding 50 parts to a cabinet
+        num_parts = 50
+        for i in range(1, num_parts + 1):
+            project_service.add_part_to_cabinet(
+                cabinet_id=test_cabinet.id,
+                part_name=f"Część nr {i}",
+                width_mm=100 + i,
+                height_mm=200 + i,
+                pieces=1,
+            )
+
+        # THEN: All parts should be added
+        session.refresh(test_cabinet)
+        assert len(test_cabinet.parts) == num_parts
+
+        # AND: Each part should have correct data
+        for idx, part in enumerate(sorted(test_cabinet.parts, key=lambda p: p.id)):
+            expected_width = 100 + (idx + 1)
+            assert part.width_mm == expected_width
+
+    def test_part_with_special_characters_in_wrapping(
+        self, session, project_service, test_cabinet
+    ):
+        """Test part with special characters in wrapping field"""
+        # GIVEN: Special characters
+        special_wrapping = "2x ABS 0.8mm / 2x PCV 1.5mm"
+
+        # WHEN: Adding part
+        result = project_service.add_part_to_cabinet(
+            cabinet_id=test_cabinet.id,
+            part_name="Blat",
+            width_mm=600,
+            height_mm=40,
+            wrapping=special_wrapping,
+        )
+
+        # THEN: Special characters preserved
+        assert result is True
+        session.refresh(test_cabinet)
+        part = test_cabinet.parts[0]
+        assert part.wrapping == special_wrapping

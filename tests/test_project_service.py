@@ -229,3 +229,119 @@ def test_next_sequence_after_manual_insert(service, template_service, count):
     # THEN it should be max + 1, respecting the manual gaps
     expected = (count * 10) + 1
     assert next_seq == expected
+
+
+# ==============================================================================
+# Edge Cases Tests
+# ==============================================================================
+
+
+class TestProjectEdgeCases:
+    """Test edge cases for project operations"""
+
+    def test_project_without_cabinets(self, service):
+        """Test that a project with no cabinets works correctly"""
+        # GIVEN: A project with no cabinets
+        proj = service.create_project(
+            name="Empty Project",
+            kitchen_type="MODERN",
+            order_number="EMPTY-001",
+        )
+
+        # THEN: Project should exist and have no cabinets
+        assert proj.id is not None
+        cabinets = service.list_cabinets(proj.id)
+        assert cabinets == []
+
+        # AND: Next sequence should be 1
+        next_seq = service.get_next_cabinet_sequence(proj.id)
+        assert next_seq == 1
+
+    def test_project_with_many_cabinets(self, service, template_service):
+        """Test project with large number of cabinets (100+)"""
+        # GIVEN: A project
+        proj = service.create_project(
+            name="Large Project",
+            kitchen_type="LOFT",
+            order_number="LARGE-001",
+        )
+
+        template = template_service.create_template(
+            kitchen_type="LOFT", name="BulkTestCabinet"
+        )
+
+        # WHEN: Adding 120 cabinets
+        num_cabinets = 120
+        for i in range(1, num_cabinets + 1):
+            service.add_cabinet(
+                proj.id,
+                sequence_number=i,
+                type_id=template.id,
+                body_color="#FFFFFF",
+                front_color="#000000",
+                handle_type="Standard",
+            )
+
+        # THEN: All cabinets should be added
+        cabinets = service.list_cabinets(proj.id)
+        assert len(cabinets) == num_cabinets
+
+        # AND: Next sequence should be correct
+        next_seq = service.get_next_cabinet_sequence(proj.id)
+        assert next_seq == num_cabinets + 1
+
+    def test_project_with_unicode_name_polish(self, service):
+        """Test project with Polish characters in name"""
+        # GIVEN: Polish characters in project name
+        polish_name = "Kuchnia Żółć Ąść Ęśćżźł"
+
+        # WHEN: Creating project with Polish name
+        proj = service.create_project(
+            name=polish_name,
+            kitchen_type="MODERN",
+            order_number="POLISH-001",
+            client_name="Jan Żółciński",
+            client_address="ul. Świdnicka 42, Łódź",
+        )
+
+        # THEN: All Polish characters should be preserved
+        fetched = service.get_project(proj.id)
+        assert fetched.name == polish_name
+        assert fetched.client_name == "Jan Żółciński"
+        assert "Łódź" in fetched.client_address
+
+    def test_project_with_unicode_name_emoji(self, service):
+        """Test project with emoji in name"""
+        # GIVEN: Emoji in project name
+        emoji_name = "Kuchnia 🍳 Nowoczesna ✨"
+
+        # WHEN: Creating project with emoji
+        proj = service.create_project(
+            name=emoji_name,
+            kitchen_type="MODERN",
+            order_number="EMOJI-001",
+        )
+
+        # THEN: Emoji should be preserved
+        fetched = service.get_project(proj.id)
+        assert fetched.name == emoji_name
+        assert "🍳" in fetched.name
+        assert "✨" in fetched.name
+
+    def test_project_with_very_long_notes(self, service):
+        """Test project with very long notes/comments"""
+        # GIVEN: Very long notes (10000 characters)
+        long_note = "A" * 10000
+
+        # WHEN: Creating project with long notes
+        proj = service.create_project(
+            name="Long Notes Project",
+            kitchen_type="MODERN",
+            order_number="LONG-001",
+            blaty=True,
+            blaty_note=long_note,
+        )
+
+        # THEN: Notes should be preserved
+        fetched = service.get_project(proj.id)
+        assert len(fetched.blaty_note) == 10000
