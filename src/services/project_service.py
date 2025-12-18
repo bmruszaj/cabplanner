@@ -315,6 +315,90 @@ class ProjectService:
         self.db.commit()
         return True
 
+    def add_part_to_cabinet(
+        self,
+        cabinet_id: int,
+        part_name: str,
+        width_mm: int,
+        height_mm: int,
+        pieces: int = 1,
+        material: str = None,
+        thickness_mm: int = None,
+        wrapping: str = None,
+        comments: str = None,
+        source_template_id: int = None,
+        source_part_id: int = None,
+    ) -> bool:
+        """Add a single part to a cabinet."""
+        cabinet = self.get_cabinet(cabinet_id)
+        if not cabinet:
+            return False
+
+        if not part_name:
+            return False
+
+        snapshot_part = ProjectCabinetPart(
+            project_cabinet_id=cabinet.id,
+            part_name=part_name,
+            height_mm=height_mm,
+            width_mm=width_mm,
+            pieces=pieces,
+            material=material,
+            thickness_mm=thickness_mm,
+            wrapping=wrapping,
+            comments=comments,
+            source_template_id=source_template_id,
+            source_part_id=source_part_id,
+        )
+        self.db.add(snapshot_part)
+
+        cabinet.updated_at = datetime.now(timezone.utc)
+
+        try:
+            self.db.commit()
+            return True
+        except Exception:
+            self.db.rollback()
+            return False
+
+    def update_part(self, part_id: int, part_data: Dict[str, Any]) -> bool:
+        """Update a single part in a cabinet."""
+        part = self.db.get(ProjectCabinetPart, part_id)
+        if not part:
+            return False
+
+        # Update part fields
+        for key, value in part_data.items():
+            if hasattr(part, key):
+                setattr(part, key, value)
+
+        part.project_cabinet.updated_at = datetime.now(timezone.utc)
+
+        try:
+            self.db.commit()
+            return True
+        except Exception:
+            self.db.rollback()
+            return False
+
+    def remove_part_from_cabinet(self, part_id: int) -> bool:
+        """Remove a single part from a cabinet."""
+        part = self.db.get(ProjectCabinetPart, part_id)
+        if not part:
+            return False
+
+        cabinet = part.project_cabinet
+        self.db.delete(part)
+
+        cabinet.updated_at = datetime.now(timezone.utc)
+
+        try:
+            self.db.commit()
+            return True
+        except Exception:
+            self.db.rollback()
+            return False
+
     def add_accessory_to_cabinet(
         self,
         cabinet_id: int,

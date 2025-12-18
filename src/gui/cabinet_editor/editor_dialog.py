@@ -589,7 +589,7 @@ class CabinetEditorDialog(QDialog):
         self.instance_form.load(project_instance, cabinet_type)
         self.type_form.load(cabinet_type)
         # Load parts from project instance snapshot (not from catalog template)
-        self.parts_form.load_custom_parts(list(project_instance.parts))
+        self.parts_form.load_custom_parts(list(project_instance.parts), project_instance)
         self.accessories_form.load(project_instance, cabinet_type)
 
         # Switch to instance tab
@@ -665,9 +665,9 @@ class CabinetEditorDialog(QDialog):
                 # Use the actual part object instead of SimpleNamespace to avoid missing attributes
                 custom_parts_for_form.append(part)
 
-            self.parts_form.load_custom_parts(custom_parts_for_form)
+            self.parts_form.load_custom_parts(custom_parts_for_form, project_instance)
         else:
-            self.parts_form.load_custom_parts([])
+            self.parts_form.load_custom_parts([], project_instance)
 
         # Load accessories (custom cabinets can still have accessories)
         self.accessories_form.load(project_instance, None)  # No cabinet type
