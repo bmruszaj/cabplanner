@@ -105,11 +105,22 @@ class ReportGenerator:
             # else: keep original order (by LP/sequence)
 
             # Split formatki by material type
-            formatki_plyta_12 = [p for p in formatki if getattr(p, 'material', '') == 'PLYTA 12']
-            formatki_plyta_16 = [p for p in formatki if getattr(p, 'material', '') == 'PLYTA 16']
-            formatki_plyta_18 = [p for p in formatki if getattr(p, 'material', '') == 'PLYTA 18']
+            formatki_plyta_12 = [
+                p for p in formatki if getattr(p, "material", "") == "PLYTA 12"
+            ]
+            formatki_plyta_16 = [
+                p for p in formatki if getattr(p, "material", "") == "PLYTA 16"
+            ]
+            formatki_plyta_18 = [
+                p for p in formatki if getattr(p, "material", "") == "PLYTA 18"
+            ]
             # Other formatki (legacy or without specific material)
-            formatki_other = [p for p in formatki if getattr(p, 'material', '') not in ('PLYTA 12', 'PLYTA 16', 'PLYTA 18')]
+            formatki_other = [
+                p
+                for p in formatki
+                if getattr(p, "material", "")
+                not in ("PLYTA 12", "PLYTA 16", "PLYTA 18")
+            ]
 
             # Add sections - split FORMATKI by material type
             if formatki_plyta_12:

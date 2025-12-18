@@ -12,14 +12,8 @@ import pytest
 from sqlalchemy.exc import IntegrityError, DataError
 
 from src.db_schema.orm_models import (
-    Project,
     ProjectCabinet,
-    ProjectCabinetPart,
-    CabinetTemplate,
-    CabinetPart,
 )
-from src.services.project_service import ProjectService
-from src.services.template_service import TemplateService
 
 
 # ============================================================
@@ -212,7 +206,9 @@ class TestPartDimensionsValidation:
 
     # ---- Template Parts Dimensions ----
 
-    def test_template_part_negative_dimensions(self, session, template_service, test_template):
+    def test_template_part_negative_dimensions(
+        self, session, template_service, test_template
+    ):
         """Test adding template part with negative dimensions - should be rejected by CHECK constraint."""
         # THEN: Should raise IntegrityError due to CHECK constraint ck_part_dims_nonneg
         with pytest.raises(IntegrityError, match="CHECK constraint failed"):
@@ -224,7 +220,9 @@ class TestPartDimensionsValidation:
                 pieces=1,
             )
 
-    def test_template_part_zero_dimensions(self, session, template_service, test_template):
+    def test_template_part_zero_dimensions(
+        self, session, template_service, test_template
+    ):
         """Test adding template part with zero dimensions."""
         part = template_service.add_part(
             cabinet_type_id=test_template.id,
@@ -650,7 +648,7 @@ class TestQuantityValidation:
             quantity=0,
         )
         session.add(cabinet)
-        
+
         # THEN: Should raise IntegrityError due to CHECK constraint ck_quantity_pos
         with pytest.raises(IntegrityError, match="CHECK constraint failed"):
             session.commit()
@@ -683,7 +681,7 @@ class TestQuantityValidation:
             quantity=-3,
         )
         session.add(cabinet)
-        
+
         # THEN: Should raise IntegrityError due to CHECK constraint ck_quantity_pos
         with pytest.raises(IntegrityError, match="CHECK constraint failed"):
             session.commit()

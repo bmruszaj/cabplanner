@@ -396,9 +396,9 @@ def test_custom_cabinets_in_report(tmp_path, project_with_custom_cabinets):
         seq = cells[0].text.strip()
         name = cells[1].text.strip()
         quantity = cells[2].text.strip()
-        color = cells[
-            5
-        ].text.strip()  # Color column (index: Lp, Nazwa, Ilość, Wymiary, Okleina, Kolor, Uwagi)
+        color = (
+            cells[5].text.strip()
+        )  # Color column (index: Lp, Nazwa, Ilość, Wymiary, Okleina, Kolor, Uwagi)
 
         if seq == "①" and "Catalog Front" in name:
             catalog_front_found = True
