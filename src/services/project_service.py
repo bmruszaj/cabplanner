@@ -196,7 +196,6 @@ class ProjectService:
                 wrapping=part.wrapping,
                 comments=part.comments,
                 material=part.material,
-                thickness_mm=part.thickness_mm,
                 processing_json=part.processing_json,
                 source_template_id=template.id,
                 source_part_id=part.id,
@@ -258,7 +257,6 @@ class ProjectService:
                 wrapping=part_data.get("wrapping"),
                 comments=part_data.get("comments"),
                 material=part_data.get("material"),
-                thickness_mm=part_data.get("thickness_mm"),
                 processing_json=part_data.get("processing_json"),
                 source_template_id=None,  # Custom cabinet
                 source_part_id=None,  # Custom cabinet
@@ -303,7 +301,6 @@ class ProjectService:
                 wrapping=part_data.get("wrapping"),
                 comments=part_data.get("comments"),
                 material=part_data.get("material"),
-                thickness_mm=part_data.get("thickness_mm"),
                 processing_json=part_data.get("processing_json"),
                 source_template_id=part_data.get("source_template_id"),
                 source_part_id=part_data.get("source_part_id"),
@@ -323,7 +320,6 @@ class ProjectService:
         height_mm: int,
         pieces: int = 1,
         material: str = None,
-        thickness_mm: int = None,
         wrapping: str = None,
         comments: str = None,
         source_template_id: int = None,
@@ -344,7 +340,6 @@ class ProjectService:
             width_mm=width_mm,
             pieces=pieces,
             material=material,
-            thickness_mm=thickness_mm,
             wrapping=wrapping,
             comments=comments,
             source_template_id=source_template_id,
@@ -531,10 +526,10 @@ class ProjectService:
                 elif "hdf" in part.part_name.lower():
                     material = "HDF"
                 else:
-                    material = "PLYTA"  # Default for panels
+                    material = "PLYTA 18"  # Default for panels
 
             # Determine category based on material
-            if material == "FRONT":
+            if material and material.upper().startswith("FRONT"):
                 fronty.append(
                     {
                         "seq": seq_symbol,
@@ -543,12 +538,11 @@ class ProjectService:
                         "width": part.width_mm,
                         "height": part.height_mm,
                         "color": cab.front_color,
-                        "thickness": part.thickness_mm,
                         "wrapping": part.wrapping or "",
                         "notes": f"Handle: {cab.handle_type}",
                     }
                 )
-            elif material == "HDF":
+            elif material and material.upper().startswith("HDF"):
                 hdf.append(
                     {
                         "seq": seq_symbol,
@@ -557,7 +551,6 @@ class ProjectService:
                         "width": part.width_mm,
                         "height": part.height_mm,
                         "color": "",
-                        "thickness": part.thickness_mm,
                         "wrapping": part.wrapping or "",
                         "notes": part.comments or "",
                     }
@@ -572,7 +565,7 @@ class ProjectService:
                         "width": part.width_mm,
                         "height": part.height_mm,
                         "color": cab.body_color,
-                        "thickness": part.thickness_mm,
+                        "material": material,
                         "wrapping": part.wrapping or "",
                         "notes": part.comments or "",
                     }

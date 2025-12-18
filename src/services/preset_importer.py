@@ -136,7 +136,7 @@ def import_presets_from_lines(
             )
 
         # Use material based on is_hdf flag
-        material = "HDF" if is_hdf else "PLYTA"
+        material = "HDF" if is_hdf else "PLYTA 18"
 
         svc.add_part(
             cabinet_type_id=existing.id,

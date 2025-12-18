@@ -13,7 +13,6 @@ class CalculatedPart:
     width_mm: int
     pieces: int
     material: str
-    thickness_mm: int
     wrapping: str
     comments: str
 
@@ -51,8 +50,7 @@ class FormulaEngine:
                 height_mm=board_mm,
                 width_mm=width_mm,
                 pieces=1,
-                material="PLYTA",
-                thickness_mm=board_mm,
+                material="PLYTA 18",
                 wrapping="D",
                 comments="",
             )
@@ -65,8 +63,7 @@ class FormulaEngine:
                 height_mm=height_mm - board_mm,  # Height minus bottom rail
                 width_mm=depth_mm,
                 pieces=2,
-                material="PLYTA",
-                thickness_mm=board_mm,
+                material="PLYTA 18",
                 wrapping="DKK",
                 comments="",
             )
@@ -79,8 +76,7 @@ class FormulaEngine:
                 height_mm=board_mm,
                 width_mm=width_mm - 2 * board_mm,  # Width minus side panels
                 pieces=2,
-                material="PLYTA",
-                thickness_mm=board_mm,
+                material="PLYTA 18",
                 wrapping="D",
                 comments="",
             )
@@ -95,8 +91,7 @@ class FormulaEngine:
                     height_mm=shelf_height,
                     width_mm=width_mm - 2 * board_mm,
                     pieces=1,
-                    material="PLYTA",
-                    thickness_mm=board_mm,
+                    material="PLYTA 18",
                     wrapping="K",
                     comments="",
                 )
@@ -112,7 +107,6 @@ class FormulaEngine:
                 width_mm=front_width,
                 pieces=1,
                 material="FRONT",
-                thickness_mm=board_mm,
                 wrapping="DDKK",
                 comments="",
             )
@@ -128,7 +122,6 @@ class FormulaEngine:
                 width_mm=hdf_width,
                 pieces=1,
                 material="HDF",
-                thickness_mm=hdf_mm,
                 wrapping="",
                 comments="",
             )
@@ -159,8 +152,7 @@ class FormulaEngine:
                 height_mm=board_mm,
                 width_mm=width_mm,
                 pieces=2,
-                material="PLYTA",
-                thickness_mm=board_mm,
+                material="PLYTA 18",
                 wrapping="K",
                 comments="",
             )
@@ -173,8 +165,7 @@ class FormulaEngine:
                 height_mm=height_mm - 2 * board_mm,  # Height minus top and bottom rails
                 width_mm=depth_mm,
                 pieces=2,
-                material="PLYTA",
-                thickness_mm=board_mm,
+                material="PLYTA 18",
                 wrapping="DKK",
                 comments=f"pcv {edge_body_mm} frez na hdf {groove_pos} od przodu gł.{groove_depth}",
             )
@@ -187,8 +178,7 @@ class FormulaEngine:
                 height_mm=board_mm,
                 width_mm=width_mm - 2 * board_mm,
                 pieces=1,
-                material="PLYTA",
-                thickness_mm=board_mm,
+                material="PLYTA 18",
                 wrapping="K",
                 comments="",
             )
@@ -204,7 +194,6 @@ class FormulaEngine:
                 width_mm=front_width,
                 pieces=1,
                 material="FRONT",
-                thickness_mm=board_mm,
                 wrapping="DDKK",
                 comments="",
             )
@@ -220,7 +209,6 @@ class FormulaEngine:
                 width_mm=hdf_width,
                 pieces=1,
                 material="HDF",
-                thickness_mm=hdf_mm,
                 wrapping="",
                 comments="",
             )
@@ -258,7 +246,6 @@ class FormulaEngine:
                 width_mm=front_width,
                 pieces=1,
                 material="FRONT",
-                thickness_mm=board_mm,
                 wrapping="DDKK",
                 comments="",
             )
@@ -271,8 +258,7 @@ class FormulaEngine:
                 height_mm=height_mm - board_mm,  # Height minus bottom
                 width_mm=depth_mm,
                 pieces=2,
-                material="PLYTA",
-                thickness_mm=board_mm,
+                material="PLYTA 18",
                 wrapping="DKK",
                 comments="",
             )
@@ -285,8 +271,7 @@ class FormulaEngine:
                 height_mm=board_mm,
                 width_mm=min(bottom_width, width_mm - 2 * board_mm),
                 pieces=1,
-                material="PLYTA",
-                thickness_mm=board_mm,
+                material="PLYTA 18",
                 wrapping="K",
                 comments="",
             )
@@ -300,8 +285,7 @@ class FormulaEngine:
                 height_mm=back_height,
                 width_mm=back_width,
                 pieces=1,
-                material="PLYTA",
-                thickness_mm=board_mm,
+                material="PLYTA 18",
                 wrapping="K",
                 comments="",
             )

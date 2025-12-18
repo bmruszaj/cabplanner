@@ -93,7 +93,6 @@ class TemplateService:
         width_mm: int,
         pieces: int = 1,
         material: Optional[str] = None,
-        thickness_mm: Optional[int] = None,
         wrapping: Optional[str] = None,
         comments: Optional[str] = None,
     ) -> CabinetPart:
@@ -104,7 +103,6 @@ class TemplateService:
             width_mm=width_mm,
             pieces=pieces,
             material=material,
-            thickness_mm=thickness_mm,
             wrapping=wrapping,
             comments=comments,
         )

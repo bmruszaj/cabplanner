@@ -21,7 +21,6 @@ class PartPlan:
     width_mm: int
     pieces: int
     material: str
-    thickness_mm: Optional[int]
     wrapping: Optional[str]
     comments: Optional[str]
 
@@ -168,8 +167,7 @@ class FormulaService:
                 height_mm=H,
                 width_mm=D - t_hdf,  # Assuming back is inset
                 pieces=1,
-                material="PLYTA",
-                thickness_mm=t,
+                material="PLYTA 18",
                 wrapping=None,
                 comments=None,
             ),
@@ -178,8 +176,7 @@ class FormulaService:
                 height_mm=H,
                 width_mm=D - t_hdf,
                 pieces=1,
-                material="PLYTA",
-                thickness_mm=t,
+                material="PLYTA 18",
                 wrapping=None,
                 comments=None,
             ),
@@ -195,8 +192,7 @@ class FormulaService:
                 height_mm=W - 2 * t,
                 width_mm=D - t_hdf,
                 pieces=1,
-                material="PLYTA",
-                thickness_mm=t,
+                material="PLYTA 18",
                 wrapping=None,
                 comments=None,
             ),
@@ -205,8 +201,7 @@ class FormulaService:
                 height_mm=W - 2 * t,
                 width_mm=D - t_hdf,
                 pieces=1,
-                material="PLYTA",
-                thickness_mm=t,
+                material="PLYTA 18",
                 wrapping=None,
                 comments=None,
             ),
@@ -230,8 +225,7 @@ class FormulaService:
                 height_mm=rail_height,
                 width_mm=W - 2 * t,
                 pieces=2,
-                material="PLYTA",
-                thickness_mm=t,
+                material="PLYTA 18",
                 wrapping=None,
                 comments=None,
             )
@@ -262,8 +256,7 @@ class FormulaService:
                     height_mm=W - 2 * t,
                     width_mm=D - shelf_back_clear - t_hdf,
                     pieces=1,
-                    material="PLYTA",
-                    thickness_mm=t,
+                    material="PLYTA 18",
                     wrapping=None,
                     comments=None,
                 )
@@ -291,7 +284,6 @@ class FormulaService:
                 width_mm=W - back_play_w,
                 pieces=1,
                 material="HDF",
-                thickness_mm=t_hdf,
                 wrapping=None,
                 comments=None,
             )
@@ -335,7 +327,6 @@ class FormulaService:
                 width_mm=W - 2 * gaps["side"],
                 pieces=1,
                 material="FRONT",
-                thickness_mm=None,
                 wrapping=None,
                 comments=None,
             )
@@ -356,7 +347,6 @@ class FormulaService:
                 width_mm=W - 2 * gaps["side"],
                 pieces=1,
                 material="FRONT",
-                thickness_mm=None,
                 wrapping=None,
                 comments=None,
             ),
@@ -366,7 +356,6 @@ class FormulaService:
                 width_mm=W - 2 * gaps["side"],
                 pieces=1,
                 material="FRONT",
-                thickness_mm=None,
                 wrapping=None,
                 comments=None,
             ),
@@ -387,7 +376,6 @@ class FormulaService:
                 width_mm=W - 2 * gaps["side"],
                 pieces=1,
                 material="FRONT",
-                thickness_mm=None,
                 wrapping=None,
                 comments=None,
             ),
@@ -397,7 +385,6 @@ class FormulaService:
                 width_mm=W - 2 * gaps["side"],
                 pieces=1,
                 material="FRONT",
-                thickness_mm=None,
                 wrapping=None,
                 comments=None,
             ),
@@ -407,7 +394,6 @@ class FormulaService:
                 width_mm=W - 2 * gaps["side"],
                 pieces=1,
                 material="FRONT",
-                thickness_mm=None,
                 wrapping=None,
                 comments=None,
             ),
@@ -428,7 +414,6 @@ class FormulaService:
                     width_mm=door_width,
                     pieces=1,
                     material="FRONT",
-                    thickness_mm=None,
                     wrapping=None,
                     comments=None,
                 ),
@@ -438,7 +423,6 @@ class FormulaService:
                     width_mm=door_width,
                     pieces=1,
                     material="FRONT",
-                    thickness_mm=None,
                     wrapping=None,
                     comments=None,
                 ),
@@ -452,7 +436,6 @@ class FormulaService:
                     width_mm=W - 2 * gaps["side"],
                     pieces=1,
                     material="FRONT",
-                    thickness_mm=None,
                     wrapping=None,
                     comments=None,
                 )
@@ -473,7 +456,6 @@ class FormulaService:
                     width_mm=W,
                     pieces=1,
                     material="ALU",
-                    thickness_mm=None,
                     wrapping=None,
                     comments="ramka alu",
                 )
