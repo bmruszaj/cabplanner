@@ -13,14 +13,12 @@ from PySide6.QtWidgets import (
     QSpinBox,
     QComboBox,
     QPlainTextEdit,
-    QPushButton,
     QFrame,
     QGroupBox,
 )
-from PySide6.QtCore import Signal, QSize
+from PySide6.QtCore import Signal
 from PySide6.QtGui import QFont
 
-from src.gui.resources.resources import get_icon
 from src.gui.resources.styles import get_theme, PRIMARY
 
 
