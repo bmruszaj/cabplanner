@@ -401,7 +401,11 @@ class PartsForm(QWidget):
 
     def _add_part(self):
         """Add a new part directly to the database."""
-        if not self.cabinet_type and not self.project_cabinet and not hasattr(self, "custom_parts"):
+        if (
+            not self.cabinet_type
+            and not self.project_cabinet
+            and not hasattr(self, "custom_parts")
+        ):
             QMessageBox.warning(self, "Błąd", "Najpierw wybierz szafkę.")
             return
 

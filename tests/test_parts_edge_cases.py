@@ -4,15 +4,10 @@ Tests all boundary conditions, error cases, and exceptional scenarios.
 """
 
 import pytest
-from datetime import datetime, timezone
-from unittest.mock import patch
 
 from src.db_schema.orm_models import (
-    Project,
     ProjectCabinet,
-    ProjectCabinetPart,
 )
-from src.services.project_service import ProjectService
 
 
 class TestPartsEdgeCases:
@@ -170,7 +165,7 @@ class TestPartsEdgeCases:
     ):
         """Test adding part with whitespace-only name"""
         # WHEN: Adding part with whitespace name
-        result = project_service.add_part_to_cabinet(
+        project_service.add_part_to_cabinet(
             cabinet_id=test_cabinet.id,
             part_name="   ",
             width_mm=500,
@@ -188,7 +183,7 @@ class TestPartsEdgeCases:
     def test_add_part_zero_dimensions(self, session, project_service, test_cabinet):
         """Test adding part with zero dimensions"""
         # WHEN: Adding part with zero dimensions
-        result = project_service.add_part_to_cabinet(
+        project_service.add_part_to_cabinet(
             cabinet_id=test_cabinet.id,
             part_name="Zero Part",
             width_mm=0,
@@ -198,12 +193,10 @@ class TestPartsEdgeCases:
         # THEN: Implementation may allow or reject - just verify no crash
         session.refresh(test_cabinet)
 
-    def test_add_part_negative_dimensions(
-        self, session, project_service, test_cabinet
-    ):
+    def test_add_part_negative_dimensions(self, session, project_service, test_cabinet):
         """Test adding part with negative dimensions"""
         # WHEN: Adding part with negative dimensions
-        result = project_service.add_part_to_cabinet(
+        project_service.add_part_to_cabinet(
             cabinet_id=test_cabinet.id,
             part_name="Negative Part",
             width_mm=-500,
@@ -257,7 +250,7 @@ class TestPartsEdgeCases:
     def test_add_part_negative_pieces(self, session, project_service, test_cabinet):
         """Test adding part with negative pieces"""
         # WHEN: Adding part with negative pieces
-        result = project_service.add_part_to_cabinet(
+        project_service.add_part_to_cabinet(
             cabinet_id=test_cabinet.id,
             part_name="Negative Pieces Part",
             width_mm=500,
@@ -303,9 +296,7 @@ class TestPartsEdgeCases:
         # THEN: Should fail gracefully
         assert result is False
 
-    def test_update_part_with_empty_data(
-        self, session, project_service, test_cabinet
-    ):
+    def test_update_part_with_empty_data(self, session, project_service, test_cabinet):
         """Test updating part with empty data dict"""
         # GIVEN: A part exists
         project_service.add_part_to_cabinet(
@@ -356,9 +347,7 @@ class TestPartsEdgeCases:
         session.refresh(part)
         assert part.part_name == "Original Name"
 
-    def test_update_part_name_to_empty(
-        self, session, project_service, test_cabinet
-    ):
+    def test_update_part_name_to_empty(self, session, project_service, test_cabinet):
         """Test updating part name to empty string"""
         # GIVEN: A part exists
         project_service.add_part_to_cabinet(
@@ -371,7 +360,7 @@ class TestPartsEdgeCases:
         part = test_cabinet.parts[0]
 
         # WHEN: Updating name to empty
-        result = project_service.update_part(
+        project_service.update_part(
             part_id=part.id,
             part_data={"part_name": ""},
         )
@@ -478,9 +467,7 @@ class TestPartsEdgeCases:
     # Material and Thickness Edge Cases
     # ============================================================
 
-    def test_add_part_with_null_material(
-        self, session, project_service, test_cabinet
-    ):
+    def test_add_part_with_null_material(self, session, project_service, test_cabinet):
         """Test adding part with null material"""
         # WHEN: Adding part with None material
         result = project_service.add_part_to_cabinet(
@@ -496,9 +483,7 @@ class TestPartsEdgeCases:
         session.refresh(test_cabinet)
         assert test_cabinet.parts[0].material is None
 
-    def test_add_part_with_zero_thickness(
-        self, session, project_service, test_cabinet
-    ):
+    def test_add_part_with_zero_thickness(self, session, project_service, test_cabinet):
         """Test adding part with zero thickness"""
         # WHEN: Adding part with zero thickness
         result = project_service.add_part_to_cabinet(
@@ -519,7 +504,7 @@ class TestPartsEdgeCases:
     ):
         """Test adding part with negative thickness"""
         # WHEN: Adding part with negative thickness
-        result = project_service.add_part_to_cabinet(
+        project_service.add_part_to_cabinet(
             cabinet_id=test_cabinet.id,
             part_name="Negative Thickness Part",
             width_mm=500,
@@ -674,9 +659,7 @@ class TestPartsSourceTracking:
         session.refresh(test_cabinet)
         assert test_cabinet.parts[0].source_template_id == 123
 
-    def test_add_part_with_source_part_id(
-        self, session, project_service, test_cabinet
-    ):
+    def test_add_part_with_source_part_id(self, session, project_service, test_cabinet):
         """Test adding part with source part reference"""
         # WHEN: Adding part with source part ID
         result = project_service.add_part_to_cabinet(

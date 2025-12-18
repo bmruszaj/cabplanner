@@ -6,16 +6,10 @@ Tests parts behavior during cabinet creation, editing, copying, and deletion.
 import pytest
 
 from src.db_schema.orm_models import (
-    Project,
     ProjectCabinet,
     ProjectCabinetPart,
-    CabinetTemplate,
-    CabinetPart,
 )
-from src.services.project_service import ProjectService
 from src.services.formula_service import FormulaService
-from src.services.catalog_service import CatalogService
-from src.services.template_service import TemplateService
 
 
 class TestPartsIntegration:
@@ -363,7 +357,7 @@ class TestPartsIntegration:
         for i in range(3):
             project_service.add_part_to_cabinet(
                 cabinet_id=cabinet.id,
-                part_name=f"Part {i+1}",
+                part_name=f"Part {i + 1}",
                 width_mm=500 + i * 10,
                 height_mm=400 + i * 10,
             )
@@ -372,8 +366,8 @@ class TestPartsIntegration:
         for i in range(2):
             project_service.add_accessory_to_cabinet(
                 cabinet_id=cabinet.id,
-                name=f"Accessory {i+1}",
-                sku=f"ACC-{i+1:03d}",
+                name=f"Accessory {i + 1}",
+                sku=f"ACC-{i + 1:03d}",
                 count=i + 1,
             )
 
@@ -506,7 +500,9 @@ class TestPartsWithCatalogTemplates:
         """Test that template has parts"""
         assert len(template_with_parts.parts) == 5
 
-    def test_adding_part_to_template(self, session, template_service, template_with_parts):
+    def test_adding_part_to_template(
+        self, session, template_service, template_with_parts
+    ):
         """Test adding a part to catalog template"""
         # GIVEN: A template with parts
         initial_count = len(template_with_parts.parts)
@@ -527,7 +523,9 @@ class TestPartsWithCatalogTemplates:
         session.refresh(template_with_parts)
         assert len(template_with_parts.parts) == initial_count + 1
 
-    def test_deleting_template_part(self, session, template_service, template_with_parts):
+    def test_deleting_template_part(
+        self, session, template_service, template_with_parts
+    ):
         """Test deleting a part from catalog template"""
         # GIVEN: A template with parts
         initial_count = len(template_with_parts.parts)

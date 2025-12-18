@@ -4,14 +4,11 @@ Tests basic CRUD operations for cabinet parts.
 """
 
 import pytest
-from datetime import datetime
 
 from src.db_schema.orm_models import (
     ProjectCabinetPart,
     ProjectCabinet,
-    Project,
 )
-from src.services.project_service import ProjectService
 
 
 class TestPartsServiceCRUD:
@@ -46,9 +43,7 @@ class TestPartsServiceCRUD:
         session.commit()
         return cabinet
 
-    def test_add_part_to_cabinet_success(
-        self, session, project_service, test_cabinet
-    ):
+    def test_add_part_to_cabinet_success(self, session, project_service, test_cabinet):
         """Test successfully adding a part to a cabinet"""
         # WHEN: Adding a valid part
         result = project_service.add_part_to_cabinet(
