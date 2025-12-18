@@ -36,7 +36,7 @@ class CatalogWindow(QDialog):
     sig_added_to_project = Signal(
         int, int, int, dict
     )  # cabinet_type_id, project_id, quantity, options
-    sig_catalog_changed = Signal()  # emitted after create/update/delete/duplicate
+    sig_catalog_changed = Signal()  # emitted after create/update/delete
 
     def __init__(
         self,
@@ -114,7 +114,6 @@ class CatalogWindow(QDialog):
         # Manage toolbar
         self.manage_toolbar.sig_new.connect(self._on_new)
         self.manage_toolbar.sig_edit.connect(self._on_edit)
-        self.manage_toolbar.sig_duplicate.connect(self._on_duplicate)
         self.manage_toolbar.sig_delete.connect(self._on_delete)
 
         # Add footer
@@ -240,28 +239,6 @@ class CatalogWindow(QDialog):
         cabinet_type_id = self.browser_widget.current_item_id()
         if cabinet_type_id:
             self._edit_cabinet_type(cabinet_type_id)
-
-    def _on_duplicate(self):
-        """Handle duplicate cabinet type."""
-        cabinet_type_id = self.browser_widget.current_item_id()
-        if not cabinet_type_id:
-            return
-
-        try:
-            duplicated = self.catalog_service.duplicate_type(cabinet_type_id)
-            self.browser_widget.refresh()
-            self.sig_catalog_changed.emit()
-
-            # Show success message
-            QMessageBox.information(
-                self,
-                "Success",
-                f"Cabinet type duplicated successfully as '{duplicated.name}'",
-            )
-        except Exception as e:
-            QMessageBox.critical(
-                self, "Error", f"Failed to duplicate cabinet type: {str(e)}"
-            )
 
     def _on_delete(self):
         """Handle delete cabinet type."""

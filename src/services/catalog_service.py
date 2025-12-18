@@ -203,49 +203,6 @@ class CatalogService:
             # Handle other unexpected errors
             raise ValueError(f"Nie udało się zaktualizować typu szafki: {str(e)}")
 
-    def duplicate_type(self, type_id: int) -> CatalogCabinetType:
-        """Duplicate cabinet type.
-
-        Args:
-            type_id: Cabinet type ID to duplicate
-
-        Returns:
-            Duplicated catalog cabinet type
-        """
-        # Get original cabinet type
-        original = self.cabinet_type_service.get_template(type_id)
-        if not original:
-            raise ValueError(f"Cabinet type {type_id} not found")
-
-        # Calculate dimensions from parts if available
-        if hasattr(original, "parts") and original.parts:
-            max_w = None
-            max_h = None
-            for part in original.parts:
-                if part.width_mm is not None:
-                    max_w = (
-                        int(part.width_mm)
-                        if max_w is None
-                        else max(max_w, int(part.width_mm))
-                    )
-                if part.height_mm is not None:
-                    max_h = (
-                        int(part.height_mm)
-                        if max_h is None
-                        else max(max_h, int(part.height_mm))
-                    )
-        else:
-            # No parts available, use default dimensions
-            pass
-
-        # Create duplicate with modified name
-        duplicate_data = {
-            "kitchen_type": original.kitchen_type,
-            "name": f"{original.name} (Copy)",
-        }
-
-        return self.create_type(duplicate_data)
-
     def delete_type(self, type_id: int) -> bool:
         """Delete cabinet type.
 
