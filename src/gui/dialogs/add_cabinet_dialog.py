@@ -43,7 +43,6 @@ class PartsTableModel(QAbstractTableModel):
             "Wymiary (mm)",
             "Ilość",
             "Materiał",
-            "Grubość",
             "Okleina",
         ]
 
@@ -72,14 +71,11 @@ class PartsTableModel(QAbstractTableModel):
             elif col == 3:
                 return part.get("material", "") or "-"
             elif col == 4:
-                thickness = part.get("thickness_mm", 0)
-                return f"{thickness}mm" if thickness else "-"
-            elif col == 5:
                 return part.get("wrapping", "") or "-"
 
         elif role == Qt.TextAlignmentRole:
             col = index.column()
-            if col in [1, 2, 4]:  # Dimensions, quantity, thickness
+            if col in [1, 2]:  # Dimensions, quantity
                 return Qt.AlignCenter
             return Qt.AlignLeft | Qt.AlignVCenter
 
@@ -221,16 +217,9 @@ class PartEditDialog(QDialog):
 
         # Material type
         self.material_combo = QComboBox()
-        self.material_combo.addItems(["PLYTA", "HDF", "FRONT", "INNE"])
+        self.material_combo.addItems(["PLYTA 12", "PLYTA 16", "PLYTA 18", "HDF", "FRONT", "INNE"])
         self.material_combo.setEditable(True)
         material_layout.addRow("Materiał:", self.material_combo)
-
-        # Thickness
-        self.thickness_spinbox = QSpinBox()
-        self.thickness_spinbox.setRange(0, 100)
-        self.thickness_spinbox.setSuffix(" mm")
-        self.thickness_spinbox.setValue(18)
-        material_layout.addRow("Grubość:", self.thickness_spinbox)
 
         # Wrapping
         self.wrapping_edit = QLineEdit()
@@ -280,7 +269,6 @@ class PartEditDialog(QDialog):
             else:
                 self.material_combo.setCurrentText(material)
 
-        self.thickness_spinbox.setValue(self.part.get("thickness_mm", 0))
         self.wrapping_edit.setText(self.part.get("wrapping", ""))
         self.comments_edit.setPlainText(self.part.get("comments", ""))
 
@@ -299,7 +287,6 @@ class PartEditDialog(QDialog):
             "height_mm": self.height_spinbox.value(),
             "pieces": self.quantity_spinbox.value(),
             "material": self.material_combo.currentText() or None,
-            "thickness_mm": self.thickness_spinbox.value() or None,
             "wrapping": self.wrapping_edit.text().strip() or None,
             "comments": self.comments_edit.toPlainText().strip() or None,
         }
@@ -922,7 +909,6 @@ class AddCabinetDialog(QDialog):
                     width_mm=part_data.get("width_mm", 0),
                     pieces=part_data.get("pieces", 1),
                     material=part_data.get("material"),
-                    thickness_mm=part_data.get("thickness_mm"),
                     wrapping=part_data.get("wrapping"),
                     comments=part_data.get("comments"),
                 )

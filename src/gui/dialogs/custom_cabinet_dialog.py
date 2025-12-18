@@ -42,7 +42,6 @@ class PartsTableModel(QAbstractTableModel):
             "Wymiary (mm)",
             "Ilość",
             "Materiał",
-            "Grubość",
             "Okleina",
         ]
 
@@ -69,14 +68,11 @@ class PartsTableModel(QAbstractTableModel):
             elif col == 3:
                 return part.material or "-"
             elif col == 4:
-                thickness = part.thickness_mm
-                return f"{thickness}mm" if thickness else "-"
-            elif col == 5:
                 return part.wrapping or "-"
 
         elif role == Qt.TextAlignmentRole:
             col = index.column()
-            if col in [1, 2, 4]:  # Dimensions, quantity, thickness
+            if col in [1, 2]:  # Dimensions, quantity
                 return Qt.AlignCenter
             return Qt.AlignLeft | Qt.AlignVCenter
 
@@ -536,7 +532,6 @@ class CustomCabinetDialog(QDialog):
                     "height_mm": part.height_mm,
                     "pieces": part.pieces,
                     "material": part.material,
-                    "thickness_mm": part.thickness_mm,
                     "wrapping": part.wrapping,
                     "comments": part.comments,
                 }
