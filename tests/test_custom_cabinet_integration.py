@@ -57,24 +57,21 @@ class TestCustomCabinetIntegration:
                     "width_mm": 560,
                     "height_mm": 720,
                     "pieces": 1,
-                    "material": "PLYTA",
-                    "thickness_mm": 18,
+                    "material": "PLYTA 18",
                 },
                 {
                     "part_name": "Bok prawy",
                     "width_mm": 560,
                     "height_mm": 720,
                     "pieces": 1,
-                    "material": "PLYTA",
-                    "thickness_mm": 18,
+                    "material": "PLYTA 18",
                 },
                 {
                     "part_name": "Dno",
                     "width_mm": 564,
                     "height_mm": 560,
                     "pieces": 1,
-                    "material": "PLYTA",
-                    "thickness_mm": 18,
+                    "material": "PLYTA 18",
                 },
             ],
         }
@@ -150,8 +147,7 @@ class TestCustomCabinetIntegration:
                     "width_mm": 580,  # Different dimensions
                     "height_mm": 740,
                     "pieces": 2,
-                    "material": "HDF",
-                    "thickness_mm": 12,
+                    "material": "HDF 12",
                 }
             ],
         }

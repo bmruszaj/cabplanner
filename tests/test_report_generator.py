@@ -48,8 +48,7 @@ def sample_project_orm():
             height_mm=720,
             width_mm=500,
             pieces=1,
-            material="PLYTA",
-            thickness_mm=18,
+            material="PLYTA 18",
             wrapping="D",
         ),
         CabinetPart(
@@ -57,8 +56,7 @@ def sample_project_orm():
             height_mm=720,
             width_mm=500,
             pieces=1,
-            material="PLYTA",
-            thickness_mm=18,
+            material="PLYTA 18",
             wrapping="D",
         ),
         CabinetPart(
@@ -66,8 +64,7 @@ def sample_project_orm():
             height_mm=480,
             width_mm=500,
             pieces=2,
-            material="PLYTA",
-            thickness_mm=18,
+            material="PLYTA 18",
             wrapping="D",
         ),
         CabinetPart(
@@ -75,8 +72,7 @@ def sample_project_orm():
             height_mm=700,
             width_mm=596,
             pieces=1,
-            material="FRONT",
-            thickness_mm=16,
+            material="FRONT 16",
             wrapping="DDKK",
         ),
         CabinetPart(
@@ -84,8 +80,7 @@ def sample_project_orm():
             height_mm=715,
             width_mm=580,
             pieces=1,
-            material="HDF",
-            thickness_mm=3,
+            material="HDF 3",
         ),
     ]
     ct.parts = parts
@@ -146,7 +141,7 @@ def test_body_tables_count_and_headers(tmp_path, sample_project_orm):
     """
     Given: a report with derived parts
     When: collecting body tables
-    Then: there are four tables titled FORMATKI, FRONTY, HDF, AKCESORIA
+    Then: there are four tables titled FORMATKI (PLYTA 18), FRONTY, HDF, AKCESORIA
     """
     rg = ReportGenerator()
     output = rg.generate(sample_project_orm, output_dir=str(tmp_path), auto_open=False)
@@ -156,7 +151,7 @@ def test_body_tables_count_and_headers(tmp_path, sample_project_orm):
 
     # Then: there should be exactly four Heading 2 titles in this order
     headings = [p.text for p in doc.paragraphs if p.style.name == "Heading 2"]
-    assert headings == ["FORMATKI", "FRONTY", "HDF", "AKCESORIA"]
+    assert headings == ["FORMATKI (PLYTA 18)", "FRONTY", "HDF", "AKCESORIA"]
 
     # And: the four body tables have the correct column headers
     header_tables = doc.sections[0].header.tables
@@ -164,9 +159,9 @@ def test_body_tables_count_and_headers(tmp_path, sample_project_orm):
     body_tables = [t for t in doc.tables if t not in header_tables + footer_tables]
 
     expected_hdr = [
-        ["Lp.", "Nazwa", "Ilość", "Wymiary (mm)", "Grub.", "Okleina", "Kolor", "Uwagi"],
-        ["Lp.", "Nazwa", "Ilość", "Wymiary (mm)", "Grub.", "Okleina", "Kolor", "Uwagi"],
-        ["Lp.", "Nazwa", "Ilość", "Wymiary (mm)", "Grub.", "Okleina", "Kolor", "Uwagi"],
+        ["Lp.", "Nazwa", "Ilość", "Wymiary (mm)", "Okleina", "Kolor", "Uwagi"],
+        ["Lp.", "Nazwa", "Ilość", "Wymiary (mm)", "Okleina", "Kolor", "Uwagi"],
+        ["Lp.", "Nazwa", "Ilość", "Wymiary (mm)", "Okleina", "Kolor", "Uwagi"],
         ["Lp.", "Nazwa akcesorium", "SKU/Kod", "Ilość", "Uwagi"],
     ]
     for table, hdr in zip(body_tables, expected_hdr):
@@ -267,16 +262,14 @@ def project_with_custom_cabinets():
             height_mm=600,
             width_mm=400,
             pieces=2,
-            material="PLYTA",
-            thickness_mm=18,
+            material="PLYTA 18",
         ),
         CabinetPart(
             part_name="Catalog Front",
             height_mm=598,
             width_mm=398,
             pieces=1,
-            material="FRONT",
-            thickness_mm=18,
+            material="FRONT 18",
         ),
     ]
     catalog_template.parts = catalog_parts
@@ -308,8 +301,7 @@ def project_with_custom_cabinets():
             height_mm=720,
             width_mm=560,
             pieces=2,
-            material="PLYTA",
-            thickness_mm=18,
+            material="PLYTA 18",
             comments="Custom side panels",
         ),
         ProjectCabinetPart(
@@ -317,8 +309,7 @@ def project_with_custom_cabinets():
             height_mm=718,
             width_mm=558,
             pieces=1,
-            material="FRONT",
-            thickness_mm=20,
+            material="FRONT 20",
             comments="Custom front door",
         ),
         ProjectCabinetPart(
@@ -326,8 +317,7 @@ def project_with_custom_cabinets():
             height_mm=710,
             width_mm=550,
             pieces=1,
-            material="HDF",
-            thickness_mm=3,
+            material="HDF 3",
             comments="Custom HDF back",
         ),
     ]
@@ -361,7 +351,7 @@ def test_custom_cabinets_in_report(tmp_path, project_with_custom_cabinets):
 
     # Check section headings
     headings = [p.text for p in doc.paragraphs if p.style.name == "Heading 2"]
-    assert "FORMATKI" in headings
+    assert any(h.startswith("FORMATKI") for h in headings)
     assert "FRONTY" in headings
     assert "HDF" in headings
     assert "AKCESORIA" in headings
@@ -407,8 +397,8 @@ def test_custom_cabinets_in_report(tmp_path, project_with_custom_cabinets):
         name = cells[1].text.strip()
         quantity = cells[2].text.strip()
         color = cells[
-            6
-        ].text.strip()  # Color column (index changed: Lp, Nazwa, Ilość, Wymiary, Grub., Okleina, Kolor, Uwagi)
+            5
+        ].text.strip()  # Color column (index: Lp, Nazwa, Ilość, Wymiary, Okleina, Kolor, Uwagi)
 
         if seq == "①" and "Catalog Front" in name:
             catalog_front_found = True

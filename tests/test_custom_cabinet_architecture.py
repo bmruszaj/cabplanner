@@ -258,8 +258,7 @@ class TestCustomCabinetArchitecture:
                     "width_mm": part.width_mm,
                     "height_mm": part.height_mm,
                     "pieces": part.pieces,
-                    "material": "PLYTA",
-                    "thickness_mm": 18,
+                    "material": "PLYTA 18",
                 }
                 for part in calculated_parts
             ],

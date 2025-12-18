@@ -36,7 +36,6 @@ class TestAccessoryIntegration:
                 "height_mm": part.height_mm,
                 "pieces": part.pieces,
                 "material": part.material,
-                "thickness_mm": part.thickness_mm,
                 "wrapping": part.wrapping,
                 "comments": part.comments,
             }
@@ -101,8 +100,7 @@ class TestAccessoryIntegration:
             "width_mm": 580,
             "height_mm": 300,
             "pieces": 1,
-            "material": "PLYTA",
-            "thickness_mm": 18,
+            "material": "PLYTA 18",
             "wrapping": "NO",
             "comments": "Extra shelf added",
         }
@@ -117,7 +115,6 @@ class TestAccessoryIntegration:
             height_mm=new_part_data["height_mm"],
             pieces=new_part_data["pieces"],
             material=new_part_data["material"],
-            thickness_mm=new_part_data["thickness_mm"],
             wrapping=new_part_data["wrapping"],
             comments=new_part_data["comments"],
         )
@@ -172,7 +169,6 @@ class TestAccessoryIntegration:
                 height_mm=part.height_mm,
                 pieces=part.pieces,
                 material=part.material,
-                thickness_mm=part.thickness_mm,
                 wrapping=part.wrapping,
                 comments=part.comments,
                 source_part_id=part.source_part_id,
@@ -273,7 +269,6 @@ class TestAccessoryIntegration:
                     "height_mm": part.height_mm,
                     "pieces": part.pieces,
                     "material": part.material,
-                    "thickness_mm": part.thickness_mm,
                     "wrapping": part.wrapping,
                     "comments": part.comments,
                 }
@@ -348,8 +343,7 @@ class TestAccessoryIntegration:
             width_mm=560,
             height_mm=720,
             pieces=2,
-            material="PLYTA",
-            thickness_mm=18,
+            material="PLYTA 18",
             wrapping="NO",
         )
         session.add(template_part)
@@ -404,8 +398,7 @@ class TestAccessoryIntegration:
             width_mm=560,
             height_mm=720,
             pieces=2,
-            material="PLYTA",
-            thickness_mm=18,
+            material="PLYTA 18",
         )
         session.add(template_part)
 
@@ -490,7 +483,6 @@ class TestAccessoryIntegration:
                     "height_mm": part.height_mm,
                     "pieces": part.pieces,
                     "material": part.material,
-                    "thickness_mm": part.thickness_mm,
                     "wrapping": part.wrapping,
                     "comments": part.comments,
                 }
@@ -625,7 +617,6 @@ def custom_cabinet_with_accessories(
             "height_mm": part.height_mm,
             "pieces": part.pieces,
             "material": part.material,
-            "thickness_mm": part.thickness_mm,
             "wrapping": part.wrapping,
             "comments": part.comments,
         }

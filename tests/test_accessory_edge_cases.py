@@ -458,7 +458,6 @@ def custom_cabinet(session, test_project, project_service, formula_service):
             "height_mm": part.height_mm,
             "pieces": part.pieces,
             "material": part.material,
-            "thickness_mm": part.thickness_mm,
             "wrapping": part.wrapping,
             "comments": part.comments,
         }

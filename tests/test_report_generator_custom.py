@@ -1,15 +1,8 @@
 """
-Test for report generation with custom ca            ProjectCabinetPart(
-                project_cabinet_id=custom_cabinet.id,
-                part_name="Bok prawy",
-                width_mm=560,
-                height_mm=720,
-                pieces=1,
-                material="PLYTA",
-                thickness_mm=18,
-                comments="Panel boczny",
+Test for report generation with custom cabinets.
+
 This test verifies that ReportGenerator properly processes custom cabinets
-that have type_id=NULL and use ProjectCabinetCustomPart for parts storage.
+that have type_id=NULL and use ProjectCabinetPart for parts storage.
 """
 
 import pytest
@@ -57,8 +50,7 @@ class TestReportGeneratorCustomCabinets:
                 width_mm=560,
                 height_mm=720,
                 pieces=1,
-                material="PLYTA",
-                thickness_mm=18,
+                material="PLYTA 18",
                 comments="Panel boczny",
             ),
             ProjectCabinetPart(
@@ -68,7 +60,6 @@ class TestReportGeneratorCustomCabinets:
                 height_mm=718,
                 pieces=1,
                 material="FRONT",
-                thickness_mm=18,
                 comments="Front MDF",
             ),
             ProjectCabinetPart(
@@ -78,7 +69,6 @@ class TestReportGeneratorCustomCabinets:
                 height_mm=712,
                 pieces=1,
                 material="HDF",
-                thickness_mm=3,
                 comments="Tył płyta HDF",
             ),
         ]
@@ -187,8 +177,7 @@ class TestReportGeneratorCustomCabinets:
             width_mm=400,
             height_mm=600,
             pieces=1,
-            material="PLYTA",
-            thickness_mm=18,
+            material="PLYTA 18",
         )
         session.add(custom_part)
         session.commit()

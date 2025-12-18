@@ -464,7 +464,7 @@ class TestPartsEdgeCases:
         assert len(test_cabinet.parts) == 3
 
     # ============================================================
-    # Material and Thickness Edge Cases
+    # Material Edge Cases
     # ============================================================
 
     def test_add_part_with_null_material(self, session, project_service, test_cabinet):
@@ -483,37 +483,41 @@ class TestPartsEdgeCases:
         session.refresh(test_cabinet)
         assert test_cabinet.parts[0].material is None
 
-    def test_add_part_with_zero_thickness(self, session, project_service, test_cabinet):
-        """Test adding part with zero thickness"""
-        # WHEN: Adding part with zero thickness
-        result = project_service.add_part_to_cabinet(
-            cabinet_id=test_cabinet.id,
-            part_name="Zero Thickness Part",
-            width_mm=500,
-            height_mm=400,
-            thickness_mm=0,
-        )
-
-        # THEN: Should handle
-        if result:
-            session.refresh(test_cabinet)
-            assert test_cabinet.parts[0].thickness_mm == 0
-
-    def test_add_part_with_negative_thickness(
+    def test_add_part_with_plyta_12_material(
         self, session, project_service, test_cabinet
     ):
-        """Test adding part with negative thickness"""
-        # WHEN: Adding part with negative thickness
-        project_service.add_part_to_cabinet(
+        """Test adding part with PLYTA 12 material"""
+        # WHEN: Adding part with PLYTA 12 material
+        result = project_service.add_part_to_cabinet(
             cabinet_id=test_cabinet.id,
-            part_name="Negative Thickness Part",
+            part_name="Thin Board Part",
             width_mm=500,
             height_mm=400,
-            thickness_mm=-18,
+            material="PLYTA 12",
         )
 
-        # THEN: Implementation should handle
+        # THEN: Should succeed
+        assert result is True
         session.refresh(test_cabinet)
+        assert test_cabinet.parts[0].material == "PLYTA 12"
+
+    def test_add_part_with_plyta_16_material(
+        self, session, project_service, test_cabinet
+    ):
+        """Test adding part with PLYTA 16 material"""
+        # WHEN: Adding part with PLYTA 16 material
+        result = project_service.add_part_to_cabinet(
+            cabinet_id=test_cabinet.id,
+            part_name="Medium Board Part",
+            width_mm=500,
+            height_mm=400,
+            material="PLYTA 16",
+        )
+
+        # THEN: Should succeed
+        assert result is True
+        session.refresh(test_cabinet)
+        assert test_cabinet.parts[0].material == "PLYTA 16"
 
     # ============================================================
     # Comments Edge Cases

@@ -52,8 +52,7 @@ class TestPartsServiceCRUD:
             width_mm=560,
             height_mm=720,
             pieces=1,
-            material="PLYTA",
-            thickness_mm=18,
+            material="PLYTA 18",
             wrapping="NO",
             comments="Test part",
         )
@@ -70,8 +69,7 @@ class TestPartsServiceCRUD:
         assert part.width_mm == 560
         assert part.height_mm == 720
         assert part.pieces == 1
-        assert part.material == "PLYTA"
-        assert part.thickness_mm == 18
+        assert part.material == "PLYTA 18"
         assert part.wrapping == "NO"
         assert part.comments == "Test part"
 

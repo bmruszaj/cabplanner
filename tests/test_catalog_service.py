@@ -150,21 +150,6 @@ class TestCatalogService:
         with pytest.raises(ValueError, match="nie został znaleziony"):
             catalog_service.update_type(99999, data)
 
-    def test_duplicate_type_basic(self, catalog_service, sample_catalog_templates):
-        """Test duplicating a cabinet type."""
-        original_id = sample_catalog_templates[0].id
-
-        duplicated = catalog_service.duplicate_type(original_id)
-
-        assert duplicated.id != original_id
-        assert duplicated.name.startswith("CatalogD60")  # Should have modified name
-        assert duplicated.kitchen_type == "LOFT"
-
-    def test_duplicate_type_nonexistent(self, catalog_service):
-        """Test duplicating a non-existent cabinet type."""
-        with pytest.raises(ValueError, match="not found"):
-            catalog_service.duplicate_type(99999)
-
     def test_delete_type_existing(self, catalog_service, sample_catalog_templates):
         """Test deleting an existing cabinet type."""
         template_id = sample_catalog_templates[

@@ -55,8 +55,7 @@ class TestPartsIntegration:
                 width_mm=part_data["width_mm"],
                 height_mm=part_data["height_mm"],
                 pieces=1,
-                material="PLYTA",
-                thickness_mm=18,
+                material="PLYTA 18",
             )
 
         session.refresh(template)
@@ -92,8 +91,7 @@ class TestPartsIntegration:
                 width_mm=560,
                 height_mm=720,
                 pieces=1,
-                material="PLYTA",
-                thickness_mm=18,
+                material="PLYTA 18",
             ),
             ProjectCabinetPart(
                 project_cabinet_id=cabinet.id,
@@ -101,8 +99,7 @@ class TestPartsIntegration:
                 width_mm=560,
                 height_mm=720,
                 pieces=1,
-                material="PLYTA",
-                thickness_mm=18,
+                material="PLYTA 18",
             ),
             ProjectCabinetPart(
                 project_cabinet_id=cabinet.id,
@@ -110,8 +107,7 @@ class TestPartsIntegration:
                 width_mm=564,
                 height_mm=540,
                 pieces=2,
-                material="PLYTA",
-                thickness_mm=18,
+                material="PLYTA 18",
             ),
         ]
         for part in parts:
@@ -131,8 +127,7 @@ class TestPartsIntegration:
                 "width_mm": 560,
                 "height_mm": 720,
                 "pieces": 1,
-                "material": "PLYTA",
-                "thickness_mm": 18,
+                "material": "PLYTA 18",
                 "wrapping": "NO",
                 "comments": "",
             },
@@ -141,8 +136,7 @@ class TestPartsIntegration:
                 "width_mm": 560,
                 "height_mm": 720,
                 "pieces": 1,
-                "material": "PLYTA",
-                "thickness_mm": 18,
+                "material": "PLYTA 18",
                 "wrapping": "NO",
                 "comments": "",
             },
@@ -151,8 +145,7 @@ class TestPartsIntegration:
                 "width_mm": 564,
                 "height_mm": 560,
                 "pieces": 1,
-                "material": "PLYTA",
-                "thickness_mm": 18,
+                "material": "PLYTA 18",
                 "wrapping": "NO",
                 "comments": "",
             },
@@ -256,7 +249,6 @@ class TestPartsIntegration:
                 height_mm=part.height_mm,
                 pieces=part.pieces,
                 material=part.material,
-                thickness_mm=part.thickness_mm,
                 wrapping=part.wrapping,
                 comments=part.comments,
                 source_part_id=part.source_part_id,
@@ -489,8 +481,7 @@ class TestPartsWithCatalogTemplates:
                 width_mm=width,
                 height_mm=height,
                 pieces=1,
-                material="PLYTA" if "Plecy" not in name else "HDF",
-                thickness_mm=18 if "Plecy" not in name else 3,
+                material="PLYTA 18" if "Plecy" not in name else "HDF",
             )
 
         session.refresh(template)
@@ -514,8 +505,7 @@ class TestPartsWithCatalogTemplates:
             width_mm=564,
             height_mm=540,
             pieces=1,
-            material="PLYTA",
-            thickness_mm=18,
+            material="PLYTA 18",
         )
 
         # THEN: Part should be added

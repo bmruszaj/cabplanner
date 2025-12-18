@@ -362,16 +362,14 @@ class TestProjectDetailsController:
                     "height_mm": 720,
                     "width_mm": 560,
                     "pieces": 1,
-                    "material": "Płyta laminowana",
-                    "thickness_mm": 18,
+                    "material": "PLYTA 18",
                 },
                 {
                     "part_name": "Bok prawy",
                     "height_mm": 720,
                     "width_mm": 560,
                     "pieces": 1,
-                    "material": "Płyta laminowana",
-                    "thickness_mm": 18,
+                    "material": "PLYTA 18",
                 },
             ],
         }
