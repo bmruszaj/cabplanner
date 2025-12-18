@@ -104,8 +104,22 @@ class ReportGenerator:
                 hdf = self._sort_by_color(hdf)
             # else: keep original order (by LP/sequence)
 
-            # Add sections
-            self._add_parts_section(doc, "FORMATKI", formatki)
+            # Split formatki by material type
+            formatki_plyta_12 = [p for p in formatki if getattr(p, 'material', '') == 'PLYTA 12']
+            formatki_plyta_16 = [p for p in formatki if getattr(p, 'material', '') == 'PLYTA 16']
+            formatki_plyta_18 = [p for p in formatki if getattr(p, 'material', '') == 'PLYTA 18']
+            # Other formatki (legacy or without specific material)
+            formatki_other = [p for p in formatki if getattr(p, 'material', '') not in ('PLYTA 12', 'PLYTA 16', 'PLYTA 18')]
+
+            # Add sections - split FORMATKI by material type
+            if formatki_plyta_12:
+                self._add_parts_section(doc, "FORMATKI (PLYTA 12)", formatki_plyta_12)
+            if formatki_plyta_16:
+                self._add_parts_section(doc, "FORMATKI (PLYTA 16)", formatki_plyta_16)
+            if formatki_plyta_18:
+                self._add_parts_section(doc, "FORMATKI (PLYTA 18)", formatki_plyta_18)
+            if formatki_other:
+                self._add_parts_section(doc, "FORMATKI", formatki_other)
             self._add_parts_section(doc, "FRONTY", fronty)
             self._add_parts_section(doc, "HDF", hdf)
             self._add_parts_section(doc, "AKCESORIA", akcesoria, accessory=True)
@@ -225,8 +239,8 @@ class ReportGenerator:
                     # For custom cabinets, default to PLYTA
                     material = "PLYTA"
 
-            # Determine category based on material
-            if material == "FRONT":
+            # Determine category based on material (use startswith for variants like "FRONT 18", "HDF 3")
+            if material and material.upper().startswith("FRONT"):
                 fronty.append(
                     SimpleNamespace(
                         seq=seq_symbol,
@@ -235,12 +249,11 @@ class ReportGenerator:
                         width=part.width_mm,
                         height=part.height_mm,
                         color=cab.front_color,
-                        thickness=getattr(part, "thickness_mm", None),
                         wrapping=getattr(part, "wrapping", "") or "",
                         notes=f"Handle: {cab.handle_type}",
                     )
                 )
-            elif material == "HDF":
+            elif material and material.upper().startswith("HDF"):
                 hdf.append(
                     SimpleNamespace(
                         seq=seq_symbol,
@@ -249,7 +262,6 @@ class ReportGenerator:
                         width=part.width_mm,
                         height=part.height_mm,
                         color="",
-                        thickness=getattr(part, "thickness_mm", None),
                         wrapping=getattr(part, "wrapping", "") or "",
                         notes=part.comments or "",
                     )
@@ -264,7 +276,7 @@ class ReportGenerator:
                         width=part.width_mm,
                         height=part.height_mm,
                         color=cab.body_color,
-                        thickness=getattr(part, "thickness_mm", None),
+                        material=material,
                         wrapping=getattr(part, "wrapping", "") or "",
                         notes=part.comments or "",
                     )
@@ -366,7 +378,6 @@ class ReportGenerator:
                 "Nazwa",
                 "Ilość",
                 "Wymiary (mm)",
-                "Grub.",
                 "Okleina",
                 "Kolor",
                 "Uwagi",
@@ -391,11 +402,9 @@ class ReportGenerator:
                 cells[1].text = part.name
                 cells[2].text = str(part.quantity)
                 cells[3].text = f"{part.width} x {part.height}"
-                thickness = getattr(part, "thickness", None)
-                cells[4].text = str(thickness) if thickness else ""
-                cells[5].text = getattr(part, "wrapping", "") or ""
-                cells[6].text = getattr(part, "color", "") or ""
-                cells[7].text = getattr(part, "notes", "") or ""
+                cells[4].text = getattr(part, "wrapping", "") or ""
+                cells[5].text = getattr(part, "color", "") or ""
+                cells[6].text = getattr(part, "notes", "") or ""
 
     def _add_notes(self, doc: DocxDocument, project: Project) -> None:
         if getattr(project, "blaty_note", None):
