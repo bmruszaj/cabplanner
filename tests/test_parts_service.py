@@ -1,0 +1,330 @@
+"""
+Unit tests for parts service functionality in ProjectService.
+Tests basic CRUD operations for cabinet parts.
+"""
+
+import pytest
+from datetime import datetime
+
+from src.db_schema.orm_models import (
+    ProjectCabinetPart,
+    ProjectCabinet,
+    Project,
+)
+from src.services.project_service import ProjectService
+
+
+class TestPartsServiceCRUD:
+    """Test basic CRUD operations for cabinet parts"""
+
+    @pytest.fixture
+    def test_project(self, session, project_service):
+        """Create a test project"""
+        return project_service.create_project(
+            name="Parts Test Project",
+            order_number="PARTS-001",
+        )
+
+    @pytest.fixture
+    def test_cabinet(self, session, project_service, test_project, template_service):
+        """Create a test cabinet for parts operations"""
+        template = template_service.create_template(
+            name="TestCabinetTemplate",
+            kitchen_type="MODERN",
+        )
+
+        cabinet = ProjectCabinet(
+            project_id=test_project.id,
+            type_id=template.id,
+            sequence_number=1,
+            quantity=1,
+            body_color="#ffffff",
+            front_color="#000000",
+            handle_type="Standard",
+        )
+        session.add(cabinet)
+        session.commit()
+        return cabinet
+
+    def test_add_part_to_cabinet_success(
+        self, session, project_service, test_cabinet
+    ):
+        """Test successfully adding a part to a cabinet"""
+        # WHEN: Adding a valid part
+        result = project_service.add_part_to_cabinet(
+            cabinet_id=test_cabinet.id,
+            part_name="Bok prawy",
+            width_mm=560,
+            height_mm=720,
+            pieces=1,
+            material="PLYTA",
+            thickness_mm=18,
+            wrapping="NO",
+            comments="Test part",
+        )
+
+        # THEN: Operation should succeed
+        assert result is True
+
+        # AND: Part should be in the cabinet
+        session.refresh(test_cabinet)
+        assert len(test_cabinet.parts) == 1
+
+        part = test_cabinet.parts[0]
+        assert part.part_name == "Bok prawy"
+        assert part.width_mm == 560
+        assert part.height_mm == 720
+        assert part.pieces == 1
+        assert part.material == "PLYTA"
+        assert part.thickness_mm == 18
+        assert part.wrapping == "NO"
+        assert part.comments == "Test part"
+
+    def test_add_part_to_cabinet_minimal_fields(
+        self, session, project_service, test_cabinet
+    ):
+        """Test adding a part with only required fields"""
+        # WHEN: Adding part with minimal required fields
+        result = project_service.add_part_to_cabinet(
+            cabinet_id=test_cabinet.id,
+            part_name="Półka",
+            width_mm=580,
+            height_mm=300,
+        )
+
+        # THEN: Operation should succeed
+        assert result is True
+
+        session.refresh(test_cabinet)
+        assert len(test_cabinet.parts) == 1
+
+        part = test_cabinet.parts[0]
+        assert part.part_name == "Półka"
+        assert part.width_mm == 580
+        assert part.height_mm == 300
+        assert part.pieces == 1  # Default value
+
+    def test_add_multiple_parts_to_cabinet(
+        self, session, project_service, test_cabinet
+    ):
+        """Test adding multiple parts to a cabinet"""
+        # WHEN: Adding multiple parts
+        parts_data = [
+            {"part_name": "Bok prawy", "width_mm": 560, "height_mm": 720},
+            {"part_name": "Bok lewy", "width_mm": 560, "height_mm": 720},
+            {"part_name": "Wieniec górny", "width_mm": 564, "height_mm": 560},
+            {"part_name": "Wieniec dolny", "width_mm": 564, "height_mm": 560},
+            {"part_name": "Plecy", "width_mm": 600, "height_mm": 720},
+        ]
+
+        for part in parts_data:
+            result = project_service.add_part_to_cabinet(
+                cabinet_id=test_cabinet.id, **part
+            )
+            assert result is True
+
+        # THEN: All parts should be in the cabinet
+        session.refresh(test_cabinet)
+        assert len(test_cabinet.parts) == 5
+
+        part_names = [p.part_name for p in test_cabinet.parts]
+        assert "Bok prawy" in part_names
+        assert "Bok lewy" in part_names
+        assert "Wieniec górny" in part_names
+        assert "Wieniec dolny" in part_names
+        assert "Plecy" in part_names
+
+    def test_update_part_success(self, session, project_service, test_cabinet):
+        """Test successfully updating a part"""
+        # GIVEN: A part exists
+        project_service.add_part_to_cabinet(
+            cabinet_id=test_cabinet.id,
+            part_name="Półka",
+            width_mm=580,
+            height_mm=300,
+            pieces=2,
+        )
+        session.refresh(test_cabinet)
+        part = test_cabinet.parts[0]
+        original_id = part.id
+
+        # WHEN: Updating the part
+        result = project_service.update_part(
+            part_id=part.id,
+            part_data={
+                "part_name": "Półka ruchoma",
+                "width_mm": 570,
+                "height_mm": 290,
+                "pieces": 3,
+                "material": "PLYTA",
+                "comments": "Updated shelf",
+            },
+        )
+
+        # THEN: Update should succeed
+        assert result is True
+
+        # AND: Part should be updated
+        session.refresh(test_cabinet)
+        updated_part = test_cabinet.parts[0]
+        assert updated_part.id == original_id
+        assert updated_part.part_name == "Półka ruchoma"
+        assert updated_part.width_mm == 570
+        assert updated_part.height_mm == 290
+        assert updated_part.pieces == 3
+        assert updated_part.material == "PLYTA"
+        assert updated_part.comments == "Updated shelf"
+
+    def test_remove_part_from_cabinet_success(
+        self, session, project_service, test_cabinet
+    ):
+        """Test successfully removing a part from a cabinet"""
+        # GIVEN: A part exists
+        project_service.add_part_to_cabinet(
+            cabinet_id=test_cabinet.id,
+            part_name="Półka do usunięcia",
+            width_mm=580,
+            height_mm=300,
+        )
+        session.refresh(test_cabinet)
+        part_id = test_cabinet.parts[0].id
+
+        # WHEN: Removing the part
+        result = project_service.remove_part_from_cabinet(part_id)
+
+        # THEN: Removal should succeed
+        assert result is True
+
+        # AND: Part should no longer exist
+        session.refresh(test_cabinet)
+        assert len(test_cabinet.parts) == 0
+
+    def test_remove_part_second_time_fails(
+        self, session, project_service, test_cabinet
+    ):
+        """Test removing a part that was already removed"""
+        # GIVEN: A part that was added and removed
+        project_service.add_part_to_cabinet(
+            cabinet_id=test_cabinet.id,
+            part_name="Part",
+            width_mm=100,
+            height_mm=100,
+        )
+        session.refresh(test_cabinet)
+        part_id = test_cabinet.parts[0].id
+
+        project_service.remove_part_from_cabinet(part_id)
+
+        # WHEN: Trying to remove again
+        result = project_service.remove_part_from_cabinet(part_id)
+
+        # THEN: Second removal should fail
+        assert result is False
+
+    def test_get_part_after_adding(self, session, project_service, test_cabinet):
+        """Test that added part can be retrieved"""
+        # GIVEN: A part was added
+        project_service.add_part_to_cabinet(
+            cabinet_id=test_cabinet.id,
+            part_name="Test Part",
+            width_mm=500,
+            height_mm=400,
+            pieces=2,
+        )
+        session.refresh(test_cabinet)
+        part_id = test_cabinet.parts[0].id
+
+        # WHEN: Retrieving the part directly
+        part = session.get(ProjectCabinetPart, part_id)
+
+        # THEN: Part should be correctly retrieved
+        assert part is not None
+        assert part.part_name == "Test Part"
+        assert part.width_mm == 500
+        assert part.height_mm == 400
+        assert part.pieces == 2
+
+    def test_part_has_correct_cabinet_reference(
+        self, session, project_service, test_cabinet
+    ):
+        """Test that part correctly references its parent cabinet"""
+        # GIVEN: A part was added
+        project_service.add_part_to_cabinet(
+            cabinet_id=test_cabinet.id,
+            part_name="Test Part",
+            width_mm=500,
+            height_mm=400,
+        )
+        session.refresh(test_cabinet)
+        part = test_cabinet.parts[0]
+
+        # THEN: Part should reference correct cabinet
+        assert part.project_cabinet_id == test_cabinet.id
+        assert part.project_cabinet is not None
+        assert part.project_cabinet.id == test_cabinet.id
+
+    def test_cabinet_updated_at_changes_on_part_add(
+        self, session, project_service, test_cabinet
+    ):
+        """Test that cabinet's updated_at timestamp changes when adding part"""
+        # GIVEN: Cabinet with known updated_at
+        original_updated_at = test_cabinet.updated_at
+
+        # WHEN: Adding a part
+        project_service.add_part_to_cabinet(
+            cabinet_id=test_cabinet.id,
+            part_name="New Part",
+            width_mm=300,
+            height_mm=200,
+        )
+
+        # THEN: Cabinet's updated_at should change
+        session.refresh(test_cabinet)
+        assert test_cabinet.updated_at >= original_updated_at
+
+    def test_cabinet_updated_at_changes_on_part_update(
+        self, session, project_service, test_cabinet
+    ):
+        """Test that cabinet's updated_at timestamp changes when updating part"""
+        # GIVEN: Cabinet with a part
+        project_service.add_part_to_cabinet(
+            cabinet_id=test_cabinet.id,
+            part_name="Part",
+            width_mm=300,
+            height_mm=200,
+        )
+        session.refresh(test_cabinet)
+        part_id = test_cabinet.parts[0].id
+        original_updated_at = test_cabinet.updated_at
+
+        # WHEN: Updating the part
+        project_service.update_part(
+            part_id=part_id,
+            part_data={"width_mm": 350},
+        )
+
+        # THEN: Cabinet's updated_at should change
+        session.refresh(test_cabinet)
+        assert test_cabinet.updated_at >= original_updated_at
+
+    def test_cabinet_updated_at_changes_on_part_remove(
+        self, session, project_service, test_cabinet
+    ):
+        """Test that cabinet's updated_at timestamp changes when removing part"""
+        # GIVEN: Cabinet with a part
+        project_service.add_part_to_cabinet(
+            cabinet_id=test_cabinet.id,
+            part_name="Part",
+            width_mm=300,
+            height_mm=200,
+        )
+        session.refresh(test_cabinet)
+        part_id = test_cabinet.parts[0].id
+        original_updated_at = test_cabinet.updated_at
+
+        # WHEN: Removing the part
+        project_service.remove_part_from_cabinet(part_id)
+
+        # THEN: Cabinet's updated_at should change
+        session.refresh(test_cabinet)
+        assert test_cabinet.updated_at >= original_updated_at
