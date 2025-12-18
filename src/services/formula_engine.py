@@ -39,7 +39,7 @@ class FormulaEngine:
         board_mm = self._get_constant("defaults.board_mm", 18)
         edge_mm = self._get_constant("defaults.edge_mm", 2)
         self._get_constant("defaults.edge_body_mm", 0.8)
-        hdf_mm = self._get_constant("defaults.hdf_mm", 3)
+        self._get_constant("defaults.hdf_mm", 3)  # reserved for future use
         hdf_clearance = self._get_constant("clearance.hdf_mm", 5)
         front_gap = self._get_constant("lower.front_gap_mm", 7)
 
@@ -139,7 +139,7 @@ class FormulaEngine:
         board_mm = self._get_constant("defaults.board_mm", 18)
         edge_mm = self._get_constant("defaults.edge_mm", 2)
         edge_body_mm = self._get_constant("defaults.edge_body_mm", 0.8)
-        hdf_mm = self._get_constant("defaults.hdf_mm", 3)
+        self._get_constant("defaults.hdf_mm", 3)  # reserved for future use
         hdf_clearance = self._get_constant("clearance.hdf_mm", 5)
         front_gap = self._get_constant("upper.front_gap_mm", 4)
         groove_pos = self._get_constant("upper.groove_pos_mm", 282)
