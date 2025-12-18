@@ -148,7 +148,7 @@ class CollapsiblePartGroup(QGroupBox):
         self.h_spin: QDoubleSpinBox = QDoubleSpinBox()
 
         for spin in (self.w_spin, self.h_spin):
-            spin.setRange(0, 5000)
+            spin.setRange(1, 5000)
             spin.setDecimals(0)
             spin.setSingleStep(10)  # Faster entry with 10mm steps
             spin.setSuffix(" mm")

@@ -187,14 +187,14 @@ class PartEditDialog(QDialog):
         dimensions_layout = QHBoxLayout()
 
         self.width_spinbox = QSpinBox()
-        self.width_spinbox.setRange(0, 5000)
+        self.width_spinbox.setRange(1, 5000)
         self.width_spinbox.setSuffix(" mm")
         self.width_spinbox.setValue(600)
         dimensions_layout.addWidget(QLabel("Szerokość:"))
         dimensions_layout.addWidget(self.width_spinbox)
 
         self.height_spinbox = QSpinBox()
-        self.height_spinbox.setRange(0, 5000)
+        self.height_spinbox.setRange(1, 5000)
         self.height_spinbox.setSuffix(" mm")
         self.height_spinbox.setValue(720)
         dimensions_layout.addWidget(QLabel("Wysokość:"))
@@ -217,7 +217,9 @@ class PartEditDialog(QDialog):
 
         # Material type
         self.material_combo = QComboBox()
-        self.material_combo.addItems(["PLYTA 12", "PLYTA 16", "PLYTA 18", "HDF", "FRONT", "INNE"])
+        self.material_combo.addItems(
+            ["PLYTA 12", "PLYTA 16", "PLYTA 18", "HDF", "FRONT", "INNE"]
+        )
         self.material_combo.setEditable(True)
         material_layout.addRow("Materiał:", self.material_combo)
 
