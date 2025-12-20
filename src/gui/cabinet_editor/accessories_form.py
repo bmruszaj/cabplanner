@@ -22,6 +22,7 @@ from PySide6.QtGui import QFont
 from src.gui.resources.resources import get_icon
 from src.gui.resources.styles import get_theme, PRIMARY
 from src.gui.dialogs.accessory_edit_dialog import AccessoryEditDialog
+from src.services.accessory_service import AccessoryService
 from .pending_changes import PendingChanges
 
 
@@ -98,6 +99,11 @@ class AccessoriesForm(QWidget):
         self.project_cabinet = None
         self.cabinet_type = None
         self._is_dirty = False
+        
+        # Create accessory service from catalog session for catalog integration
+        self.accessory_service = None
+        if catalog_service and hasattr(catalog_service, 'session'):
+            self.accessory_service = AccessoryService(catalog_service.session)
 
         # Pending changes - held in memory until Save button is clicked
         self.pending = PendingChanges()
@@ -263,7 +269,11 @@ class AccessoriesForm(QWidget):
             return
 
         existing_names = self._get_existing_accessory_names()
-        dialog = AccessoryEditDialog(existing_names=existing_names, parent=self)
+        dialog = AccessoryEditDialog(
+            existing_names=existing_names,
+            accessory_service=self.accessory_service,
+            parent=self,
+        )
         if dialog.exec() == QDialog.Accepted:
             try:
                 accessory_data = dialog.accessory_data
@@ -304,7 +314,10 @@ class AccessoriesForm(QWidget):
                 }
                 existing_names = self._get_existing_accessory_names()
                 dialog = AccessoryEditDialog(
-                    accessory=accessory_dict, existing_names=existing_names, parent=self
+                    accessory=accessory_dict,
+                    existing_names=existing_names,
+                    accessory_service=self.accessory_service,
+                    parent=self,
                 )
                 if dialog.exec() == QDialog.Accepted:
                     acc_id = (

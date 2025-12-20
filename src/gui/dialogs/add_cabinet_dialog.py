@@ -541,7 +541,11 @@ class AddCabinetDialog(QDialog):
     def _add_accessory(self):
         """Add a new accessory."""
         existing_names = self._get_existing_accessory_names()
-        dialog = AccessoryEditDialog(existing_names=existing_names, parent=self)
+        dialog = AccessoryEditDialog(
+            existing_names=existing_names,
+            accessory_service=self.accessory_service,
+            parent=self,
+        )
         if dialog.exec() == QDialog.Accepted:
             self.accessories.append(dialog.accessory_data)
             self.accessories_model.update_accessories(self.accessories)
@@ -557,7 +561,10 @@ class AddCabinetDialog(QDialog):
         if accessory:
             existing_names = self._get_existing_accessory_names()
             dialog = AccessoryEditDialog(
-                accessory=accessory, existing_names=existing_names, parent=self
+                accessory=accessory,
+                existing_names=existing_names,
+                accessory_service=self.accessory_service,
+                parent=self,
             )
             if dialog.exec() == QDialog.Accepted:
                 self.accessories[current_row] = dialog.accessory_data
