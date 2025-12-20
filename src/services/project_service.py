@@ -130,6 +130,72 @@ class ProjectService:
         self.db.commit()
         return True
 
+    def duplicate_cabinet(self, cabinet_id: int) -> Optional[ProjectCabinet]:
+        """
+        Duplicate a cabinet instance within the same project.
+
+        Creates a copy of the cabinet with all its parts and accessories,
+        assigns a new sequence number.
+
+        Args:
+            cabinet_id: ID of the cabinet to duplicate
+
+        Returns:
+            The newly created cabinet, or None if source cabinet not found
+        """
+        source = self.get_cabinet(cabinet_id)
+        if not source:
+            return None
+
+        # Get next sequence number for the project
+        next_seq = self.get_next_cabinet_sequence(source.project_id)
+
+        # Create new cabinet with same attributes
+        new_cabinet = ProjectCabinet(
+            project_id=source.project_id,
+            sequence_number=next_seq,
+            type_id=source.type_id,
+            body_color=source.body_color,
+            front_color=source.front_color,
+            handle_type=source.handle_type,
+            quantity=source.quantity,
+        )
+        self.db.add(new_cabinet)
+        self.db.flush()  # Get the ID
+
+        # Duplicate all parts
+        for part in source.parts:
+            new_part = ProjectCabinetPart(
+                project_cabinet_id=new_cabinet.id,
+                part_name=part.part_name,
+                height_mm=part.height_mm,
+                width_mm=part.width_mm,
+                pieces=part.pieces,
+                wrapping=part.wrapping,
+                comments=part.comments,
+                material=part.material,
+                processing_json=part.processing_json,
+                source_template_id=part.source_template_id,
+                source_part_id=part.source_part_id,
+                calc_context_json=part.calc_context_json,
+            )
+            self.db.add(new_part)
+
+        # Duplicate all accessories
+        for acc in source.accessory_snapshots:
+            new_acc = ProjectCabinetAccessorySnapshot(
+                project_cabinet_id=new_cabinet.id,
+                name=acc.name,
+                unit=acc.unit,
+                count=acc.count,
+                source_accessory_id=acc.source_accessory_id,
+            )
+            self.db.add(new_acc)
+
+        self.db.commit()
+        self.db.refresh(new_cabinet)
+        return new_cabinet
+
     def get_next_cabinet_sequence(self, project_id: int) -> int:
         current_max = (
             self.db.scalar(
