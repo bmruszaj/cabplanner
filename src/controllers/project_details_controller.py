@@ -213,6 +213,41 @@ class ProjectDetailsController(QObject):
             logger.exception(f"[CONTROLLER] delete error: {e}")
             self.validation_error.emit(error_msg)
 
+    def on_cabinet_duplicated(self, cabinet_id: int):
+        """
+        Handle cabinet duplication.
+
+        Args:
+            cabinet_id: ID of the cabinet to duplicate
+        """
+        import logging
+
+        logger = logging.getLogger(__name__)
+        logger.debug(f"[CONTROLLER] on_cabinet_duplicated: cabinet_id={cabinet_id}")
+        try:
+            new_cabinet = self.project_service.duplicate_cabinet(cabinet_id)
+            if not new_cabinet:
+                self.validation_error.emit("Nie udało się zduplikować szafy")
+                return
+
+            # Add to local cache
+            self.cabinets.append(new_cabinet)
+            logger.debug(
+                f"[CONTROLLER] cabinet duplicated: new_id={new_cabinet.id}, seq={new_cabinet.sequence_number}"
+            )
+
+            # Re-emit sorted data
+            ordered_cabinets = sort_cabinets(self.cabinets)
+            logger.debug(
+                f"[CONTROLLER] emitting data_loaded with {len(ordered_cabinets)} cabinets"
+            )
+            self.data_loaded.emit(ordered_cabinets)
+
+        except Exception as e:
+            error_msg = f"Błąd podczas duplikowania szafy: {str(e)}"
+            logger.exception(f"[CONTROLLER] duplicate error: {e}")
+            self.validation_error.emit(error_msg)
+
     def _replace_cabinet_in_cache(self, updated_cabinet: ProjectCabinet):
         """Replace cabinet in local cache with updated version."""
         for i, cabinet in enumerate(self.cabinets):
