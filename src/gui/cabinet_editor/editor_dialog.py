@@ -383,180 +383,90 @@ class CabinetEditorDialog(QDialog):
 
         self.reject()
 
-    def _save_current_form(self) -> bool:
-        """Save data from current form."""
-        current_form = self._get_current_form()
-        if not current_form or not current_form.is_valid():
-            return False
+    def _refresh_cabinet_data(self) -> None:
+        """Reload cabinet from database and update form references."""
+        if self.project_instance and self.project_service:
+            refreshed = self.project_service.get_cabinet(self.project_instance.id)
+            if refreshed:
+                self.project_instance = refreshed
+                self.parts_form.project_cabinet = refreshed
+                self.accessories_form.project_cabinet = refreshed
 
+    def _save_all_forms(self) -> bool:
+        """Save all forms that have changes."""
+        if self.project_instance:
+            return self._save_project_instance_forms()
+        elif self.cabinet_type:
+            return self._save_catalog_template_forms()
+        return True
+
+    def _save_project_instance_forms(self) -> bool:
+        """Save all dirty forms for project instance."""
         try:
-            # PROJECT INSTANCE (snapshot) - use project_service
-            if self.project_instance:
-                if current_form == self.instance_form:
-                    values = current_form.values()
-                    updated_cabinet = self.project_service.update_cabinet(
-                        self.project_instance.id, **values
-                    )
-                    if updated_cabinet:
-                        self.project_instance = updated_cabinet
-                        current_form.reset_dirty()
-                        return True
+            # Save instance form
+            if self.instance_form.is_dirty():
+                values = self.instance_form.values()
+                updated = self.project_service.update_cabinet(
+                    self.project_instance.id, **values
+                )
+                if not updated:
+                    self._show_save_error("instancji")
+                    return False
+                self.project_instance = updated
+                self.instance_form.reset_dirty()
 
-                elif current_form == self.parts_form:
-                    parts_changes = current_form.values()
-                    success = self._apply_parts_changes(parts_changes)
-                    if success:
-                        current_form.reset_dirty()
-                        return True
+            # Save parts form
+            if self.parts_form.is_dirty():
+                parts_changes = self.parts_form.values()
+                if not self._apply_parts_changes(parts_changes):
+                    self._show_save_error("części")
+                    return False
+                self._refresh_cabinet_data()
+                self.parts_form.reset_dirty()
 
-                elif current_form == self.accessories_form:
-                    # Apply pending accessories changes
-                    accessories_changes = current_form.values()
-                    success = self._apply_accessories_changes(accessories_changes)
-                    if success:
-                        current_form.reset_dirty()
-                        return True
+            # Save accessories form
+            if self.accessories_form.is_dirty():
+                accessories_changes = self.accessories_form.values()
+                if not self._apply_accessories_changes(accessories_changes):
+                    self._show_save_error("akcesoriów")
+                    return False
+                self._refresh_cabinet_data()
+                self.accessories_form.reset_dirty()
 
-            # CATALOG TEMPLATE - use catalog_service
-            elif self.cabinet_type:
-                if current_form == self.parts_form:
-                    # Parts in catalog templates are managed through template service
-                    # Individual part edits are handled by part dialogs directly
-                    current_form.reset_dirty()
-                    return True
+            return True
 
         except Exception as e:
             QMessageBox.critical(
                 self, "Błąd zapisu", f"Nie udało się zapisać zmian:\n{str(e)}"
             )
+            return False
 
-        return False
-
-    def _save_all_forms(self) -> bool:
-        """Save all forms that have changes."""
-        saved_count = 0
-        total_dirty = 0
-
-        # Simple logic: check what we're editing and use appropriate service
-        forms_to_save = []
-
-        # PROJECT INSTANCE (snapshot) - use project_service
-        if self.project_instance:
-            if self.instance_form.is_dirty():
-                forms_to_save.append((self.instance_form, "instance"))
+    def _save_catalog_template_forms(self) -> bool:
+        """Save all dirty forms for catalog template."""
+        try:
+            # Parts are managed through individual dialogs
             if self.parts_form.is_dirty():
-                forms_to_save.append((self.parts_form, "parts"))
+                self.parts_form.reset_dirty()
+
+            # Save accessories
             if self.accessories_form.is_dirty():
-                forms_to_save.append((self.accessories_form, "accessories"))
+                accessories_changes = self.accessories_form.values()
+                if not self._apply_template_accessories_changes(accessories_changes):
+                    self._show_save_error("akcesoriów")
+                    return False
+                self.accessories_form.reset_dirty()
 
-        # CATALOG TEMPLATE - use catalog_service
-        elif self.cabinet_type:
-            if self.parts_form.is_dirty():
-                forms_to_save.append((self.parts_form, "parts"))
-            if self.accessories_form.is_dirty():
-                forms_to_save.append((self.accessories_form, "accessories"))
+            return True
 
-        for form, form_type in forms_to_save:
-            total_dirty += 1
-            try:
-                # PROJECT INSTANCE saves
-                if self.project_instance:
-                    if form_type == "instance":
-                        values = form.values()
-                        updated_cabinet = self.project_service.update_cabinet(
-                            self.project_instance.id, **values
-                        )
-                        if updated_cabinet:
-                            self.project_instance = updated_cabinet
-                            form.reset_dirty()
-                            saved_count += 1
+        except Exception as e:
+            QMessageBox.critical(
+                self, "Błąd zapisu", f"Nie udało się zapisać zmian:\n{str(e)}"
+            )
+            return False
 
-                    elif form_type == "parts":
-                        parts_changes = form.values()
-                        success = self._apply_parts_changes(parts_changes)
-                        if success:
-                            # Reload cabinet from database to get updated parts with IDs
-                            refreshed_cabinet = self.project_service.get_cabinet(
-                                self.project_instance.id
-                            )
-                            if refreshed_cabinet:
-                                self.project_instance = refreshed_cabinet
-                                # Update form's project_cabinet reference
-                                form.project_cabinet = refreshed_cabinet
-                            form.reset_dirty()
-                            saved_count += 1
-                        else:
-                            QMessageBox.critical(
-                                self, "Błąd zapisu", "Nie udało się zapisać części."
-                            )
-                            return False
-
-                    elif form_type == "accessories":
-                        # Apply pending accessories changes
-                        accessories_changes = form.values()
-                        success = self._apply_accessories_changes(accessories_changes)
-                        if success:
-                            # Reload cabinet from database to get updated accessories with IDs
-                            refreshed_cabinet = self.project_service.get_cabinet(
-                                self.project_instance.id
-                            )
-                            if refreshed_cabinet:
-                                self.project_instance = refreshed_cabinet
-                                # Update form's project_cabinet reference
-                                form.project_cabinet = refreshed_cabinet
-                            form.reset_dirty()
-                            saved_count += 1
-                        else:
-                            QMessageBox.critical(
-                                self, "Błąd zapisu", "Nie udało się zapisać akcesoriów."
-                            )
-                            return False
-
-                # CATALOG TEMPLATE saves
-                elif self.cabinet_type:
-                    if form_type == "type":
-                        values = form.values()
-                        success = self.catalog_service.update_type(
-                            self.cabinet_type.id, values
-                        )
-                        if success:
-                            for key, value in values.items():
-                                if hasattr(self.cabinet_type, key):
-                                    setattr(self.cabinet_type, key, value)
-                            form.reset_dirty()
-                            saved_count += 1
-
-                    elif form_type == "parts":
-                        # Template parts managed through individual dialogs
-                        form.reset_dirty()
-                        saved_count += 1
-
-                    elif form_type == "accessories":
-                        # Apply pending accessories changes for catalog template
-                        accessories_changes = form.values()
-                        success = self._apply_template_accessories_changes(
-                            accessories_changes
-                        )
-                        if success:
-                            form.reset_dirty()
-                            saved_count += 1
-                        else:
-                            QMessageBox.critical(
-                                self,
-                                "Błąd zapisu",
-                                "Nie udało się zapisać akcesoriów.",
-                            )
-                            return False
-
-            except Exception as e:
-                QMessageBox.critical(
-                    self,
-                    "Błąd zapisu",
-                    f"Nie udało się zapisać zmian w zakładce {form_type}:\n{str(e)}",
-                )
-                return False
-
-        return saved_count == total_dirty
+    def _show_save_error(self, item_type: str) -> None:
+        """Show save error message."""
+        QMessageBox.critical(self, "Błąd zapisu", f"Nie udało się zapisać {item_type}.")
 
     def load_instance(self, cabinet_type, project_instance):
         """Load data for editing project instance."""
@@ -689,7 +599,9 @@ class CabinetEditorDialog(QDialog):
                         return False
 
                 # Apply parts changes (edits)
-                for part_id, part_data in parts_changes.get("parts_changes", {}).items():
+                for part_id, part_data in parts_changes.get(
+                    "parts_changes", {}
+                ).items():
                     success = self.project_service.update_part(part_id, part_data)
                     if not success:
                         return False
