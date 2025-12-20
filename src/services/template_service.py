@@ -144,23 +144,23 @@ class TemplateService:
         self.db.refresh(link)
         return link
 
-    def add_accessory_by_sku(
+    def add_accessory_by_name(
         self,
         *,
         cabinet_type_id: int,
         name: str,
-        sku: str,
+        unit: str = "szt",
         count: int = 1,
     ) -> CabinetTemplateAccessory:
         """
-        Add an accessory to a cabinet template by SKU.
+        Add an accessory to a cabinet template by name.
         Creates the accessory if it doesn't exist.
         """
         # Find or create accessory
-        stmt = select(Accessory).filter_by(sku=sku)
+        stmt = select(Accessory).filter_by(name=name)
         accessory = self.db.scalars(stmt).first()
         if not accessory:
-            accessory = Accessory(name=name, sku=sku)
+            accessory = Accessory(name=name, unit=unit)
             self.db.add(accessory)
             self.db.flush()
 

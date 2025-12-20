@@ -196,13 +196,13 @@ class TestPartsIntegration:
         project_service.add_accessory_to_cabinet(
             cabinet_id=custom_cabinet_with_parts.id,
             name="Hinge",
-            sku="HNG-001",
+            unit="szt",
             count=4,
         )
         project_service.add_accessory_to_cabinet(
             cabinet_id=custom_cabinet_with_parts.id,
             name="Handle",
-            sku="HDL-001",
+            unit="kpl",
             count=1,
         )
 
@@ -359,7 +359,7 @@ class TestPartsIntegration:
             project_service.add_accessory_to_cabinet(
                 cabinet_id=cabinet.id,
                 name=f"Accessory {i + 1}",
-                sku=f"ACC-{i + 1:03d}",
+                unit="szt",
                 count=i + 1,
             )
 

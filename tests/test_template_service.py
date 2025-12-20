@@ -136,15 +136,15 @@ def test_get_nonexistent_returns_none(service):
 # -- Accessory tests --
 
 
-def test_add_accessory_by_sku_creates_accessory(service):
+def test_add_accessory_by_name_creates_accessory(service):
     # GIVEN a cabinet template
     ct = service.create_template(kitchen_type="LOFT", name="AccTestCabinet1")
 
-    # WHEN adding an accessory by SKU that doesn't exist yet
-    link = service.add_accessory_by_sku(
+    # WHEN adding an accessory by name that doesn't exist yet
+    link = service.add_accessory_by_name(
         cabinet_type_id=ct.id,
         name="Uchwyt Złoty",
-        sku="UCH-GOLD-001",
+        unit="szt",
         count=2,
     )
 
@@ -155,18 +155,18 @@ def test_add_accessory_by_sku_creates_accessory(service):
 
     # AND the accessory should have been created
     assert link.accessory.name == "Uchwyt Złoty"
-    assert link.accessory.sku == "UCH-GOLD-001"
+    assert link.accessory.unit == "szt"
 
 
-def test_add_accessory_by_sku_uses_existing_accessory(service):
+def test_add_accessory_by_name_uses_existing_accessory(service):
     # GIVEN a cabinet template and an existing accessory
     ct = service.create_template(kitchen_type="LOFT", name="AccTestCabinet2")
 
     # First create an accessory
-    first_link = service.add_accessory_by_sku(
+    first_link = service.add_accessory_by_name(
         cabinet_type_id=ct.id,
         name="Handle A",
-        sku="HANDLE-A-001",
+        unit="kpl",
         count=1,
     )
     first_accessory_id = first_link.accessory.id
@@ -174,11 +174,11 @@ def test_add_accessory_by_sku_uses_existing_accessory(service):
     # Create another cabinet template
     ct2 = service.create_template(kitchen_type="LOFT", name="AccTestCabinet3")
 
-    # WHEN adding an accessory with the same SKU to another cabinet
-    second_link = service.add_accessory_by_sku(
+    # WHEN adding an accessory with the same name to another cabinet
+    second_link = service.add_accessory_by_name(
         cabinet_type_id=ct2.id,
-        name="Handle A Different Name",  # Name may differ
-        sku="HANDLE-A-001",
+        name="Handle A",  # Same name
+        unit="kpl",
         count=3,
     )
 
@@ -191,11 +191,11 @@ def test_list_accessories_for_cabinet_template(service):
     # GIVEN a cabinet template with some accessories
     ct = service.create_template(kitchen_type="WINO", name="AccTestCabinet4")
 
-    service.add_accessory_by_sku(
-        cabinet_type_id=ct.id, name="Prowadnica", sku="PROW-001", count=4
+    service.add_accessory_by_name(
+        cabinet_type_id=ct.id, name="Prowadnica", unit="szt", count=4
     )
-    service.add_accessory_by_sku(
-        cabinet_type_id=ct.id, name="Zawias", sku="ZAW-001", count=2
+    service.add_accessory_by_name(
+        cabinet_type_id=ct.id, name="Zawias", unit="kpl", count=2
     )
 
     # WHEN listing accessories
@@ -203,15 +203,15 @@ def test_list_accessories_for_cabinet_template(service):
 
     # THEN we should have both accessories
     assert len(accessories) == 2
-    skus = {a.accessory.sku for a in accessories}
-    assert skus == {"PROW-001", "ZAW-001"}
+    names = {a.accessory.name for a in accessories}
+    assert names == {"Prowadnica", "Zawias"}
 
 
 def test_delete_accessory_from_cabinet_template(service):
     # GIVEN a cabinet template with an accessory
     ct = service.create_template(kitchen_type="PARIS", name="AccTestCabinet5")
-    link = service.add_accessory_by_sku(
-        cabinet_type_id=ct.id, name="Uchwyt", sku="UCH-DEL-001", count=1
+    link = service.add_accessory_by_name(
+        cabinet_type_id=ct.id, name="Uchwyt", unit="szt", count=1
     )
     accessory_id = link.accessory.id
 
@@ -229,13 +229,13 @@ def test_delete_accessory_from_cabinet_template(service):
 def test_update_accessory_count(service):
     # GIVEN a cabinet template with an accessory
     ct = service.create_template(kitchen_type="LOFT", name="AccTestCabinet6")
-    service.add_accessory_by_sku(
-        cabinet_type_id=ct.id, name="Rączka", sku="RACZ-UPD-001", count=1
+    service.add_accessory_by_name(
+        cabinet_type_id=ct.id, name="Rączka", unit="szt", count=1
     )
 
     # WHEN adding the same accessory again with a different count
-    updated_link = service.add_accessory_by_sku(
-        cabinet_type_id=ct.id, name="Rączka", sku="RACZ-UPD-001", count=5
+    updated_link = service.add_accessory_by_name(
+        cabinet_type_id=ct.id, name="Rączka", unit="szt", count=5
     )
 
     # THEN the count should be updated

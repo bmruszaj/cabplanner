@@ -13,12 +13,10 @@ from PySide6.QtWidgets import (
     QLabel,
     QLineEdit,
     QComboBox,
-    QSpinBox,
     QPushButton,
     QGroupBox,
     QTabWidget,
     QMessageBox,
-    QDialogButtonBox,
     QTextEdit,
     QTableView,
     QHeaderView,
@@ -30,6 +28,8 @@ from PySide6.QtGui import QFont
 
 from src.gui.resources.resources import get_icon
 from src.gui.resources.styles import get_theme, PRIMARY
+from src.gui.dialogs.accessory_edit_dialog import AccessoryEditDialog
+from src.gui.dialogs.part_edit_dialog import PartEditDialog
 
 
 class PartsTableModel(QAbstractTableModel):
@@ -103,7 +103,7 @@ class AccessoriesTableModel(QAbstractTableModel):
     def __init__(self, accessories, parent=None):
         super().__init__(parent)
         self.accessories = accessories
-        self.headers = ["Nazwa", "SKU", "Ilość"]
+        self.headers = ["Nazwa", "Ilość", "Jedn."]
 
     def rowCount(self, parent=QModelIndex()):
         return len(self.accessories)
@@ -122,13 +122,14 @@ class AccessoriesTableModel(QAbstractTableModel):
             if col == 0:
                 return accessory.get("name", "")
             elif col == 1:
-                return accessory.get("sku", "")
-            elif col == 2:
                 return accessory.get("count", 1)
+            elif col == 2:
+                unit = accessory.get("unit", "szt")
+                return "szt." if unit == "szt" else "kpl."
 
         elif role == Qt.TextAlignmentRole:
             col = index.column()
-            if col == 2:  # Quantity
+            if col in (1, 2):  # Quantity and Unit
                 return Qt.AlignCenter
             return Qt.AlignLeft | Qt.AlignVCenter
 
@@ -148,246 +149,6 @@ class AccessoriesTableModel(QAbstractTableModel):
         if 0 <= row < len(self.accessories):
             return self.accessories[row]
         return None
-
-
-class PartEditDialog(QDialog):
-    """Dialog for editing a cabinet part"""
-
-    def __init__(self, part=None, parent=None):
-        super().__init__(parent)
-        self.part = part
-        self.is_edit_mode = part is not None
-
-        self.setWindowTitle("Edytuj część" if self.is_edit_mode else "Nowa część")
-        self.resize(400, 500)
-
-        self._setup_ui()
-        self._setup_connections()
-
-        if self.is_edit_mode:
-            self._load_part_data()
-
-    def _setup_ui(self):
-        """Setup the user interface."""
-        layout = QVBoxLayout(self)
-        layout.setSpacing(16)
-        layout.setContentsMargins(16, 16, 16, 16)
-
-        # Basic information group
-        basic_group = QGroupBox("Podstawowe informacje")
-        basic_layout = QFormLayout(basic_group)
-        basic_layout.setSpacing(12)
-
-        # Part name
-        self.name_edit = QLineEdit()
-        self.name_edit.setPlaceholderText("np. bok lewy, front, półka...")
-        basic_layout.addRow("Nazwa części*:", self.name_edit)
-
-        # Dimensions
-        dimensions_layout = QHBoxLayout()
-
-        self.width_spinbox = QSpinBox()
-        self.width_spinbox.setRange(1, 5000)
-        self.width_spinbox.setSuffix(" mm")
-        self.width_spinbox.setValue(600)
-        dimensions_layout.addWidget(QLabel("Szerokość:"))
-        dimensions_layout.addWidget(self.width_spinbox)
-
-        self.height_spinbox = QSpinBox()
-        self.height_spinbox.setRange(1, 5000)
-        self.height_spinbox.setSuffix(" mm")
-        self.height_spinbox.setValue(720)
-        dimensions_layout.addWidget(QLabel("Wysokość:"))
-        dimensions_layout.addWidget(self.height_spinbox)
-
-        basic_layout.addRow("Wymiary:", dimensions_layout)
-
-        # Quantity
-        self.quantity_spinbox = QSpinBox()
-        self.quantity_spinbox.setRange(1, 100)
-        self.quantity_spinbox.setValue(1)
-        basic_layout.addRow("Ilość:", self.quantity_spinbox)
-
-        layout.addWidget(basic_group)
-
-        # Material information group
-        material_group = QGroupBox("Informacje o materiale")
-        material_layout = QFormLayout(material_group)
-        material_layout.setSpacing(12)
-
-        # Material type
-        self.material_combo = QComboBox()
-        self.material_combo.addItems(
-            ["PLYTA 12", "PLYTA 16", "PLYTA 18", "HDF", "FRONT", "INNE"]
-        )
-        self.material_combo.setEditable(True)
-        material_layout.addRow("Materiał:", self.material_combo)
-
-        # Wrapping
-        self.wrapping_edit = QLineEdit()
-        self.wrapping_edit.setPlaceholderText("np. D, K, DDKK...")
-        material_layout.addRow("Okleina:", self.wrapping_edit)
-
-        layout.addWidget(material_group)
-
-        # Comments group
-        comments_group = QGroupBox("Uwagi")
-        comments_layout = QVBoxLayout(comments_group)
-
-        self.comments_edit = QTextEdit()
-        self.comments_edit.setMaximumHeight(80)
-        self.comments_edit.setPlaceholderText("Dodatkowe uwagi dotyczące części...")
-        comments_layout.addWidget(self.comments_edit)
-
-        layout.addWidget(comments_group)
-
-        # Button box
-        self.button_box = QDialogButtonBox(
-            QDialogButtonBox.Save | QDialogButtonBox.Cancel
-        )
-        self.button_box.accepted.connect(self.accept)
-        self.button_box.rejected.connect(self.reject)
-        layout.addWidget(self.button_box)
-
-    def _setup_connections(self):
-        """Setup signal connections."""
-        pass
-
-    def _load_part_data(self):
-        """Load part data into the form."""
-        if not self.part:
-            return
-
-        self.name_edit.setText(self.part.get("part_name", ""))
-        self.width_spinbox.setValue(self.part.get("width_mm", 0))
-        self.height_spinbox.setValue(self.part.get("height_mm", 0))
-        self.quantity_spinbox.setValue(self.part.get("pieces", 1))
-
-        material = self.part.get("material", "")
-        if material:
-            index = self.material_combo.findText(material)
-            if index >= 0:
-                self.material_combo.setCurrentIndex(index)
-            else:
-                self.material_combo.setCurrentText(material)
-
-        self.wrapping_edit.setText(self.part.get("wrapping", ""))
-        self.comments_edit.setPlainText(self.part.get("comments", ""))
-
-    def accept(self):
-        """Handle dialog acceptance."""
-        name = self.name_edit.text().strip()
-        if not name:
-            QMessageBox.warning(self, "Błąd", "Nazwa części jest wymagana.")
-            self.name_edit.setFocus()
-            return
-
-        # Create part data
-        self.part_data = {
-            "part_name": name,
-            "width_mm": self.width_spinbox.value(),
-            "height_mm": self.height_spinbox.value(),
-            "pieces": self.quantity_spinbox.value(),
-            "material": self.material_combo.currentText() or None,
-            "wrapping": self.wrapping_edit.text().strip() or None,
-            "comments": self.comments_edit.toPlainText().strip() or None,
-        }
-
-        super().accept()
-
-
-class AccessoryEditDialog(QDialog):
-    """Dialog for editing an accessory"""
-
-    def __init__(self, accessory=None, parent=None):
-        super().__init__(parent)
-        self.accessory = accessory
-        self.is_edit_mode = accessory is not None
-
-        self.setWindowTitle(
-            "Edytuj akcesorium" if self.is_edit_mode else "Nowe akcesorium"
-        )
-        self.resize(400, 300)
-
-        self._setup_ui()
-        self._setup_connections()
-
-        if self.is_edit_mode:
-            self._load_accessory_data()
-
-    def _setup_ui(self):
-        """Setup the user interface."""
-        layout = QVBoxLayout(self)
-        layout.setSpacing(16)
-        layout.setContentsMargins(16, 16, 16, 16)
-
-        # Accessory information group
-        accessory_group = QGroupBox("Informacje o akcesorium")
-        accessory_layout = QFormLayout(accessory_group)
-        accessory_layout.setSpacing(12)
-
-        # Accessory name
-        self.name_edit = QLineEdit()
-        self.name_edit.setPlaceholderText("np. Uchwyt standardowy...")
-        accessory_layout.addRow("Nazwa akcesorium*:", self.name_edit)
-
-        # SKU
-        self.sku_edit = QLineEdit()
-        self.sku_edit.setPlaceholderText("np. UCH-001...")
-        accessory_layout.addRow("SKU*:", self.sku_edit)
-
-        # Quantity
-        self.quantity_spinbox = QSpinBox()
-        self.quantity_spinbox.setRange(1, 100)
-        self.quantity_spinbox.setValue(1)
-        accessory_layout.addRow("Ilość:", self.quantity_spinbox)
-
-        layout.addWidget(accessory_group)
-
-        # Button box
-        self.button_box = QDialogButtonBox(
-            QDialogButtonBox.Save | QDialogButtonBox.Cancel
-        )
-        self.button_box.accepted.connect(self.accept)
-        self.button_box.rejected.connect(self.reject)
-        layout.addWidget(self.button_box)
-
-    def _setup_connections(self):
-        """Setup signal connections."""
-        pass
-
-    def _load_accessory_data(self):
-        """Load accessory data into the form."""
-        if not self.accessory:
-            return
-
-        self.name_edit.setText(self.accessory.get("name", ""))
-        self.sku_edit.setText(self.accessory.get("sku", ""))
-        self.quantity_spinbox.setValue(self.accessory.get("count", 1))
-
-    def accept(self):
-        """Handle dialog acceptance."""
-        name = self.name_edit.text().strip()
-        sku = self.sku_edit.text().strip()
-
-        if not name:
-            QMessageBox.warning(self, "Błąd", "Nazwa akcesorium jest wymagana.")
-            self.name_edit.setFocus()
-            return
-
-        if not sku:
-            QMessageBox.warning(self, "Błąd", "SKU jest wymagane.")
-            self.sku_edit.setFocus()
-            return
-
-        # Create accessory data
-        self.accessory_data = {
-            "name": name,
-            "sku": sku,
-            "count": self.quantity_spinbox.value(),
-        }
-
-        super().accept()
 
 
 class AddCabinetDialog(QDialog):
@@ -773,9 +534,14 @@ class AddCabinetDialog(QDialog):
                 self.parts_model.update_parts(self.parts)
                 self._update_parts_info()
 
+    def _get_existing_accessory_names(self):
+        """Get list of existing accessory names for uniqueness validation."""
+        return [acc.get("name", "") for acc in self.accessories if acc.get("name")]
+
     def _add_accessory(self):
         """Add a new accessory."""
-        dialog = AccessoryEditDialog(parent=self)
+        existing_names = self._get_existing_accessory_names()
+        dialog = AccessoryEditDialog(existing_names=existing_names, parent=self)
         if dialog.exec() == QDialog.Accepted:
             self.accessories.append(dialog.accessory_data)
             self.accessories_model.update_accessories(self.accessories)
@@ -789,7 +555,10 @@ class AddCabinetDialog(QDialog):
 
         accessory = self.accessories_model.get_accessory_at_row(current_row)
         if accessory:
-            dialog = AccessoryEditDialog(accessory, parent=self)
+            existing_names = self._get_existing_accessory_names()
+            dialog = AccessoryEditDialog(
+                accessory=accessory, existing_names=existing_names, parent=self
+            )
             if dialog.exec() == QDialog.Accepted:
                 self.accessories[current_row] = dialog.accessory_data
                 self.accessories_model.update_accessories(self.accessories)
@@ -917,10 +686,10 @@ class AddCabinetDialog(QDialog):
 
             # Add accessories to cabinet template
             for accessory_data in self.accessories:
-                self.catalog_service.cabinet_type_service.add_accessory_by_sku(
+                self.catalog_service.cabinet_type_service.add_accessory_by_name(
                     cabinet_type_id=cabinet_type.id,
                     name=accessory_data["name"],
-                    sku=accessory_data["sku"],
+                    unit=accessory_data.get("unit", "szt"),
                     count=accessory_data.get("count", 1),
                 )
 

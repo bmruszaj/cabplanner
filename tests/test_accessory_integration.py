@@ -43,8 +43,8 @@ class TestAccessoryIntegration:
         ]
 
         initial_accessories = [
-            {"name": "Hinge", "sku": "HNG-001", "count": 4},
-            {"name": "Handle", "sku": "HDL-001", "count": 1},
+            {"name": "Hinge", "unit": "szt", "count": 4},
+            {"name": "Handle", "unit": "kpl", "count": 1},
         ]
 
         calc_context = {
@@ -81,7 +81,7 @@ class TestAccessoryIntegration:
         assert "Handle" in accessory_names
 
         hinge = next(acc for acc in cabinet.accessory_snapshots if acc.name == "Hinge")
-        assert hinge.sku == "HNG-001"
+        assert hinge.unit == "szt"
         assert hinge.count == 4
 
     def test_accessories_persist_through_cabinet_editing(
@@ -180,7 +180,7 @@ class TestAccessoryIntegration:
             project_service.add_accessory_to_cabinet(
                 cabinet_id=copied_cabinet.id,
                 name=accessory.name,
-                sku=accessory.sku,
+                unit=accessory.unit,
                 count=accessory.count,
             )
 
@@ -192,10 +192,11 @@ class TestAccessoryIntegration:
 
         # Verify accessory details match
         copied_accessory_data = [
-            (acc.name, acc.sku, acc.count) for acc in copied_cabinet.accessory_snapshots
+            (acc.name, acc.unit, acc.count)
+            for acc in copied_cabinet.accessory_snapshots
         ]
         original_accessory_data = [
-            (acc.name, acc.sku, acc.count) for acc in original_accessories
+            (acc.name, acc.unit, acc.count) for acc in original_accessories
         ]
 
         # Sort both lists for comparison (order might differ)
@@ -301,14 +302,14 @@ class TestAccessoryIntegration:
 
         # WHEN: Adding different accessories to each cabinet
         accessories_data = [
-            ("Cabinet 1 Hinge", "C1-HNG-001", 4),
-            ("Cabinet 2 Handle", "C2-HDL-001", 2),
-            ("Cabinet 3 Drawer Slide", "C3-DRW-001", 6),
+            ("Cabinet 1 Hinge", "szt", 4),
+            ("Cabinet 2 Handle", "kpl", 2),
+            ("Cabinet 3 Drawer Slide", "szt", 6),
         ]
 
-        for i, (name, sku, count) in enumerate(accessories_data):
+        for i, (name, unit, count) in enumerate(accessories_data):
             result = project_service.add_accessory_to_cabinet(
-                cabinet_id=cabinets[i].id, name=name, sku=sku, count=count
+                cabinet_id=cabinets[i].id, name=name, unit=unit, count=count
             )
             assert result is True
 
@@ -318,9 +319,9 @@ class TestAccessoryIntegration:
             assert len(cabinet.accessory_snapshots) == 1
 
             accessory = cabinet.accessory_snapshots[0]
-            expected_name, expected_sku, expected_count = accessories_data[i]
+            expected_name, expected_unit, expected_count = accessories_data[i]
             assert accessory.name == expected_name
-            assert accessory.sku == expected_sku
+            assert accessory.unit == expected_unit
             assert accessory.count == expected_count
 
     def test_accessory_integration_with_standard_cabinets(
@@ -365,7 +366,7 @@ class TestAccessoryIntegration:
         result = project_service.add_accessory_to_cabinet(
             cabinet_id=standard_cabinet.id,
             name="Standard Hinge",
-            sku="STD-HNG-001",
+            unit="szt",
             count=4,
         )
 
@@ -376,7 +377,7 @@ class TestAccessoryIntegration:
 
         accessory = standard_cabinet.accessory_snapshots[0]
         assert accessory.name == "Standard Hinge"
-        assert accessory.sku == "STD-HNG-001"
+        assert accessory.unit == "szt"
         assert accessory.count == 4
 
     def test_template_accessories_are_copied_to_project_cabinet(
@@ -403,8 +404,8 @@ class TestAccessoryIntegration:
         session.add(template_part)
 
         # Create accessories and link them to the template
-        accessory1 = Accessory(name="Template Hinge", sku="TPL-HNG-001")
-        accessory2 = Accessory(name="Template Handle", sku="TPL-HDL-001")
+        accessory1 = Accessory(name="Template Hinge", unit="szt")
+        accessory2 = Accessory(name="Template Handle", unit="kpl")
         session.add(accessory1)
         session.add(accessory2)
         session.flush()
@@ -448,14 +449,14 @@ class TestAccessoryIntegration:
         hinge_snapshot = next(
             acc for acc in cabinet.accessory_snapshots if acc.name == "Template Hinge"
         )
-        assert hinge_snapshot.sku == "TPL-HNG-001"
+        assert hinge_snapshot.unit == "szt"
         assert hinge_snapshot.count == 4
         assert hinge_snapshot.source_accessory_id == accessory1.id
 
         handle_snapshot = next(
             acc for acc in cabinet.accessory_snapshots if acc.name == "Template Handle"
         )
-        assert handle_snapshot.sku == "TPL-HDL-001"
+        assert handle_snapshot.unit == "kpl"
         assert handle_snapshot.count == 2
         assert handle_snapshot.source_accessory_id == accessory2.id
 
@@ -516,7 +517,7 @@ class TestAccessoryIntegration:
             service1.add_accessory_to_cabinet(
                 cabinet_id=cabinet.id,
                 name="Session Test Hinge",
-                sku="SESS-HNG-001",
+                unit="szt",
                 count=4,
             )
 
@@ -543,7 +544,7 @@ class TestAccessoryIntegration:
 
             accessory = retrieved_cabinet.accessory_snapshots[0]
             assert accessory.name == "Session Test Hinge"
-            assert accessory.sku == "SESS-HNG-001"
+            assert accessory.unit == "szt"
             assert accessory.count == 4
 
             # Test operations in new session
@@ -648,10 +649,10 @@ def custom_cabinet_with_accessories(
 
     # Add accessories
     project_service.add_accessory_to_cabinet(
-        cabinet_id=cabinet.id, name="Test Hinge", sku="TEST-HNG-001", count=4
+        cabinet_id=cabinet.id, name="Test Hinge", unit="szt", count=4
     )
     project_service.add_accessory_to_cabinet(
-        cabinet_id=cabinet.id, name="Test Handle", sku="TEST-HDL-001", count=1
+        cabinet_id=cabinet.id, name="Test Handle", unit="kpl", count=1
     )
 
     session.refresh(cabinet)

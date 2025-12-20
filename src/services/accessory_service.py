@@ -19,12 +19,14 @@ class AccessoryService:
     def get_accessory(self, accessory_id: int) -> Optional[Accessory]:
         return self.db.get(Accessory, accessory_id)
 
-    def find_by_sku(self, sku: str) -> Optional[Accessory]:
-        stmt = select(Accessory).filter_by(sku=sku)
+    def find_by_name(self, name: str) -> Optional[Accessory]:
+        """Find an accessory by its name."""
+        stmt = select(Accessory).filter_by(name=name)
         return self.db.scalars(stmt).first()
 
-    def create_accessory(self, name: str, sku: str) -> Accessory:
-        accessory = Accessory(name=name, sku=sku)
+    def create_accessory(self, name: str, unit: str = "szt") -> Accessory:
+        """Create a new accessory with name and unit (szt or kpl)."""
+        accessory = Accessory(name=name, unit=unit)
         self.db.add(accessory)
         self.db.commit()
         self.db.refresh(accessory)
@@ -49,12 +51,12 @@ class AccessoryService:
         self.db.commit()
         return True
 
-    def get_or_create(self, name: str, sku: str) -> Accessory:
+    def get_or_create(self, name: str, unit: str = "szt") -> Accessory:
         """
-        Find an existing Accessory by SKU, or create a new one if not found.
+        Find an existing Accessory by name, or create a new one if not found.
         Useful for inline add/find within project workflows.
         """
-        accessory = self.find_by_sku(sku)
+        accessory = self.find_by_name(name)
         if accessory:
             return accessory
-        return self.create_accessory(name=name, sku=sku)
+        return self.create_accessory(name=name, unit=unit)

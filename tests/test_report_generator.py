@@ -99,7 +99,7 @@ def sample_project_orm():
     project.cabinets = [cab]
 
     # Accessory and link
-    acc = Accessory(name="Hinge X", sku="HX123")
+    acc = Accessory(name="Hinge X", unit="szt")
     link = ProjectCabinetAccessory(count=4)
     # assign relationships
     link.project_cabinet = cab
@@ -162,7 +162,7 @@ def test_body_tables_count_and_headers(tmp_path, sample_project_orm):
         ["Lp.", "Nazwa", "Ilość", "Wymiary (mm)", "Okleina", "Kolor", "Uwagi"],
         ["Lp.", "Nazwa", "Ilość", "Wymiary (mm)", "Okleina", "Kolor", "Uwagi"],
         ["Lp.", "Nazwa", "Ilość", "Wymiary (mm)", "Okleina", "Kolor", "Uwagi"],
-        ["Lp.", "Nazwa akcesorium", "SKU/Kod", "Ilość", "Uwagi"],
+        ["Lp.", "Nazwa akcesorium", "Ilość", "Jedn.", "Uwagi"],
     ]
     for table, hdr in zip(body_tables, expected_hdr):
         assert [cell.text for cell in table.rows[0].cells] == hdr
@@ -195,7 +195,7 @@ def test_accessories_section(tmp_path, sample_project_orm):
     """
     Given: derived AKCESORIA table
     When: reading its single row
-    Then: it matches accessory name, sku, and total count
+    Then: it matches accessory name, count, and unit
     """
     rg = ReportGenerator()
     output = rg.generate(sample_project_orm, output_dir=str(tmp_path), auto_open=False)
@@ -206,10 +206,10 @@ def test_accessories_section(tmp_path, sample_project_orm):
     acc_table = body_tables[3]
     assert len(acc_table.rows) == 2
     cells = acc_table.rows[1].cells
-    # Name has shifted to index 1, SKU to 2, quantity to 3
+    # Name at index 1, quantity at 2, unit at 3
     assert cells[1].text == "Hinge X"
-    assert cells[2].text == "HX123"
-    assert cells[3].text == str(4 * sample_project_orm.cabinets[0].quantity)
+    assert cells[2].text == str(4 * sample_project_orm.cabinets[0].quantity)
+    assert cells[3].text == "szt"
 
 
 def test_notes_and_footer(tmp_path, sample_project_orm):

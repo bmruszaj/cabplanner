@@ -227,7 +227,7 @@ class ProjectService:
                 snapshot_accessory = ProjectCabinetAccessorySnapshot(
                     project_cabinet_id=cabinet.id,
                     name=accessory.name,
-                    sku=accessory.sku,
+                    unit=accessory.unit,
                     count=template_accessory.count,
                     source_accessory_id=accessory.id,
                 )
@@ -272,7 +272,7 @@ class ProjectService:
             snapshot_accessory = ProjectCabinetAccessorySnapshot(
                 project_cabinet_id=cabinet.id,
                 name=acc_data.get("name", ""),
-                sku=acc_data.get("sku", ""),
+                unit=acc_data.get("unit", "szt"),
                 count=acc_data.get("count", 1),
                 source_accessory_id=acc_data.get("source_accessory_id"),  # Can be None
             )
@@ -398,7 +398,7 @@ class ProjectService:
         self,
         cabinet_id: int,
         name: str,
-        sku: str = None,
+        unit: str = "szt",
         count: int = 1,
         source_accessory_id: int = None,
     ) -> bool:
@@ -418,7 +418,7 @@ class ProjectService:
         snapshot_accessory = ProjectCabinetAccessorySnapshot(
             project_cabinet_id=cabinet.id,
             name=name,
-            sku=sku or "",
+            unit=unit,
             count=count,
             source_accessory_id=source_accessory_id,
         )
@@ -580,7 +580,7 @@ class ProjectService:
                 {
                     "seq": seq_symbol,
                     "name": acc_snapshot.name,
-                    "sku": acc_snapshot.sku,
+                    "unit": acc_snapshot.unit,
                     "quantity": total,
                     "notes": "",
                     "sequence": seq,
@@ -595,7 +595,7 @@ class ProjectService:
                 {
                     "seq": seq_symbol,
                     "name": acc.name,
-                    "sku": acc.sku,
+                    "unit": acc.unit,
                     "quantity": total,
                     "notes": "",
                     "sequence": seq,

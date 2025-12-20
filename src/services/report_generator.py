@@ -306,7 +306,11 @@ class ReportGenerator:
             total = link.count * qty
             akcesoria.append(
                 SimpleNamespace(
-                    seq=seq_symbol, name=acc.name, sku=acc.sku, quantity=total, notes=""
+                    seq=seq_symbol,
+                    name=acc.name,
+                    unit=acc.unit,
+                    quantity=total,
+                    notes="",
                 )
             )
 
@@ -382,7 +386,7 @@ class ReportGenerator:
             return
 
         cols = (
-            ["Lp.", "Nazwa akcesorium", "SKU/Kod", "Ilość", "Uwagi"]
+            ["Lp.", "Nazwa akcesorium", "Ilość", "Jedn.", "Uwagi"]
             if accessory
             else [
                 "Lp.",
@@ -406,8 +410,8 @@ class ReportGenerator:
 
             if accessory:
                 cells[1].text = part.name
-                cells[2].text = getattr(part, "sku", "") or ""
-                cells[3].text = str(part.quantity)
+                cells[2].text = str(part.quantity)
+                cells[3].text = getattr(part, "unit", "szt") or "szt"
                 cells[4].text = getattr(part, "notes", "") or ""
             else:
                 cells[1].text = part.name

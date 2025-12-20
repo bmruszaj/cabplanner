@@ -8,26 +8,20 @@ from PySide6.QtWidgets import (
     QWidget,
     QVBoxLayout,
     QHBoxLayout,
-    QFormLayout,
     QLabel,
-    QComboBox,
-    QLineEdit,
     QPushButton,
-    QGroupBox,
-    QSpinBox,
-    QTextEdit,
     QTableView,
     QHeaderView,
     QAbstractItemView,
     QMessageBox,
     QDialog,
-    QDialogButtonBox,
 )
 from PySide6.QtCore import Signal, Qt, QAbstractTableModel, QModelIndex
 from PySide6.QtGui import QFont
 
 from src.gui.resources.resources import get_icon
 from src.gui.resources.styles import get_theme, PRIMARY
+from src.gui.dialogs.part_edit_dialog import PartEditDialog
 from .pending_changes import PendingChanges
 
 
@@ -92,151 +86,6 @@ class PartsTableModel(QAbstractTableModel):
         if 0 <= row < len(self.parts):
             return self.parts[row]
         return None
-
-
-class PartEditDialog(QDialog):
-    """Dialog for editing a cabinet part"""
-
-    def __init__(self, part=None, parent=None):
-        super().__init__(parent)
-        self.part = part
-        self.is_edit_mode = part is not None
-
-        self.setWindowTitle("Edytuj część" if self.is_edit_mode else "Nowa część")
-        self.resize(400, 500)
-
-        self._setup_ui()
-        self._setup_connections()
-
-        if self.is_edit_mode:
-            self._load_part_data()
-
-    def _setup_ui(self):
-        """Setup the user interface."""
-        layout = QVBoxLayout(self)
-        layout.setSpacing(16)
-        layout.setContentsMargins(16, 16, 16, 16)
-
-        # Basic information group
-        basic_group = QGroupBox("Podstawowe informacje")
-        basic_layout = QFormLayout(basic_group)
-        basic_layout.setSpacing(16)
-
-        # Part name
-        self.name_edit = QLineEdit()
-        self.name_edit.setPlaceholderText("np. bok lewy, front, półka...")
-        basic_layout.addRow("Nazwa części*:", self.name_edit)
-
-        # Dimensions
-        dimensions_layout = QHBoxLayout()
-
-        self.width_spinbox = QSpinBox()
-        self.width_spinbox.setRange(1, 5000)
-        self.width_spinbox.setSuffix(" mm")
-        self.width_spinbox.setValue(600)
-        dimensions_layout.addWidget(QLabel("Szerokość:"))
-        dimensions_layout.addWidget(self.width_spinbox)
-
-        self.height_spinbox = QSpinBox()
-        self.height_spinbox.setRange(1, 5000)
-        self.height_spinbox.setSuffix(" mm")
-        self.height_spinbox.setValue(720)
-        dimensions_layout.addWidget(QLabel("Wysokość:"))
-        dimensions_layout.addWidget(self.height_spinbox)
-
-        basic_layout.addRow("Wymiary:", dimensions_layout)
-
-        # Quantity
-        self.quantity_spinbox = QSpinBox()
-        self.quantity_spinbox.setRange(1, 100)
-        self.quantity_spinbox.setValue(1)
-        basic_layout.addRow("Ilość:", self.quantity_spinbox)
-
-        layout.addWidget(basic_group)
-
-        # Material information group
-        material_group = QGroupBox("Informacje o materiale")
-        material_layout = QFormLayout(material_group)
-        material_layout.setSpacing(16)
-
-        # Material type
-        self.material_combo = QComboBox()
-        self.material_combo.addItems(
-            ["PLYTA 12", "PLYTA 16", "PLYTA 18", "HDF", "FRONT", "INNE"]
-        )
-        self.material_combo.setEditable(True)
-        material_layout.addRow("Materiał:", self.material_combo)
-
-        # Wrapping
-        self.wrapping_edit = QLineEdit()
-        self.wrapping_edit.setPlaceholderText("np. D, K, DDKK...")
-        material_layout.addRow("Okleina:", self.wrapping_edit)
-
-        layout.addWidget(material_group)
-
-        # Comments group
-        comments_group = QGroupBox("Uwagi")
-        comments_layout = QVBoxLayout(comments_group)
-
-        self.comments_edit = QTextEdit()
-        self.comments_edit.setMaximumHeight(80)
-        self.comments_edit.setPlaceholderText("Dodatkowe uwagi dotyczące części...")
-        comments_layout.addWidget(self.comments_edit)
-
-        layout.addWidget(comments_group)
-
-        # Button box
-        self.button_box = QDialogButtonBox(
-            QDialogButtonBox.Save | QDialogButtonBox.Cancel
-        )
-        self.button_box.accepted.connect(self.accept)
-        self.button_box.rejected.connect(self.reject)
-        layout.addWidget(self.button_box)
-
-    def _setup_connections(self):
-        """Setup signal connections."""
-        pass
-
-    def _load_part_data(self):
-        """Load part data into the form."""
-        if not self.part:
-            return
-
-        self.name_edit.setText(self.part.part_name or "")
-        self.width_spinbox.setValue(self.part.width_mm or 0)
-        self.height_spinbox.setValue(self.part.height_mm or 0)
-        self.quantity_spinbox.setValue(self.part.pieces or 1)
-
-        if self.part.material:
-            index = self.material_combo.findText(self.part.material)
-            if index >= 0:
-                self.material_combo.setCurrentIndex(index)
-            else:
-                self.material_combo.setCurrentText(self.part.material)
-
-        self.wrapping_edit.setText(self.part.wrapping or "")
-        self.comments_edit.setPlainText(self.part.comments or "")
-
-    def accept(self):
-        """Handle dialog acceptance."""
-        name = self.name_edit.text().strip()
-        if not name:
-            QMessageBox.warning(self, "Błąd", "Nazwa części jest wymagana.")
-            self.name_edit.setFocus()
-            return
-
-        # Create part data
-        self.part_data = {
-            "part_name": name,
-            "width_mm": self.width_spinbox.value(),
-            "height_mm": self.height_spinbox.value(),
-            "pieces": self.quantity_spinbox.value(),
-            "material": self.material_combo.currentText() or None,
-            "wrapping": self.wrapping_edit.text().strip() or None,
-            "comments": self.comments_edit.toPlainText().strip() or None,
-        }
-
-        super().accept()
 
 
 class PartsForm(QWidget):
@@ -334,6 +183,8 @@ class PartsForm(QWidget):
         selection_model = self.parts_table.selectionModel()
         if selection_model:
             selection_model.selectionChanged.connect(self._on_selection_changed)
+        # Connect double-click to edit
+        self.parts_table.doubleClicked.connect(self._on_double_click)
 
     def _apply_styles(self):
         """Apply visual styling."""
@@ -387,6 +238,11 @@ class PartsForm(QWidget):
         has_selection = len(self.parts_table.selectionModel().selectedRows()) > 0
         self.edit_part_btn.setEnabled(has_selection)
         self.delete_part_btn.setEnabled(has_selection)
+
+    def _on_double_click(self, index):
+        """Handle double-click on table row to edit the part."""
+        if index.isValid():
+            self._edit_part()
 
     def _add_part(self):
         """Add a new part to pending changes (saved on dialog save button)."""

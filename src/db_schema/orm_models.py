@@ -203,7 +203,7 @@ class CabinetPart(Base):
 
 class Accessory(Base):
     """
-    SKU-based hardware/supplies (handles, runners, gallery rails, etc.)
+    Hardware/supplies (handles, runners, gallery rails, etc.)
     Can be linked to a project cabinet or to a drawer template as defaults.
     """
 
@@ -211,7 +211,7 @@ class Accessory(Base):
 
     id = Column(Integer, primary_key=True)
     name = Column(String(255), nullable=False)
-    sku = Column(String(120), nullable=False)
+    unit = Column(String(10), nullable=False, default="szt")  # 'szt' or 'kpl'
 
     created_at = Column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
@@ -230,8 +230,7 @@ class Accessory(Base):
     )
 
     __table_args__ = (
-        UniqueConstraint("sku", name="uq_accessory_sku"),
-        Index("ix_accessories_sku", "sku"),
+        CheckConstraint("unit IN ('szt', 'kpl')", name="ck_accessory_unit"),
     )
 
 
@@ -347,7 +346,7 @@ class ProjectCabinetAccessorySnapshot(Base):
     )
 
     name = Column(String(255), nullable=False)
-    sku = Column(String(120), nullable=False)
+    unit = Column(String(10), nullable=False, default="szt")  # 'szt' or 'kpl'
     count = Column(Integer, nullable=False, default=1)
 
     # Traceability: where this accessory came from
@@ -372,6 +371,7 @@ class ProjectCabinetAccessorySnapshot(Base):
 
     __table_args__ = (
         CheckConstraint("count >= 1", name="ck_project_accessory_count_pos"),
+        CheckConstraint("unit IN ('szt', 'kpl')", name="ck_project_accessory_unit"),
         Index("ix_project_cabinet_accessory_snapshots_cabinet", "project_cabinet_id"),
         Index("ix_project_cabinet_accessory_snapshots_source", "source_accessory_id"),
     )

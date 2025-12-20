@@ -1,31 +1,27 @@
 """
 Accessories form for editing cabinet accessories in the cabinet editor.
 
-Handles accessory-level fields like SKU, quantities, etc.
+Handles accessory-level fields like unit (szt/kpl), quantities, etc.
 """
 
 from PySide6.QtWidgets import (
     QWidget,
     QVBoxLayout,
     QHBoxLayout,
-    QFormLayout,
     QLabel,
-    QLineEdit,
     QPushButton,
-    QGroupBox,
-    QSpinBox,
     QTableView,
     QHeaderView,
     QAbstractItemView,
     QMessageBox,
     QDialog,
-    QDialogButtonBox,
 )
 from PySide6.QtCore import Signal, Qt, QAbstractTableModel, QModelIndex
 from PySide6.QtGui import QFont
 
 from src.gui.resources.resources import get_icon
 from src.gui.resources.styles import get_theme, PRIMARY
+from src.gui.dialogs.accessory_edit_dialog import AccessoryEditDialog
 from .pending_changes import PendingChanges
 
 
@@ -35,7 +31,7 @@ class AccessoriesTableModel(QAbstractTableModel):
     def __init__(self, accessories, parent=None):
         super().__init__(parent)
         self.accessories = accessories
-        self.headers = ["Nazwa", "SKU", "Ilość"]
+        self.headers = ["Nazwa", "Ilość", "Jedn."]
 
     def rowCount(self, parent=QModelIndex()):
         return len(self.accessories)
@@ -58,17 +54,17 @@ class AccessoriesTableModel(QAbstractTableModel):
                 else:
                     return accessory.name
             elif col == 1:
+                return accessory.count
+            elif col == 2:
                 # Handle both legacy (with .accessory) and snapshot (direct fields)
                 if hasattr(accessory, "accessory") and accessory.accessory:
-                    return accessory.accessory.sku
+                    return getattr(accessory.accessory, "unit", "szt")
                 else:
-                    return accessory.sku
-            elif col == 2:
-                return accessory.count
+                    return getattr(accessory, "unit", "szt")
 
         elif role == Qt.TextAlignmentRole:
             col = index.column()
-            if col == 2:  # Quantity
+            if col in (1, 2):  # Quantity, Unit
                 return Qt.AlignCenter
             return Qt.AlignLeft | Qt.AlignVCenter
 
@@ -88,146 +84,6 @@ class AccessoriesTableModel(QAbstractTableModel):
         if 0 <= row < len(self.accessories):
             return self.accessories[row]
         return None
-
-
-class AccessorySelectionDialog(QDialog):
-    """Dialog for selecting accessories to add to a cabinet"""
-
-    def __init__(self, available_accessories, parent=None):
-        super().__init__(parent)
-        self.available_accessories = available_accessories
-        self.selected_accessory = None
-        self.selected_quantity = 1
-
-        self.setWindowTitle("Wybierz akcesorium")
-        self.resize(400, 300)
-
-        self._setup_ui()
-        self._setup_connections()
-
-    def _setup_ui(self):
-        """Setup the user interface."""
-        layout = QVBoxLayout(self)
-        layout.setSpacing(16)
-        layout.setContentsMargins(16, 16, 16, 16)
-
-        # Accessory selection
-        selection_group = QGroupBox("Wybierz akcesorium")
-        selection_layout = QFormLayout(selection_group)
-        selection_layout.setSpacing(16)
-
-        # Accessory name (free text)
-        self.accessory_name_edit = QLineEdit()
-        self.accessory_name_edit.setPlaceholderText(
-            "np. Uchwyt standardowy, Zawias automatyczny..."
-        )
-        selection_layout.addRow("Nazwa akcesorium*:", self.accessory_name_edit)
-
-        # Accessory SKU (free text)
-        self.accessory_sku_edit = QLineEdit()
-        self.accessory_sku_edit.setPlaceholderText("np. UCH-001, ZAW-001...")
-        selection_layout.addRow("SKU:", self.accessory_sku_edit)
-
-        # Quantity
-        self.quantity_spinbox = QSpinBox()
-        self.quantity_spinbox.setRange(1, 100)
-        self.quantity_spinbox.setValue(1)
-        selection_layout.addRow("Ilość:", self.quantity_spinbox)
-
-        layout.addWidget(selection_group)
-
-        # Button box
-        self.button_box = QDialogButtonBox(
-            QDialogButtonBox.Ok | QDialogButtonBox.Cancel
-        )
-        self.button_box.accepted.connect(self.accept)
-        self.button_box.rejected.connect(self.reject)
-        layout.addWidget(self.button_box)
-
-    def _setup_connections(self):
-        """Setup signal connections."""
-        pass
-
-    def _on_accessory_changed(self, index):
-        """Handle accessory selection change."""
-        pass
-
-    def accept(self):
-        """Handle dialog acceptance."""
-        name = self.accessory_name_edit.text().strip()
-        if not name:
-            QMessageBox.warning(self, "Błąd", "Nazwa akcesorium jest wymagana.")
-            self.accessory_name_edit.setFocus()
-            return
-
-        # Create accessory data
-        self.accessory_data = {
-            "name": name,
-            "sku": self.accessory_sku_edit.text().strip() or None,
-            "quantity": self.quantity_spinbox.value(),
-        }
-
-        super().accept()
-
-
-class AccessoryQuantityDialog(QDialog):
-    """Dialog for editing accessory quantity"""
-
-    def __init__(self, accessory, parent=None):
-        super().__init__(parent)
-        self.accessory = accessory
-        self.new_quantity = accessory.count
-
-        self.setWindowTitle("Zmień ilość")
-        self.resize(300, 150)
-
-        self._setup_ui()
-        self._setup_connections()
-
-    def _setup_ui(self):
-        """Setup the user interface."""
-        layout = QVBoxLayout(self)
-        layout.setSpacing(16)
-        layout.setContentsMargins(16, 16, 16, 16)
-
-        # Info label - handle both legacy and snapshot accessories
-        accessory_name = ""
-        if hasattr(self.accessory, "accessory") and self.accessory.accessory:
-            accessory_name = self.accessory.accessory.name
-        else:
-            accessory_name = self.accessory.name
-
-        info_label = QLabel(f"Akcesorium: {accessory_name}")
-        info_label.setStyleSheet("font-weight: bold;")
-        layout.addWidget(info_label)
-
-        # Quantity selection
-        quantity_layout = QHBoxLayout()
-        quantity_layout.addWidget(QLabel("Nowa ilość:"))
-
-        self.quantity_spinbox = QSpinBox()
-        self.quantity_spinbox.setRange(1, 100)
-        self.quantity_spinbox.setValue(self.accessory.count)
-        quantity_layout.addWidget(self.quantity_spinbox)
-
-        layout.addLayout(quantity_layout)
-
-        # Button box
-        self.button_box = QDialogButtonBox(
-            QDialogButtonBox.Ok | QDialogButtonBox.Cancel
-        )
-        self.button_box.accepted.connect(self.accept)
-        self.button_box.rejected.connect(self.reject)
-        layout.addWidget(self.button_box)
-
-    def _setup_connections(self):
-        """Setup signal connections."""
-        pass
-
-    def accept(self):
-        """Handle dialog acceptance."""
-        self.new_quantity = self.quantity_spinbox.value()
-        super().accept()
 
 
 class AccessoriesForm(QWidget):
@@ -274,11 +130,11 @@ class AccessoriesForm(QWidget):
         self.add_accessory_btn.clicked.connect(self._add_accessory)
         header_layout.addWidget(self.add_accessory_btn)
 
-        self.edit_quantity_btn = QPushButton("Zmień ilość")
-        self.edit_quantity_btn.setIcon(get_icon("edit"))
-        self.edit_quantity_btn.clicked.connect(self._edit_quantity)
-        self.edit_quantity_btn.setEnabled(False)
-        header_layout.addWidget(self.edit_quantity_btn)
+        self.edit_accessory_btn = QPushButton("Edytuj")
+        self.edit_accessory_btn.setIcon(get_icon("edit"))
+        self.edit_accessory_btn.clicked.connect(self._edit_accessory)
+        self.edit_accessory_btn.setEnabled(False)
+        header_layout.addWidget(self.edit_accessory_btn)
 
         self.delete_accessory_btn = QPushButton("Usuń")
         self.delete_accessory_btn.setIcon(get_icon("remove"))
@@ -327,6 +183,8 @@ class AccessoriesForm(QWidget):
         selection_model = self.accessories_table.selectionModel()
         if selection_model:
             selection_model.selectionChanged.connect(self._on_selection_changed)
+        # Connect double-click to edit
+        self.accessories_table.doubleClicked.connect(self._on_double_click)
 
     def _apply_styles(self):
         """Apply visual styling."""
@@ -378,8 +236,25 @@ class AccessoriesForm(QWidget):
     def _on_selection_changed(self):
         """Handle table selection changes."""
         has_selection = len(self.accessories_table.selectionModel().selectedRows()) > 0
-        self.edit_quantity_btn.setEnabled(has_selection)
+        self.edit_accessory_btn.setEnabled(has_selection)
         self.delete_accessory_btn.setEnabled(has_selection)
+
+    def _on_double_click(self, index):
+        """Handle double-click on table row to edit the accessory."""
+        if index.isValid():
+            self._edit_accessory()
+
+    def _get_existing_accessory_names(self):
+        """Get list of existing accessory names for uniqueness validation."""
+        names = []
+        if hasattr(self, "accessories_model"):
+            for acc in self.accessories_model.accessories:
+                name = getattr(acc, "name", None)
+                if not name and hasattr(acc, "accessory") and acc.accessory:
+                    name = acc.accessory.name
+                if name:
+                    names.append(name)
+        return names
 
     def _add_accessory(self):
         """Add a new accessory to pending changes (saved on dialog save button)."""
@@ -387,16 +262,16 @@ class AccessoriesForm(QWidget):
             QMessageBox.warning(self, "Błąd", "Najpierw wybierz szafkę.")
             return
 
-        available_accessories = []
-        dialog = AccessorySelectionDialog(available_accessories, parent=self)
+        existing_names = self._get_existing_accessory_names()
+        dialog = AccessoryEditDialog(existing_names=existing_names, parent=self)
         if dialog.exec() == QDialog.Accepted:
             try:
                 accessory_data = dialog.accessory_data
                 self.pending.add_item(
                     {
                         "name": accessory_data["name"],
-                        "sku": accessory_data["sku"],
-                        "count": accessory_data["quantity"],
+                        "unit": accessory_data["unit"],
+                        "count": accessory_data["count"],
                     }
                 )
                 self._mark_dirty()
@@ -407,8 +282,8 @@ class AccessoriesForm(QWidget):
                     self, "Błąd", f"Nie udało się dodać akcesorium:\n{str(e)}"
                 )
 
-    def _edit_quantity(self):
-        """Edit the quantity of the selected accessory (saved on dialog save button)."""
+    def _edit_accessory(self):
+        """Edit the selected accessory (saved on dialog save button)."""
         current_row = self.accessories_table.currentIndex().row()
         if current_row < 0:
             return
@@ -416,7 +291,21 @@ class AccessoriesForm(QWidget):
         if hasattr(self, "accessories_model"):
             accessory = self.accessories_model.get_accessory_at_row(current_row)
             if accessory:
-                dialog = AccessoryQuantityDialog(accessory, parent=self)
+                # Convert accessory object to dict for AccessoryEditDialog
+                accessory_dict = {
+                    "name": getattr(accessory, "name", "")
+                    or (
+                        accessory.accessory.name
+                        if hasattr(accessory, "accessory") and accessory.accessory
+                        else ""
+                    ),
+                    "unit": getattr(accessory, "unit", "szt"),
+                    "count": getattr(accessory, "count", 1),
+                }
+                existing_names = self._get_existing_accessory_names()
+                dialog = AccessoryEditDialog(
+                    accessory=accessory_dict, existing_names=existing_names, parent=self
+                )
                 if dialog.exec() == QDialog.Accepted:
                     acc_id = (
                         getattr(accessory, "id", None)
@@ -424,7 +313,15 @@ class AccessoriesForm(QWidget):
                         or getattr(accessory, "temp_id", None)
                     )
                     if acc_id:
-                        self.pending.update_item(acc_id, {"count": dialog.new_quantity})
+                        accessory_data = dialog.accessory_data
+                        self.pending.update_item(
+                            acc_id,
+                            {
+                                "name": accessory_data["name"],
+                                "unit": accessory_data["unit"],
+                                "count": accessory_data["count"],
+                            },
+                        )
                         self._mark_dirty()
                         self._refresh_accessories_display()
 
@@ -523,11 +420,11 @@ class AccessoriesForm(QWidget):
                             if hasattr(acc, "accessory") and acc.accessory
                             else ""
                         ),
-                        sku=getattr(acc, "sku", None)
+                        unit=getattr(acc, "unit", "szt")
                         or (
-                            acc.accessory.sku
+                            getattr(acc.accessory, "unit", "szt")
                             if hasattr(acc, "accessory") and acc.accessory
-                            else ""
+                            else "szt"
                         ),
                         count=updated_data.get("count", acc.count),
                     )
@@ -541,7 +438,7 @@ class AccessoriesForm(QWidget):
                 id=None,
                 temp_id=pending_acc.get("temp_id"),
                 name=pending_acc.get("name", ""),
-                sku=pending_acc.get("sku", ""),
+                unit=pending_acc.get("unit", "szt"),
                 count=pending_acc.get("count", 1),
             )
             result_accessories.append(temp_acc)

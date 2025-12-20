@@ -82,7 +82,7 @@ def sample_cabinet(db_session, sample_project):
     accessory = ProjectCabinetAccessorySnapshot(
         project_cabinet_id=cabinet.id,
         name="Handle",
-        sku="HANDLE-001",
+        unit="szt",
         count=2,
     )
     db_session.add(accessory)
@@ -241,7 +241,7 @@ class TestAccessoriesFormPendingChanges:
         pending.add_item(
             {
                 "name": "New Hinge",
-                "sku": "HINGE-001",
+                "unit": "szt",
                 "count": 4,
             }
         )
@@ -294,7 +294,7 @@ class TestAccessoriesFormPendingChanges:
         pending.add_item(
             {
                 "name": "New Hinge",
-                "sku": "HINGE-001",
+                "unit": "kpl",
                 "count": 4,
             }
         )
@@ -304,7 +304,7 @@ class TestAccessoriesFormPendingChanges:
             project_service.add_accessory_to_cabinet(
                 cabinet_id=sample_cabinet.id,
                 name=acc_data["name"],
-                sku=acc_data.get("sku"),
+                unit=acc_data.get("unit", "szt"),
                 count=acc_data["count"],
             )
 
