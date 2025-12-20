@@ -114,6 +114,7 @@ class CatalogWindow(QDialog):
         # Manage toolbar
         self.manage_toolbar.sig_new.connect(self._on_new)
         self.manage_toolbar.sig_edit.connect(self._on_edit)
+        self.manage_toolbar.sig_duplicate.connect(self._on_duplicate)
         self.manage_toolbar.sig_delete.connect(self._on_delete)
 
         # Add footer
@@ -239,6 +240,40 @@ class CatalogWindow(QDialog):
         cabinet_type_id = self.browser_widget.current_item_id()
         if cabinet_type_id:
             self._edit_cabinet_type(cabinet_type_id)
+
+    def _on_duplicate(self):
+        """Handle duplicate cabinet type."""
+        cabinet_type_id = self.browser_widget.current_item_id()
+        if not cabinet_type_id:
+            return
+
+        item = self.browser_widget.current_item()
+        if not item:
+            return
+
+        try:
+            # Duplicate the template using the service
+            new_template = self.catalog_service.cabinet_type_service.duplicate_template(
+                cabinet_type_id
+            )
+            if new_template:
+                self.browser_widget.refresh()
+                self.sig_catalog_changed.emit()
+                QMessageBox.information(
+                    self,
+                    "Sukces",
+                    f"Typ szafki '{item.name}' został zduplikowany jako '{new_template.name}'.",
+                )
+            else:
+                QMessageBox.warning(
+                    self,
+                    "Ostrzeżenie",
+                    "Nie udało się zduplikować typu szafki.",
+                )
+        except Exception as e:
+            QMessageBox.critical(
+                self, "Błąd", f"Nie udało się zduplikować typu szafki: {str(e)}"
+            )
 
     def _on_delete(self):
         """Handle delete cabinet type."""
