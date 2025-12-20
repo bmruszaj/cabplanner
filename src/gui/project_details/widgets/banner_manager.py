@@ -10,7 +10,7 @@ from PySide6.QtWidgets import QWidget, QVBoxLayout, QLabel
 from PySide6.QtCore import QTimer
 
 # Import colors from the app's theme system
-from src.gui.resources.styles import PRIMARY, PRIMARY_LIGHT
+from src.gui.resources.styles import PRIMARY
 
 
 class BannerManager(QWidget):
@@ -44,30 +44,33 @@ class BannerManager(QWidget):
         banner.setWordWrap(True)
         # Define colors based on banner type using app theme
         if banner_type == "success":
-            bg_color = f"{PRIMARY}20"  # Light teal with transparency
+            bg_color = "transparent"
             border_color = PRIMARY
-            text_color = "#ffffff"
+            text_color = "#000000"
         elif banner_type == "error":
-            bg_color = "#f8d7da"
-            border_color = "#f5c6cb"
-            text_color = "#721c24"
+            bg_color = "transparent"
+            border_color = "#f44336"
+            text_color = "#000000"
         elif banner_type == "warning":
-            bg_color = "#fff3cd"
-            border_color = "#ffeaa7"
-            text_color = "#856404"
+            bg_color = "transparent"
+            border_color = "#ff9800"
+            text_color = "#000000"
         else:  # info
-            bg_color = f"{PRIMARY}10"  # Very light teal
-            border_color = PRIMARY_LIGHT
-            text_color = PRIMARY
+            bg_color = "transparent"
+            border_color = "#2196F3"
+            text_color = "#000000"
 
         banner.setStyleSheet(f"""
             QLabel {{
                 background-color: {bg_color};
-                border: 1px solid {border_color};
+                border: 2px solid {border_color};
                 color: {text_color};
-                padding: 8px 12px;
-                border-radius: 4px;
-                margin: 2px 0px;
+                padding: 12px 16px;
+                border-radius: 6px;
+                margin: 8px 4px;
+                font-size: 11pt;
+                font-weight: 500;
+                min-height: 40px;
             }}
         """)
 
