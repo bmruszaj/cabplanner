@@ -18,6 +18,7 @@ class ManageToolbar(QWidget):
     # Signals
     sig_new = Signal()
     sig_edit = Signal()
+    sig_duplicate = Signal()
     sig_delete = Signal()
 
     def __init__(self, parent=None):
@@ -37,6 +38,9 @@ class ManageToolbar(QWidget):
         self.btn_edit = self._create_tool_button(
             "edit", "Edytuj", "Edytuj wybrany typ szafki"
         )
+        self.btn_duplicate = self._create_tool_button(
+            "duplicate", "Duplikuj", "Duplikuj wybrany typ szafki"
+        )
         self.btn_delete = self._create_tool_button(
             "delete", "Usuń", "Usuń wybrany typ szafki"
         )
@@ -44,6 +48,7 @@ class ManageToolbar(QWidget):
         # Add buttons to layout
         layout.addWidget(self.btn_new)
         layout.addWidget(self.btn_edit)
+        layout.addWidget(self.btn_duplicate)
         layout.addWidget(self.btn_delete)
 
         # Add separator
@@ -65,6 +70,7 @@ class ManageToolbar(QWidget):
         # Store actions for external access
         self.act_new = QAction("New", self)
         self.act_edit = QAction("Edit", self)
+        self.act_duplicate = QAction("Duplicate", self)
         self.act_delete = QAction("Delete", self)
 
         # Set initial enabled state
@@ -87,11 +93,13 @@ class ManageToolbar(QWidget):
         """Setup signal connections."""
         self.btn_new.clicked.connect(self.sig_new.emit)
         self.btn_edit.clicked.connect(self.sig_edit.emit)
+        self.btn_duplicate.clicked.connect(self.sig_duplicate.emit)
         self.btn_delete.clicked.connect(self.sig_delete.emit)
 
         # Connect actions
         self.act_new.triggered.connect(self.sig_new.emit)
         self.act_edit.triggered.connect(self.sig_edit.emit)
+        self.act_duplicate.triggered.connect(self.sig_duplicate.emit)
         self.act_delete.triggered.connect(self.sig_delete.emit)
 
     def _apply_styles(self):
@@ -133,9 +141,11 @@ class ManageToolbar(QWidget):
         self.btn_new.setEnabled(True)
         self.act_new.setEnabled(True)
 
-        # Edit, Delete require selection
+        # Edit, Duplicate, Delete require selection
         self.btn_edit.setEnabled(has_selection)
+        self.btn_duplicate.setEnabled(has_selection)
         self.btn_delete.setEnabled(has_selection)
 
         self.act_edit.setEnabled(has_selection)
+        self.act_duplicate.setEnabled(has_selection)
         self.act_delete.setEnabled(has_selection)
