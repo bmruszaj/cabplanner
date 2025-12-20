@@ -431,6 +431,7 @@ class ProjectDetailsView(QDialog):
         self.sig_cabinet_sequence_changed.connect(self._on_sequence_changed_request)
         self.sig_cabinet_qty_changed.connect(self._on_quantity_changed_request)
         self.sig_cabinet_delete.connect(self._on_delete_request)
+        self.sig_cabinet_duplicate.connect(self._on_duplicate_request)
 
         # Cabinet edit signal - handle locally
         self.sig_cabinet_edit.connect(self._handle_cabinet_edit)
@@ -696,6 +697,15 @@ class ProjectDetailsView(QDialog):
             self.controller.on_cabinet_deleted(cabinet_id)
         else:
             self._dbg("_on_delete_request: no controller!")
+
+    def _on_duplicate_request(self, cabinet_id: int) -> None:
+        """Handle duplicate request from card - delegate to controller."""
+        self._dbg(f"_on_duplicate_request: cabinet_id={cabinet_id}")
+        if self.controller:
+            self.controller.on_cabinet_duplicated(cabinet_id)
+            self._show_success("Szafka zduplikowana")
+        else:
+            self._dbg("_on_duplicate_request: no controller!")
 
     def _on_table_double_click(self, index):
         """Handle double-click on table view row to edit cabinet."""
