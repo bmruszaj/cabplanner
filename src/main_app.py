@@ -34,7 +34,7 @@ def main():
     apply_theme(app, session)
 
     window = create_main_window(session)
-    window.show()
+    window.showMaximized()
     wire_startup_update_check(window, services["settings"], services["updater"])
 
     try:

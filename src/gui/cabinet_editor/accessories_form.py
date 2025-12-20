@@ -99,10 +99,10 @@ class AccessoriesForm(QWidget):
         self.project_cabinet = None
         self.cabinet_type = None
         self._is_dirty = False
-        
+
         # Create accessory service from catalog session for catalog integration
         self.accessory_service = None
-        if catalog_service and hasattr(catalog_service, 'session'):
+        if catalog_service and hasattr(catalog_service, "session"):
             self.accessory_service = AccessoryService(catalog_service.session)
 
         # Pending changes - held in memory until Save button is clicked

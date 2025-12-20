@@ -204,8 +204,10 @@ class TestAccessoryEditDialogCatalogIntegration:
 
         # Should have empty option + 3 catalog items
         assert dialog.name_combo.count() == 4
-        
-        items = [dialog.name_combo.itemText(i) for i in range(dialog.name_combo.count())]
+
+        items = [
+            dialog.name_combo.itemText(i) for i in range(dialog.name_combo.count())
+        ]
         assert "Zawias cichy domyk" in items
         assert "Uchwyt standardowy" in items
         assert "Prowadnica" in items
@@ -213,30 +215,32 @@ class TestAccessoryEditDialogCatalogIntegration:
     def test_selecting_catalog_item_sets_unit(self, app, mock_accessory_service):
         """Selecting item from catalog should set default unit."""
         dialog = AccessoryEditDialog(accessory_service=mock_accessory_service)
-        
+
         # Select kpl unit item
         dialog.name_combo.setCurrentText("Uchwyt standardowy")
-        
+
         # Unit should be set to kpl
         assert dialog.kpl_radio.isChecked()
 
     def test_selecting_szt_item_sets_szt_unit(self, app, mock_accessory_service):
         """Selecting szt item from catalog should set szt unit."""
         dialog = AccessoryEditDialog(accessory_service=mock_accessory_service)
-        
+
         # First change to kpl to verify it changes back
         dialog.kpl_radio.setChecked(True)
-        
+
         # Select szt unit item
         dialog.name_combo.setCurrentText("Zawias cichy domyk")
-        
+
         # Unit should be set to szt
         assert dialog.szt_radio.isChecked()
 
     def test_new_name_not_in_catalog(self, app, mock_accessory_service):
         """New names should be identified as not in catalog."""
         dialog = AccessoryEditDialog(accessory_service=mock_accessory_service)
-        
+
         assert dialog._is_new_catalog_entry("Nowe akcesorium")
         assert not dialog._is_new_catalog_entry("Zawias cichy domyk")
-        assert not dialog._is_new_catalog_entry("zawias cichy domyk")  # Case insensitive
+        assert not dialog._is_new_catalog_entry(
+            "zawias cichy domyk"
+        )  # Case insensitive
