@@ -842,24 +842,43 @@ class ProjectDetailsView(QDialog):
 
         # Calculate dimensions from parts snapshot
         if hasattr(cabinet, "parts") and cabinet.parts:
-            # Use max width/height among parts as representative cabinet dimensions
-            max_w = None
-            max_h = None
-            for part in cabinet.parts:
+            parts = cabinet.parts
+            
+            if len(parts) == 1:
+                # Single part: use 2D dimensions (width and height)
+                part = parts[0]
                 if part.width_mm is not None:
-                    max_w = (
-                        int(part.width_mm)
-                        if max_w is None
-                        else max(max_w, int(part.width_mm))
-                    )
+                    width = int(part.width_mm)
                 if part.height_mm is not None:
-                    max_h = (
-                        int(part.height_mm)
-                        if max_h is None
-                        else max(max_h, int(part.height_mm))
-                    )
-            width = max_w
-            height = max_h
+                    height = int(part.height_mm)
+                # Don't set depth for single part
+                
+            elif len(parts) >= 2:
+                # Multiple parts: analyze if we can determine 3D dimensions
+                # Check which dimensions are consistent across parts
+                widths = [int(p.width_mm) for p in parts if p.width_mm is not None]
+                heights = [int(p.height_mm) for p in parts if p.height_mm is not None]
+                
+                # If widths are all the same, it's the cabinet width
+                if widths and len(set(widths)) == 1:
+                    width = widths[0]
+                elif widths:
+                    # Use the most common width or max
+                    width = max(widths)
+                
+                # If heights are all the same, it's the cabinet height
+                if heights and len(set(heights)) == 1:
+                    height = heights[0]
+                elif heights:
+                    # Use the most common height or max
+                    height = max(heights)
+                
+                # For depth: use the fact that different widths can indicate front/back parts
+                # If there are different widths, the smaller one is likely the depth
+                if widths and len(set(widths)) > 1:
+                    sorted_widths = sorted(set(widths))
+                    # The smallest width among parts is likely the cabinet depth
+                    depth = sorted_widths[0]
 
             # Try to get name from calculation context (for custom cabinets)
             if not cabinet.cabinet_type and cabinet.parts:
@@ -874,13 +893,9 @@ class ProjectDetailsView(QDialog):
                         cabinet_name = f"{template_name} + niestandardowa"
                         break
 
-        # Fallback to default dimensions if no parts found
-        if width is None or height is None:
-            width = 600  # Default width
-            height = 720  # Default height
-
-        # Set a reasonable default depth for kitchen cabinets
-        depth = 560.0  # Standard kitchen cabinet depth
+        # Note: Do NOT set default dimensions if no parts found
+        # This allows the card to hide dimension section when there are no parts
+        # Do NOT set default depth - only display it when we can calculate it from parts
 
         # Get cabinet name (from template if standard, from context if custom)
         if cabinet.cabinet_type:
