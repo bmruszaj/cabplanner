@@ -306,7 +306,11 @@ class ReportGenerator:
             total = link.count * qty
             akcesoria.append(
                 SimpleNamespace(
-                    seq=seq_symbol, name=acc.name, unit=acc.unit, quantity=total, notes=""
+                    seq=seq_symbol,
+                    name=acc.name,
+                    unit=acc.unit,
+                    quantity=total,
+                    notes="",
                 )
             )
 

@@ -197,28 +197,32 @@ class CabinetCard(QFrame):
             self.dims_label.setVisible(False)
 
     def _setup_menu(self):
-        menu = QMenu(self)
+        self.context_menu = QMenu(self)
 
         edit_action = QAction("Edytuj", self)
         edit_action.triggered.connect(lambda: self.sig_edit.emit(self.cabinet_id))
-        menu.addAction(edit_action)
+        self.context_menu.addAction(edit_action)
 
         duplicate_action = QAction("Duplikuj", self)
         duplicate_action.triggered.connect(
             lambda: self.sig_duplicate.emit(self.cabinet_id)
         )
-        menu.addAction(duplicate_action)
+        self.context_menu.addAction(duplicate_action)
 
-        menu.addSeparator()
+        self.context_menu.addSeparator()
 
         delete_action = QAction("Usuń", self)
         delete_action.triggered.connect(lambda: self.sig_delete.emit(self.cabinet_id))
-        menu.addAction(delete_action)
+        self.context_menu.addAction(delete_action)
 
-        self.menu_btn.setMenu(menu)
+        self.menu_btn.setMenu(self.context_menu)
 
     def _connect_signals(self):
         pass
+
+    def contextMenuEvent(self, event):
+        """Show context menu on right-click."""
+        self.context_menu.exec(event.globalPos())
 
     def showEvent(self, event):
         """Ensure heavy sub-widgets are created when card becomes visible."""

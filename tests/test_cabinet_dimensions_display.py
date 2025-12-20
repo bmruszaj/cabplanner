@@ -11,7 +11,7 @@ Scenarios tested:
 4. Cabinet with 2+ parts with different widths - show 3D with smallest width as depth
 """
 
-from unittest.mock import Mock, patch
+from unittest.mock import Mock
 import pytest
 
 from src.db_schema.orm_models import ProjectCabinet, ProjectCabinetPart
@@ -21,7 +21,7 @@ from src.db_schema.orm_models import ProjectCabinet, ProjectCabinetPart
 def mock_project_view():
     """Create a mock ProjectDetailsView with the _cabinet_to_card_data method."""
     from src.gui.project_details.view import ProjectDetailsView
-    
+
     view = Mock(spec=ProjectDetailsView)
     # Bind the actual method to the mock
     view._cabinet_to_card_data = ProjectDetailsView._cabinet_to_card_data.__get__(view)
@@ -52,12 +52,12 @@ def mock_cabinet_single_part():
     cabinet.body_color = "Biały"
     cabinet.front_color = "Biały"
     cabinet.cabinet_type = None
-    
+
     part = Mock(spec=ProjectCabinetPart)
     part.width_mm = 560
     part.height_mm = 720
     part.calc_context_json = {"template_name": "Dolna"}
-    
+
     cabinet.parts = [part]
     return cabinet
 
@@ -72,15 +72,15 @@ def mock_cabinet_same_width_parts():
     cabinet.body_color = "Biały"
     cabinet.front_color = "Biały"
     cabinet.cabinet_type = None
-    
+
     part1 = Mock(spec=ProjectCabinetPart)
     part1.width_mm = 560
     part1.height_mm = 720
-    
+
     part2 = Mock(spec=ProjectCabinetPart)
     part2.width_mm = 560
     part2.height_mm = 720
-    
+
     cabinet.parts = [part1, part2]
     return cabinet
 
@@ -95,22 +95,22 @@ def mock_cabinet_different_width_parts():
     cabinet.body_color = "Biały"
     cabinet.front_color = "Biały"
     cabinet.cabinet_type = None
-    
+
     # Sides (thin - represents depth)
     part1 = Mock(spec=ProjectCabinetPart)
     part1.width_mm = 20
     part1.height_mm = 720
-    
+
     # Front
     part2 = Mock(spec=ProjectCabinetPart)
     part2.width_mm = 560
     part2.height_mm = 720
-    
+
     # Back
     part3 = Mock(spec=ProjectCabinetPart)
     part3.width_mm = 560
     part3.height_mm = 720
-    
+
     cabinet.parts = [part1, part2, part3]
     return cabinet
 
@@ -118,39 +118,51 @@ def mock_cabinet_different_width_parts():
 class TestCabinetDimensionsDisplay:
     """Test cabinet dimension calculation and display."""
 
-    def test_cabinet_no_parts_no_dimensions(self, mock_project_view, mock_cabinet_no_parts):
+    def test_cabinet_no_parts_no_dimensions(
+        self, mock_project_view, mock_cabinet_no_parts
+    ):
         """Cabinet with no parts should not display dimensions."""
         card_data = mock_project_view._cabinet_to_card_data(mock_cabinet_no_parts)
-        
+
         assert card_data["width_mm"] is None
         assert card_data["height_mm"] is None
         assert card_data["depth_mm"] is None
 
-    def test_cabinet_single_part_2d_dimensions(self, mock_project_view, mock_cabinet_single_part):
+    def test_cabinet_single_part_2d_dimensions(
+        self, mock_project_view, mock_cabinet_single_part
+    ):
         """Cabinet with single part should show 2D (width × height, no depth)."""
         card_data = mock_project_view._cabinet_to_card_data(mock_cabinet_single_part)
-        
+
         assert card_data["width_mm"] == 560
         assert card_data["height_mm"] == 720
         assert card_data["depth_mm"] is None  # No depth for single part
         assert card_data["name"] == "Dolna + niestandardowa"
 
-    def test_cabinet_same_width_parts_2d(self, mock_project_view, mock_cabinet_same_width_parts):
+    def test_cabinet_same_width_parts_2d(
+        self, mock_project_view, mock_cabinet_same_width_parts
+    ):
         """Cabinet with multiple parts of same width should show 2D."""
-        card_data = mock_project_view._cabinet_to_card_data(mock_cabinet_same_width_parts)
-        
+        card_data = mock_project_view._cabinet_to_card_data(
+            mock_cabinet_same_width_parts
+        )
+
         assert card_data["width_mm"] == 560
         assert card_data["height_mm"] == 720
         # When widths are all the same, no depth can be calculated
         assert card_data["depth_mm"] is None
 
-    def test_cabinet_different_width_parts_3d(self, mock_project_view, mock_cabinet_different_width_parts):
+    def test_cabinet_different_width_parts_3d(
+        self, mock_project_view, mock_cabinet_different_width_parts
+    ):
         """Cabinet with parts of different widths should show 3D with smallest width as depth."""
-        card_data = mock_project_view._cabinet_to_card_data(mock_cabinet_different_width_parts)
-        
+        card_data = mock_project_view._cabinet_to_card_data(
+            mock_cabinet_different_width_parts
+        )
+
         assert card_data["width_mm"] == 560  # Max of widths
         assert card_data["height_mm"] == 720
-        assert card_data["depth_mm"] == 20   # Min of widths (smallest = depth)
+        assert card_data["depth_mm"] == 20  # Min of widths (smallest = depth)
 
     def test_cabinet_with_none_dimensions(self, mock_project_view):
         """Cabinet with parts having None dimensions should handle gracefully."""
@@ -161,15 +173,15 @@ class TestCabinetDimensionsDisplay:
         cabinet.body_color = "Biały"
         cabinet.front_color = "Biały"
         cabinet.cabinet_type = None
-        
+
         part = Mock(spec=ProjectCabinetPart)
         part.width_mm = None
         part.height_mm = 720
-        
+
         cabinet.parts = [part]
-        
+
         card_data = mock_project_view._cabinet_to_card_data(cabinet)
-        
+
         # Should handle None gracefully
         assert card_data["width_mm"] is None
         assert card_data["height_mm"] == 720
@@ -183,26 +195,26 @@ class TestCabinetDimensionsDisplay:
         cabinet.body_color = "Biały"
         cabinet.front_color = "Biały"
         cabinet.cabinet_type = None
-        
+
         # Side (thin - depth)
         side = Mock(spec=ProjectCabinetPart)
         side.width_mm = 560  # Width of cabinet
         side.height_mm = 720
-        
+
         # Bottom (thin - depth)
         bottom = Mock(spec=ProjectCabinetPart)
         bottom.width_mm = 560
         bottom.height_mm = 564  # Front width
-        
+
         # Front (actual width)
         front = Mock(spec=ProjectCabinetPart)
         front.width_mm = 600
         front.height_mm = 720
-        
+
         cabinet.parts = [side, bottom, front]
-        
+
         card_data = mock_project_view._cabinet_to_card_data(cabinet)
-        
+
         # Should use max width, max height, and min of different widths as depth
         assert card_data["width_mm"] == 600  # Max width
         assert card_data["height_mm"] == 720
@@ -216,19 +228,19 @@ class TestCabinetDimensionsDisplay:
         cabinet.quantity = 1
         cabinet.body_color = "Biały"
         cabinet.front_color = "Biały"
-        
+
         cabinet_type = Mock()
         cabinet_type.name = "LOFT Dolna 60"
         cabinet_type.kitchen_type = "LOFT"
         cabinet.cabinet_type = cabinet_type
-        
+
         part = Mock(spec=ProjectCabinetPart)
         part.width_mm = 600
         part.height_mm = 720
-        
+
         cabinet.parts = [part]
-        
+
         card_data = mock_project_view._cabinet_to_card_data(cabinet)
-        
+
         assert card_data["name"] == "LOFT Dolna 60"
         assert card_data["kitchen_type"] == "LOFT"

@@ -90,11 +90,11 @@ class EmptyStateWidget(QWidget):
         subtitle.setAlignment(Qt.AlignmentFlag.AlignCenter)
         subtitle.setStyleSheet("color: #94a3b8; font-size: 14px;")
 
-        # CTA Button
+        # CTA Button - uses primary theme color
         add_button = QPushButton("Dodaj z katalogu")
         add_button.setStyleSheet("""
             QPushButton {
-                background-color: #2196F3;
+                background-color: #0A766C;
                 color: white;
                 border: none;
                 border-radius: 8px;
@@ -103,10 +103,10 @@ class EmptyStateWidget(QWidget):
                 font-size: 14px;
             }
             QPushButton:hover {
-                background-color: #1976D2;
+                background-color: #085f56;
             }
             QPushButton:pressed {
-                background-color: #0D47A1;
+                background-color: #064e46;
             }
         """)
         add_button.clicked.connect(self.add_cabinet_requested.emit)
@@ -321,12 +321,44 @@ class ProjectDetailsView(QDialog):
             Qt.ScrollBarPolicy.ScrollBarAsNeeded
         )
 
+        # Wrapper widget for scroll area content (cards + add button)
+        self.scroll_content = QWidget()
+        scroll_content_layout = QVBoxLayout(self.scroll_content)
+        scroll_content_layout.setContentsMargins(0, 0, 0, 0)
+        scroll_content_layout.setSpacing(16)
+
         # Card container with FlowLayout for simple, flash-free behavior (like main window)
         self.card_container = QWidget()
         self.card_layout = FlowLayout(self.card_container, margin=8, spacing=12)
         self.card_container.setLayout(self.card_layout)
+        scroll_content_layout.addWidget(self.card_container)
 
-        self.card_scroll.setWidget(self.card_container)
+        # Add from catalog button - below cards, scrolls with them
+        self.add_catalog_btn = QPushButton("+ Dodaj z katalogu")
+        self.add_catalog_btn.clicked.connect(self._handle_add_from_catalog)
+        self.add_catalog_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #0A766C;
+                color: white;
+                border: none;
+                border-radius: 6px;
+                padding: 10px 16px;
+                font-weight: 500;
+                font-size: 10pt;
+            }
+            QPushButton:hover {
+                background-color: #085f56;
+            }
+            QPushButton:pressed {
+                background-color: #064e46;
+            }
+        """)
+        scroll_content_layout.addWidget(
+            self.add_catalog_btn, 0, Qt.AlignmentFlag.AlignCenter
+        )
+        scroll_content_layout.addStretch()
+
+        self.card_scroll.setWidget(self.scroll_content)
         self.stacked_widget.addWidget(self.card_scroll)
 
         # Empty state widget for when no cabinets exist
@@ -843,7 +875,7 @@ class ProjectDetailsView(QDialog):
         # Calculate dimensions from parts snapshot
         if hasattr(cabinet, "parts") and cabinet.parts:
             parts = cabinet.parts
-            
+
             if len(parts) == 1:
                 # Single part: use 2D dimensions (width and height)
                 part = parts[0]
@@ -852,27 +884,27 @@ class ProjectDetailsView(QDialog):
                 if part.height_mm is not None:
                     height = int(part.height_mm)
                 # Don't set depth for single part
-                
+
             elif len(parts) >= 2:
                 # Multiple parts: analyze if we can determine 3D dimensions
                 # Check which dimensions are consistent across parts
                 widths = [int(p.width_mm) for p in parts if p.width_mm is not None]
                 heights = [int(p.height_mm) for p in parts if p.height_mm is not None]
-                
+
                 # If widths are all the same, it's the cabinet width
                 if widths and len(set(widths)) == 1:
                     width = widths[0]
                 elif widths:
                     # Use the most common width or max
                     width = max(widths)
-                
+
                 # If heights are all the same, it's the cabinet height
                 if heights and len(set(heights)) == 1:
                     height = heights[0]
                 elif heights:
                     # Use the most common height or max
                     height = max(heights)
-                
+
                 # For depth: use the fact that different widths can indicate front/back parts
                 # If there are different widths, the smaller one is likely the depth
                 if widths and len(set(widths)) > 1:
