@@ -393,14 +393,10 @@ class CabinetEditorDialog(QDialog):
                 height = max(height, part.height_mm or 0)
 
         # Use kitchen type to determine depth (standard cabinet depths)
-        depth = (
-            560 if self.cabinet_type.kitchen_type in ["LOFT", "PARIS", "WINO"] else 320
-        )
 
         if width and height:
             self.drawing_placeholder.setText(
-                f"Rysunek szafki\n"
-                f"(Implementacja rysunku w przyszłości)"
+                "Rysunek szafki\n(Implementacja rysunku w przyszłości)"
             )
         else:
             self.drawing_placeholder.setText(
