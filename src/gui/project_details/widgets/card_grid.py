@@ -143,14 +143,11 @@ class CardGrid(QWidget):
         self.empty_state = EmptyStateWidget()
         self.empty_state.add_cabinet_requested.connect(self.sig_add_from_catalog.emit)
 
-        # Initially show empty state
-        self.scroll_area.setWidget(self.empty_state)
-        main_layout.addWidget(self.scroll_area)
-
-        # Add button - always visible when showing cards
+        # Add button - visible when showing cards (before scroll area)
         self.add_catalog_btn = QPushButton("+ Dodaj z katalogu")
         self.add_catalog_btn.setVisible(False)  # Hidden until cards view is shown
         self.add_catalog_btn.clicked.connect(self.sig_add_from_catalog.emit)
+        self.add_catalog_btn.setFixedHeight(40)
         self.add_catalog_btn.setStyleSheet(f"""
             QPushButton {{
                 background-color: {PRIMARY};
@@ -168,7 +165,11 @@ class CardGrid(QWidget):
                 background-color: #064e46;
             }}
         """)
-        main_layout.addWidget(self.add_catalog_btn)
+        main_layout.addWidget(self.add_catalog_btn, 0, Qt.AlignmentFlag.AlignLeft)
+
+        # Initially show empty state
+        self.scroll_area.setWidget(self.empty_state)
+        main_layout.addWidget(self.scroll_area)
 
     def add_card(self, cabinet_data):
         """
