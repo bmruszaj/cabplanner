@@ -59,6 +59,90 @@ class TemplateService:
         self.db.commit()
         return True
 
+    def update_template_name(self, template_id: int, new_name: str) -> bool:
+        """Update the name of a cabinet template."""
+        tpl = self.get_template(template_id)
+        if not tpl:
+            return False
+        tpl.name = new_name
+        try:
+            self.db.commit()
+            return True
+        except IntegrityError as e:
+            self.db.rollback()
+            if "UNIQUE constraint failed" in str(e):
+                raise ValueError(
+                    f"Typ szafki o nazwie '{new_name}' już istnieje. Wybierz inną nazwę."
+                )
+            raise ValueError(f"Błąd bazy danych: {str(e)}")
+
+    def duplicate_template(self, template_id: int) -> Optional[CabinetTemplate]:
+        """
+        Duplicate a cabinet template with all its parts and accessories.
+
+        Creates a copy with a unique name (adds " (kopia)" suffix).
+
+        Args:
+            template_id: ID of the template to duplicate
+
+        Returns:
+            The newly created template, or None if source template not found
+        """
+        source = self.get_template(template_id)
+        if not source:
+            return None
+
+        # Generate unique name
+        base_name = source.name
+        new_name = f"{base_name} (kopia)"
+
+        # Check if name exists and add number if needed
+        counter = 1
+        while True:
+            existing = self.db.scalar(
+                select(CabinetTemplate).where(CabinetTemplate.name == new_name)
+            )
+            if not existing:
+                break
+            counter += 1
+            new_name = f"{base_name} (kopia {counter})"
+
+        # Create new template
+        new_template = CabinetTemplate(
+            kitchen_type=source.kitchen_type,
+            name=new_name,
+        )
+        self.db.add(new_template)
+        self.db.flush()  # Get the ID
+
+        # Duplicate all parts
+        for part in source.parts:
+            new_part = CabinetPart(
+                cabinet_type_id=new_template.id,
+                part_name=part.part_name,
+                height_mm=part.height_mm,
+                width_mm=part.width_mm,
+                pieces=part.pieces,
+                material=part.material,
+                wrapping=part.wrapping,
+                comments=part.comments,
+                processing_json=part.processing_json,
+            )
+            self.db.add(new_part)
+
+        # Duplicate all accessory links
+        for acc_link in source.accessories:
+            new_link = CabinetTemplateAccessory(
+                cabinet_type_id=new_template.id,
+                accessory_id=acc_link.accessory_id,
+                count=acc_link.count,
+            )
+            self.db.add(new_link)
+
+        self.db.commit()
+        self.db.refresh(new_template)
+        return new_template
+
     def update_template(self, template_id: int, **fields) -> Optional[CabinetTemplate]:
         tpl = self.get_template(template_id)
         if not tpl:
@@ -116,6 +200,18 @@ class TemplateService:
             CabinetPart.cabinet_type_id == cabinet_type_id
         )
         return list(self.db.scalars(stmt).all())
+
+    def update_part(self, part_id: int, **kwargs) -> Optional[CabinetPart]:
+        """Update a cabinet part."""
+        part = self.db.get(CabinetPart, part_id)
+        if not part:
+            return None
+        for key, value in kwargs.items():
+            if hasattr(part, key):
+                setattr(part, key, value)
+        self.db.commit()
+        self.db.refresh(part)
+        return part
 
     def delete_part(self, part_id: int) -> bool:
         part = self.db.get(CabinetPart, part_id)
