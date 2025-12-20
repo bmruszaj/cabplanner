@@ -11,6 +11,7 @@ from PySide6.QtWidgets import (
     QTabWidget,
     QPushButton,
     QLabel,
+    QLineEdit,
     QFrame,
     QMessageBox,
 )
@@ -80,6 +81,25 @@ class CabinetEditorDialog(QDialog):
         title_font.setBold(True)
         self.title_label.setFont(title_font)
         header_layout.addWidget(self.title_label)
+
+        # Editable name field (visible only in type mode)
+        self.name_edit = QLineEdit()
+        self.name_edit.setPlaceholderText("Nazwa szafki...")
+        self.name_edit.setStyleSheet("""
+            QLineEdit {
+                font-size: 12pt;
+                font-weight: bold;
+                padding: 6px 10px;
+                border: 1px solid #ccc;
+                border-radius: 4px;
+                background-color: #fff;
+            }
+            QLineEdit:focus {
+                border-color: #0A766C;
+            }
+        """)
+        self.name_edit.hide()  # Hidden by default
+        header_layout.addWidget(self.name_edit)
 
         self.subtitle_label = QLabel("Wybierz element do edycji")
         subtitle_font = QFont()
@@ -197,6 +217,9 @@ class CabinetEditorDialog(QDialog):
         self.instance_form.sig_dirty_changed.connect(self._on_dirty_changed)
         self.parts_form.sig_dirty_changed.connect(self._on_dirty_changed)
         self.accessories_form.sig_dirty_changed.connect(self._on_dirty_changed)
+
+        # Name edit tracking
+        self.name_edit.textChanged.connect(self._on_name_changed)
 
         # Buttons
         self.cancel_button.clicked.connect(self._cancel)
@@ -321,9 +344,29 @@ class CabinetEditorDialog(QDialog):
         # We have data if we have either a cabinet type or a project instance
         has_data = self.cabinet_type is not None or self.project_instance is not None
         is_dirty = current_form.is_dirty() if current_form else False
-        is_valid = current_form.is_valid() if current_form else False
+        is_valid = current_form.is_valid() if current_form else True
 
-        self.save_button.setEnabled(has_data and is_dirty and is_valid)
+        # Check if name was changed (in type mode)
+        name_changed = self._is_name_changed()
+        name_valid = len(self.name_edit.text().strip()) > 0
+
+        # Enable save if: has data AND (form is dirty+valid OR name changed+valid)
+        can_save = has_data and (
+            (is_dirty and is_valid) or (name_changed and name_valid)
+        )
+
+        self.save_button.setEnabled(can_save)
+
+    def _is_name_changed(self) -> bool:
+        """Check if the name field was modified."""
+        # We're in type-editing mode if we have cabinet_type but no project_instance
+        if not self.cabinet_type or self.project_instance is not None:
+            return False
+        return self.name_edit.text().strip() != self.cabinet_type.name
+
+    def _on_name_changed(self):
+        """Handle name field text change."""
+        self._update_buttons()
 
     def _get_current_form(self):
         """Get currently active form widget."""
@@ -357,9 +400,6 @@ class CabinetEditorDialog(QDialog):
         if width and height:
             self.drawing_placeholder.setText(
                 f"Rysunek szafki\n"
-                f"Szerokość: {width}mm\n"
-                f"Wysokość: {height}mm\n"
-                f"Głębokość: {depth}mm\n\n"
                 f"(Implementacja rysunku w przyszłości)"
             )
         else:
@@ -462,8 +502,19 @@ class CabinetEditorDialog(QDialog):
     def _save_catalog_template_forms(self) -> bool:
         """Save all dirty forms for catalog template."""
         try:
-            # Parts are managed through individual dialogs
+            # Save name if changed
+            new_name = self.name_edit.text().strip()
+            if new_name and self.cabinet_type and new_name != self.cabinet_type.name:
+                self.catalog_service.cabinet_type_service.update_template_name(
+                    self.cabinet_type.id, new_name
+                )
+
+            # Parts - apply pending changes
             if self.parts_form.is_dirty():
+                parts_changes = self.parts_form.values()
+                if not self._apply_template_parts_changes(parts_changes):
+                    self._show_save_error("części")
+                    return False
                 self.parts_form.reset_dirty()
 
             # Save accessories
@@ -492,8 +543,9 @@ class CabinetEditorDialog(QDialog):
         self.project_instance = project_instance
         self.mode = "instance"
 
-        # Update title
+        # Update title and hide name editor
         self.title_label.setText(f"Edytor: {cabinet_type.name}")
+        self.name_edit.hide()
         self.subtitle_label.setText("Edycja instancji szafki w projekcie")
 
         # Load forms
@@ -519,8 +571,10 @@ class CabinetEditorDialog(QDialog):
         self.project_instance = None
         self.mode = "type"
 
-        # Update title
-        self.title_label.setText(f"Edytor: {cabinet_type.name}")
+        # Update title and show name editor
+        self.title_label.setText("Edytor typu szafki")
+        self.name_edit.setText(cabinet_type.name)
+        self.name_edit.show()
         self.subtitle_label.setText("Edycja typu szafki w katalogu")
 
         # Load forms
@@ -545,6 +599,9 @@ class CabinetEditorDialog(QDialog):
         self.cabinet_type = None  # No catalog type for custom cabinets
         self.project_instance = project_instance
         self.mode = "custom_instance"
+
+        # Hide name edit for custom instances
+        self.name_edit.hide()
 
         # Update title - try to get template name from calc_context
         template_name = "Niestandardowa"
@@ -682,6 +739,45 @@ class CabinetEditorDialog(QDialog):
 
         except Exception as e:
             print(f"Error applying accessories changes: {e}")
+            return False
+
+    def _apply_template_parts_changes(self, parts_changes: dict) -> bool:
+        """Apply pending parts changes for catalog template."""
+        try:
+            if not self.cabinet_type or not self.catalog_service:
+                return False
+
+            template_service = self.catalog_service.cabinet_type_service
+
+            # Apply parts to remove first
+            for part_id in parts_changes.get("parts_to_remove", []):
+                success = template_service.delete_part(part_id)
+                if not success:
+                    return False
+
+            # Apply parts changes (edits)
+            for part_id, part_data in parts_changes.get("parts_changes", {}).items():
+                success = template_service.update_part(part_id, **part_data)
+                if not success:
+                    return False
+
+            # Apply parts to add
+            for part_data in parts_changes.get("parts_to_add", []):
+                template_service.add_part(
+                    cabinet_type_id=self.cabinet_type.id,
+                    part_name=part_data.get("part_name", ""),
+                    height_mm=part_data.get("height_mm", 0),
+                    width_mm=part_data.get("width_mm", 0),
+                    pieces=part_data.get("pieces", 1),
+                    material=part_data.get("material"),
+                    wrapping=part_data.get("wrapping"),
+                    comments=part_data.get("comments"),
+                )
+
+            return True
+
+        except Exception as e:
+            print(f"Error applying template parts changes: {e}")
             return False
 
     def _apply_template_accessories_changes(self, accessories_changes: dict) -> bool:
