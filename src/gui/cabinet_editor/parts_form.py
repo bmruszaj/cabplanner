@@ -28,6 +28,7 @@ from PySide6.QtGui import QFont
 
 from src.gui.resources.resources import get_icon
 from src.gui.resources.styles import get_theme, PRIMARY
+from .pending_changes import PendingChanges
 
 
 class PartsTableModel(QAbstractTableModel):
@@ -251,10 +252,8 @@ class PartsForm(QWidget):
         self.project_cabinet = None  # For project instances
         self._is_dirty = False
 
-        # Pending changes - trzymane w pamięci do czasu zapisu
-        self.pending_parts_to_add = []  # Lista części do dodania
-        self.pending_parts_to_remove = []  # Lista ID części do usunięcia
-        self.pending_parts_changes = {}  # Dict {part_id: part_data} dla edytowanych części
+        # Pending changes - held in memory until Save button is clicked
+        self.pending = PendingChanges()
 
         self._setup_ui()
         self._setup_connections()
@@ -402,11 +401,8 @@ class PartsForm(QWidget):
         dialog = PartEditDialog(parent=self)
         if dialog.exec() == QDialog.Accepted:
             try:
-                # Get part data from dialog
                 part_data = dialog.part_data
-
-                # Always add to pending changes - will be saved on dialog Save button
-                self.pending_parts_to_add.append(part_data)
+                self.pending.add_item(part_data)
                 self._mark_dirty()
                 self._refresh_parts_display()
 
@@ -428,22 +424,14 @@ class PartsForm(QWidget):
                 if dialog.exec() == QDialog.Accepted:
                     try:
                         part_data = dialog.part_data
+                        part_id = getattr(part, "id", None) or getattr(
+                            part, "temp_id", None
+                        )
 
-                        # Always add to pending changes - will be saved on dialog Save button
-                        part_id = getattr(part, "id", None)
-                        if part_id and part_id > 0:
-                            # Existing part from database - track change
-                            self.pending_parts_changes[part_id] = part_data
-                        else:
-                            # Newly added part (in pending_parts_to_add) - update in place
-                            # Find and update the pending part
-                            for i, pending_part in enumerate(self.pending_parts_to_add):
-                                if pending_part.get("part_name") == part.part_name:
-                                    self.pending_parts_to_add[i] = part_data
-                                    break
-
-                        self._mark_dirty()
-                        self._refresh_parts_display()
+                        if part_id:
+                            self.pending.update_item(part_id, part_data)
+                            self._mark_dirty()
+                            self._refresh_parts_display()
 
                     except Exception as e:
                         QMessageBox.critical(
@@ -471,23 +459,13 @@ class PartsForm(QWidget):
 
                 if reply == QMessageBox.Yes:
                     try:
-                        # Always add to pending changes - will be saved on dialog Save button
-                        part_id = getattr(part, "id", None)
-                        if part_id and part_id > 0:
-                            # Existing part from database - mark for removal
-                            self.pending_parts_to_remove.append(part_id)
-                            # Also remove any pending changes for this part
-                            if part_id in self.pending_parts_changes:
-                                del self.pending_parts_changes[part_id]
-                        else:
-                            # Newly added part (in pending_parts_to_add) - remove from pending
-                            for i, pending_part in enumerate(self.pending_parts_to_add):
-                                if pending_part.get("part_name") == part.part_name:
-                                    self.pending_parts_to_add.pop(i)
-                                    break
-
-                        self._mark_dirty()
-                        self._refresh_parts_display()
+                        part_id = getattr(part, "id", None) or getattr(
+                            part, "temp_id", None
+                        )
+                        if part_id:
+                            self.pending.remove_item(part_id)
+                            self._mark_dirty()
+                            self._refresh_parts_display()
 
                     except Exception as e:
                         QMessageBox.critical(
@@ -510,39 +488,53 @@ class PartsForm(QWidget):
 
     def _refresh_parts_display(self):
         """Refresh parts display including pending changes."""
+        display_parts = self._get_display_parts()
+        self._update_parts_table(display_parts)
+
+    def _get_display_parts(self) -> list:
+        """Get list of parts to display, including pending changes."""
+        from types import SimpleNamespace
+
         # Start with current database parts
         existing_parts = []
-
         if self.project_cabinet and hasattr(self.project_cabinet, "parts"):
-            # Project instance - load parts from snapshot
             existing_parts = list(self.project_cabinet.parts)
         elif self.cabinet_type and hasattr(self.cabinet_type, "parts"):
-            # Catalog template - load parts from template
             existing_parts = list(self.cabinet_type.parts)
         elif hasattr(self, "custom_parts"):
             existing_parts = self.custom_parts
 
         # Filter out parts marked for removal
         filtered_parts = [
-            part
-            for part in existing_parts
-            if part.id not in self.pending_parts_to_remove
+            part for part in existing_parts if part.id not in self.pending.to_remove
         ]
 
-        # Apply changes to existing parts
+        # Apply changes to existing parts (create copies to avoid mutating originals)
+        result_parts = []
         for part in filtered_parts:
-            if part.id in self.pending_parts_changes:
-                updated_data = self.pending_parts_changes[part.id]
-                for key, value in updated_data.items():
-                    if hasattr(part, key):
-                        setattr(part, key, value)
+            if part.id in self.pending.changes:
+                updated_data = self.pending.changes[part.id]
+                part_copy = SimpleNamespace(
+                    id=part.id,
+                    part_name=updated_data.get("part_name", part.part_name),
+                    height_mm=updated_data.get("height_mm", part.height_mm),
+                    width_mm=updated_data.get("width_mm", part.width_mm),
+                    pieces=updated_data.get("pieces", part.pieces),
+                    material=updated_data.get("material", part.material),
+                    wrapping=updated_data.get("wrapping", part.wrapping),
+                    comments=updated_data.get(
+                        "comments", getattr(part, "comments", None)
+                    ),
+                )
+                result_parts.append(part_copy)
+            else:
+                result_parts.append(part)
 
-        # Add pending new parts (create temporary objects for display)
-        from types import SimpleNamespace
-
-        for pending_part in self.pending_parts_to_add:
+        # Add pending new parts
+        for pending_part in self.pending.to_add:
             temp_part = SimpleNamespace(
-                id=-1,  # Temporary ID
+                id=None,
+                temp_id=pending_part.get("temp_id"),
                 part_name=pending_part.get("part_name", ""),
                 height_mm=pending_part.get("height_mm", 0),
                 width_mm=pending_part.get("width_mm", 0),
@@ -551,11 +543,14 @@ class PartsForm(QWidget):
                 wrapping=pending_part.get("wrapping", ""),
                 comments=pending_part.get("comments", ""),
             )
-            filtered_parts.append(temp_part)
+            result_parts.append(temp_part)
 
-        # Update display
-        total_count = len(filtered_parts)
-        pending_count = len(self.pending_parts_to_add)
+        return result_parts
+
+    def _update_parts_table(self, parts: list) -> None:
+        """Update the parts table with given parts list."""
+        total_count = len(parts)
+        pending_count = len(self.pending.to_add)
 
         if pending_count > 0:
             self.info_label.setText(
@@ -565,10 +560,10 @@ class PartsForm(QWidget):
             self.info_label.setText(f"Znaleziono {total_count} części")
 
         if not hasattr(self, "parts_model"):
-            self.parts_model = PartsTableModel(filtered_parts)
+            self.parts_model = PartsTableModel(parts)
             self.parts_table.setModel(self.parts_model)
         else:
-            self.parts_model.update_parts(filtered_parts)
+            self.parts_model.update_parts(parts)
 
     def _mark_dirty(self):
         """Mark form as dirty and emit signal."""
@@ -582,9 +577,7 @@ class PartsForm(QWidget):
         self.project_cabinet = project_cabinet
 
         # Reset pending changes when loading new data
-        self.pending_parts_to_add = []
-        self.pending_parts_to_remove = []
-        self.pending_parts_changes = {}
+        self.pending.clear()
 
         if not cabinet_type and not project_cabinet:
             self.setEnabled(False)
@@ -592,7 +585,7 @@ class PartsForm(QWidget):
             return
 
         self.setEnabled(True)
-        self._refresh_parts_display()  # Use new method that shows pending changes
+        self._refresh_parts_display()
 
         # Reset dirty flag
         self._is_dirty = False
@@ -605,12 +598,10 @@ class PartsForm(QWidget):
         self.custom_parts = custom_parts or []
 
         # Reset pending changes when loading new data
-        self.pending_parts_to_add = []
-        self.pending_parts_to_remove = []
-        self.pending_parts_changes = {}
+        self.pending.clear()
 
         self.setEnabled(True)
-        self._refresh_parts_display()  # Use new method that shows pending changes
+        self._refresh_parts_display()
 
         # Update info label
         if self.custom_parts:
@@ -635,27 +626,26 @@ class PartsForm(QWidget):
 
     def reset_dirty(self):
         """Reset dirty flag after saving and clear pending changes."""
-        # Clear pending changes since they've been saved
-        self.pending_parts_to_add = []
-        self.pending_parts_to_remove = []
-        self.pending_parts_changes = {}
-
+        self.pending.clear()
         self._is_dirty = False
         self.sig_dirty_changed.emit(False)
-
-        # Refresh display to show current state without pending changes
         self._refresh_parts_display()
 
     def values(self) -> dict:
-        """Get pending changes for saving."""
+        """Get pending changes for saving.
+
+        Returns a dict with consistent structure:
+        - parts_to_add: list of part data dicts
+        - parts_to_remove: list of part IDs
+        - parts_changes: dict of {part_id: updated_data}
+        """
         # For custom cabinets, return the complete updated parts list
         if hasattr(self, "custom_parts"):
-            # Start with current custom parts
             updated_parts = []
 
             # Add existing parts (with any pending changes applied)
             for part in self.custom_parts:
-                if part.id not in self.pending_parts_to_remove:
+                if part.id not in self.pending.to_remove:
                     part_dict = {
                         "part_name": part.part_name,
                         "height_mm": part.height_mm,
@@ -668,8 +658,8 @@ class PartsForm(QWidget):
                     }
 
                     # Apply any pending changes for this part
-                    if part.id in self.pending_parts_changes:
-                        part_dict.update(self.pending_parts_changes[part.id])
+                    if part.id in self.pending.changes:
+                        part_dict.update(self.pending.changes[part.id])
 
                     # Include source information if available
                     if hasattr(part, "source_template_id"):
@@ -682,18 +672,15 @@ class PartsForm(QWidget):
                     updated_parts.append(part_dict)
 
             # Add new pending parts
-            for pending_part in self.pending_parts_to_add:
-                updated_parts.append(pending_part)
-
+            updated_parts.extend(self.pending.get_additions())
             return updated_parts
 
-        else:
-            # For catalog cabinets, return pending changes
-            return {
-                "parts_to_add": self.pending_parts_to_add.copy(),
-                "parts_to_remove": self.pending_parts_to_remove.copy(),
-                "parts_changes": self.pending_parts_changes.copy(),
-            }
+        # For regular cabinets, return structured pending changes
+        return {
+            "parts_to_add": self.pending.get_additions(),
+            "parts_to_remove": self.pending.get_removals(),
+            "parts_changes": self.pending.get_updates(),
+        }
 
     def get_all_parts_data(self) -> list:
         """Get current parts data from the table model."""
