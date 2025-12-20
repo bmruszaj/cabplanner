@@ -89,7 +89,7 @@ class PartEditDialog(QDialog):
         # Material type
         self.material_combo = QComboBox()
         self.material_combo.addItems(
-            ["PLYTA 12", "PLYTA 16", "PLYTA 18", "HDF", "FRONT", "INNE"]
+            ["PLYTA 18", "PLYTA 16", "PLYTA 12", "HDF", "FRONT", "INNE"]
         )
         self.material_combo.setEditable(True)
         material_layout.addRow("Materiał:", self.material_combo)

@@ -18,6 +18,7 @@ from PySide6.QtGui import QFont
 from .cabinet_card import CabinetCard
 from ..constants import CARD_GRID_SPACING
 from src.gui.layouts.flow_layout import FlowLayout
+from src.gui.resources.styles import PRIMARY
 
 
 class EmptyStateWidget(QWidget):
@@ -113,7 +114,7 @@ class CardGrid(QWidget):
         """Initialize the UI layout."""
         main_layout = QVBoxLayout(self)
         main_layout.setContentsMargins(20, 20, 20, 20)
-        main_layout.setSpacing(0)
+        main_layout.setSpacing(16)
 
         # Scroll area for cards
         self.scroll_area = QScrollArea()
@@ -145,6 +146,29 @@ class CardGrid(QWidget):
         # Initially show empty state
         self.scroll_area.setWidget(self.empty_state)
         main_layout.addWidget(self.scroll_area)
+
+        # Add button - always visible when showing cards
+        self.add_catalog_btn = QPushButton("+ Dodaj z katalogu")
+        self.add_catalog_btn.setVisible(False)  # Hidden until cards view is shown
+        self.add_catalog_btn.clicked.connect(self.sig_add_from_catalog.emit)
+        self.add_catalog_btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {PRIMARY};
+                color: white;
+                border: none;
+                border-radius: 6px;
+                padding: 10px 16px;
+                font-weight: 500;
+                font-size: 10pt;
+            }}
+            QPushButton:hover {{
+                background-color: #085f56;
+            }}
+            QPushButton:pressed {{
+                background-color: #064e46;
+            }}
+        """)
+        main_layout.addWidget(self.add_catalog_btn)
 
     def add_card(self, cabinet_data):
         """
@@ -402,6 +426,9 @@ class CardGrid(QWidget):
             self.flow_layout = FlowLayout(self.content_widget)
             self.flow_layout.addStretch()
             self.scroll_area.setWidget(self.content_widget)
+        
+        # Show the add button when viewing cards
+        self.add_catalog_btn.setVisible(True)
 
     def _switch_to_empty_state(self):
         """Switch from card grid to empty state view."""
@@ -429,6 +456,9 @@ class CardGrid(QWidget):
                 self.sig_add_from_catalog.emit
             )
             self.scroll_area.setWidget(self.empty_state)
+        
+        # Hide the add button when showing empty state
+        self.add_catalog_btn.setVisible(False)
 
     def _show_no_results_state(self):
         """Show a 'no search results' message."""

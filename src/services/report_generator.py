@@ -123,12 +123,12 @@ class ReportGenerator:
             ]
 
             # Add sections - split FORMATKI by material type
-            if formatki_plyta_12:
-                self._add_parts_section(doc, "FORMATKI (PLYTA 12)", formatki_plyta_12)
-            if formatki_plyta_16:
-                self._add_parts_section(doc, "FORMATKI (PLYTA 16)", formatki_plyta_16)
             if formatki_plyta_18:
                 self._add_parts_section(doc, "FORMATKI (PLYTA 18)", formatki_plyta_18)
+            if formatki_plyta_16:
+                self._add_parts_section(doc, "FORMATKI (PLYTA 16)", formatki_plyta_16)
+            if formatki_plyta_12:
+                self._add_parts_section(doc, "FORMATKI (PLYTA 12)", formatki_plyta_12)
             if formatki_other:
                 self._add_parts_section(doc, "FORMATKI", formatki_other)
             self._add_parts_section(doc, "FRONTY", fronty)
@@ -306,11 +306,7 @@ class ReportGenerator:
             total = link.count * qty
             akcesoria.append(
                 SimpleNamespace(
-                    seq=seq_symbol,
-                    name=acc.name,
-                    unit=acc.unit,
-                    quantity=total,
-                    notes="",
+                    seq=seq_symbol, name=acc.name, unit=acc.unit, quantity=total, notes=""
                 )
             )
 
