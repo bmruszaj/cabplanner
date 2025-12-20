@@ -26,6 +26,7 @@ from PySide6.QtGui import QFont
 
 from src.gui.resources.resources import get_icon
 from src.gui.resources.styles import get_theme, PRIMARY
+from .pending_changes import PendingChanges
 
 
 class AccessoriesTableModel(QAbstractTableModel):
@@ -242,10 +243,8 @@ class AccessoriesForm(QWidget):
         self.cabinet_type = None
         self._is_dirty = False
 
-        # Pending changes - trzymane w pamięci do czasu zapisu
-        self.pending_accessories_to_add = []  # Lista akcesoriów do dodania
-        self.pending_accessories_to_remove = []  # Lista ID akcesoriów do usunięcia
-        self.pending_quantity_changes = {}  # Dict {accessory_id: new_quantity}
+        # Pending changes - held in memory until Save button is clicked
+        self.pending = PendingChanges()
 
         self._setup_ui()
         self._setup_connections()
@@ -388,17 +387,12 @@ class AccessoriesForm(QWidget):
             QMessageBox.warning(self, "Błąd", "Najpierw wybierz szafkę.")
             return
 
-        # Create empty list for available accessories (not used in free text mode)
         available_accessories = []
-
         dialog = AccessorySelectionDialog(available_accessories, parent=self)
         if dialog.exec() == QDialog.Accepted:
             try:
-                # Get accessory data from dialog
                 accessory_data = dialog.accessory_data
-
-                # Always add to pending changes - will be saved on dialog Save button
-                self.pending_accessories_to_add.append(
+                self.pending.add_item(
                     {
                         "name": accessory_data["name"],
                         "sku": accessory_data["sku"],
@@ -424,23 +418,15 @@ class AccessoriesForm(QWidget):
             if accessory:
                 dialog = AccessoryQuantityDialog(accessory, parent=self)
                 if dialog.exec() == QDialog.Accepted:
-                    # Always add to pending changes - will be saved on dialog Save button
-                    acc_id = getattr(accessory, "id", None) or getattr(
-                        accessory, "accessory_id", None
+                    acc_id = (
+                        getattr(accessory, "id", None)
+                        or getattr(accessory, "accessory_id", None)
+                        or getattr(accessory, "temp_id", None)
                     )
-                    if acc_id and acc_id > 0:
-                        # Existing accessory from database - track change
-                        self.pending_quantity_changes[acc_id] = dialog.new_quantity
-                    else:
-                        # Newly added accessory (in pending_accessories_to_add) - update in place
-                        acc_name = getattr(accessory, "name", None)
-                        for pending_acc in self.pending_accessories_to_add:
-                            if pending_acc.get("name") == acc_name:
-                                pending_acc["count"] = dialog.new_quantity
-                                break
-
-                    self._mark_dirty()
-                    self._refresh_accessories_display()
+                    if acc_id:
+                        self.pending.update_item(acc_id, {"count": dialog.new_quantity})
+                        self._mark_dirty()
+                        self._refresh_accessories_display()
 
     def _delete_accessory(self):
         """Delete the selected accessory (saved on dialog save button)."""
@@ -451,7 +437,6 @@ class AccessoriesForm(QWidget):
         if hasattr(self, "accessories_model"):
             accessory = self.accessories_model.get_accessory_at_row(current_row)
             if accessory:
-                # Handle both legacy and snapshot accessories for name display
                 accessory_name = ""
                 if hasattr(accessory, "accessory") and accessory.accessory:
                     accessory_name = accessory.accessory.name
@@ -467,26 +452,15 @@ class AccessoriesForm(QWidget):
                 )
 
                 if reply == QMessageBox.Yes:
-                    # Always add to pending changes - will be saved on dialog Save button
-                    acc_id = getattr(accessory, "id", None) or getattr(
-                        accessory, "accessory_id", None
+                    acc_id = (
+                        getattr(accessory, "id", None)
+                        or getattr(accessory, "accessory_id", None)
+                        or getattr(accessory, "temp_id", None)
                     )
-                    if acc_id and acc_id > 0:
-                        # Existing accessory from database - mark for removal
-                        self.pending_accessories_to_remove.append(acc_id)
-                        # Also remove any pending quantity changes for this accessory
-                        if acc_id in self.pending_quantity_changes:
-                            del self.pending_quantity_changes[acc_id]
-                    else:
-                        # Newly added accessory (in pending_accessories_to_add) - remove from pending
-                        acc_name = getattr(accessory, "name", None)
-                        for i, pending_acc in enumerate(self.pending_accessories_to_add):
-                            if pending_acc.get("name") == acc_name:
-                                self.pending_accessories_to_add.pop(i)
-                                break
-
-                    self._mark_dirty()
-                    self._refresh_accessories_display()
+                    if acc_id:
+                        self.pending.remove_item(acc_id)
+                        self._mark_dirty()
+                        self._refresh_accessories_display()
 
     def _refresh_accessories(self):
         """Refresh the accessories table (original method - loads from database)."""
@@ -517,47 +491,67 @@ class AccessoriesForm(QWidget):
 
     def _refresh_accessories_display(self):
         """Refresh accessories display including pending changes."""
+        display_accessories = self._get_display_accessories()
+        self._update_accessories_table(display_accessories)
+
+    def _get_display_accessories(self) -> list:
+        """Get list of accessories to display, including pending changes."""
+        from types import SimpleNamespace
+
         # Start with current database accessories
         existing_accessories = []
-
         if self.project_cabinet and hasattr(
             self.project_cabinet, "accessory_snapshots"
         ):
             existing_accessories = list(self.project_cabinet.accessory_snapshots)
         elif self.cabinet_type and hasattr(self.cabinet_type, "accessories"):
-            # Load accessories from cabinet template
             existing_accessories = list(self.cabinet_type.accessories)
 
         # Filter out accessories marked for removal
-        # For CabinetTemplateAccessory, use accessory_id; for snapshots, use id
-        filtered_accessories = []
+        result_accessories = []
         for acc in existing_accessories:
-            # Get the appropriate ID for this accessory type
             acc_id = getattr(acc, "id", None) or getattr(acc, "accessory_id", None)
-            if acc_id not in self.pending_accessories_to_remove:
-                filtered_accessories.append(acc)
+            if acc_id not in self.pending.to_remove:
+                # Apply quantity changes if any
+                if acc_id in self.pending.changes:
+                    updated_data = self.pending.changes[acc_id]
+                    acc_copy = SimpleNamespace(
+                        id=acc_id,
+                        name=getattr(acc, "name", None)
+                        or (
+                            acc.accessory.name
+                            if hasattr(acc, "accessory") and acc.accessory
+                            else ""
+                        ),
+                        sku=getattr(acc, "sku", None)
+                        or (
+                            acc.accessory.sku
+                            if hasattr(acc, "accessory") and acc.accessory
+                            else ""
+                        ),
+                        count=updated_data.get("count", acc.count),
+                    )
+                    result_accessories.append(acc_copy)
+                else:
+                    result_accessories.append(acc)
 
-        # Apply quantity changes
-        for acc in filtered_accessories:
-            acc_id = getattr(acc, "id", None) or getattr(acc, "accessory_id", None)
-            if acc_id in self.pending_quantity_changes:
-                acc.count = self.pending_quantity_changes[acc_id]
-
-        # Add pending new accessories (create temporary objects for display)
-        from types import SimpleNamespace
-
-        for pending_acc in self.pending_accessories_to_add:
+        # Add pending new accessories
+        for pending_acc in self.pending.to_add:
             temp_acc = SimpleNamespace(
-                id=-1,  # Temporary ID
-                name=pending_acc["name"],
-                sku=pending_acc["sku"],
-                count=pending_acc["count"],
+                id=None,
+                temp_id=pending_acc.get("temp_id"),
+                name=pending_acc.get("name", ""),
+                sku=pending_acc.get("sku", ""),
+                count=pending_acc.get("count", 1),
             )
-            filtered_accessories.append(temp_acc)
+            result_accessories.append(temp_acc)
 
-        # Update display
-        total_count = len(filtered_accessories)
-        pending_count = len(self.pending_accessories_to_add)
+        return result_accessories
+
+    def _update_accessories_table(self, accessories: list) -> None:
+        """Update the accessories table with given list."""
+        total_count = len(accessories)
+        pending_count = len(self.pending.to_add)
 
         if pending_count > 0:
             self.info_label.setText(
@@ -567,10 +561,10 @@ class AccessoriesForm(QWidget):
             self.info_label.setText(f"Znaleziono {total_count} akcesoriów")
 
         if not hasattr(self, "accessories_model"):
-            self.accessories_model = AccessoriesTableModel(filtered_accessories)
+            self.accessories_model = AccessoriesTableModel(accessories)
             self.accessories_table.setModel(self.accessories_model)
         else:
-            self.accessories_model.update_accessories(filtered_accessories)
+            self.accessories_model.update_accessories(accessories)
 
     def _mark_dirty(self):
         """Mark form as dirty and emit signal."""
@@ -584,9 +578,7 @@ class AccessoriesForm(QWidget):
         self.cabinet_type = cabinet_type
 
         # Reset pending changes when loading new data
-        self.pending_accessories_to_add = []
-        self.pending_accessories_to_remove = []
-        self.pending_quantity_changes = {}
+        self.pending.clear()
 
         if not project_cabinet and not cabinet_type:
             self.setEnabled(False)
@@ -594,7 +586,7 @@ class AccessoriesForm(QWidget):
             return
 
         self.setEnabled(True)
-        self._refresh_accessories_display()  # Use new method that shows pending changes
+        self._refresh_accessories_display()
 
         # Reset dirty flag
         self._is_dirty = False
@@ -611,16 +603,11 @@ class AccessoriesForm(QWidget):
 
     def reset_dirty(self):
         """Reset dirty flag after saving and clear pending changes."""
-        # Clear pending changes since they've been saved
-        self.pending_accessories_to_add = []
-        self.pending_accessories_to_remove = []
-        self.pending_quantity_changes = {}
-
+        self.pending.clear()
         self._is_dirty = False
         self.sig_dirty_changed.emit(False)
 
         # Reload project_cabinet from database to get fresh accessory_snapshots
-        # (with proper IDs for newly added accessories)
         if self.project_cabinet and self.project_service:
             refreshed_cabinet = self.project_service.get_cabinet(
                 self.project_cabinet.id
@@ -628,13 +615,25 @@ class AccessoriesForm(QWidget):
             if refreshed_cabinet:
                 self.project_cabinet = refreshed_cabinet
 
-        # Refresh display to show current state without pending changes
         self._refresh_accessories_display()
 
     def values(self) -> dict:
-        """Get pending changes for saving."""
+        """Get pending changes for saving.
+
+        Returns a dict with consistent structure:
+        - accessories_to_add: list of accessory data dicts
+        - accessories_to_remove: list of accessory IDs
+        - quantity_changes: dict of {acc_id: new_count}
+        """
+        # Extract quantity changes from changes dict
+        quantity_changes = {
+            acc_id: data.get("count")
+            for acc_id, data in self.pending.changes.items()
+            if "count" in data
+        }
+
         return {
-            "accessories_to_add": self.pending_accessories_to_add.copy(),
-            "accessories_to_remove": self.pending_accessories_to_remove.copy(),
-            "quantity_changes": self.pending_quantity_changes.copy(),
+            "accessories_to_add": self.pending.get_additions(),
+            "accessories_to_remove": self.pending.get_removals(),
+            "quantity_changes": quantity_changes,
         }
