@@ -390,7 +390,7 @@ class PartsForm(QWidget):
         self.delete_part_btn.setEnabled(has_selection)
 
     def _add_part(self):
-        """Add a new part directly to the database."""
+        """Add a new part to pending changes (saved on dialog save button)."""
         if (
             not self.cabinet_type
             and not self.project_cabinet
@@ -405,49 +405,10 @@ class PartsForm(QWidget):
                 # Get part data from dialog
                 part_data = dialog.part_data
 
-                # Save directly to database for project instances
-                if self.project_cabinet and self.project_service:
-                    success = self.project_service.add_part_to_cabinet(
-                        cabinet_id=self.project_cabinet.id,
-                        part_name=part_data["part_name"],
-                        width_mm=part_data["width_mm"],
-                        height_mm=part_data["height_mm"],
-                        pieces=part_data["pieces"],
-                        material=part_data.get("material"),
-                        wrapping=part_data.get("wrapping"),
-                        comments=part_data.get("comments"),
-                    )
-                    if success:
-                        # Reload cabinet from database to get fresh data
-                        refreshed_cabinet = self.project_service.get_cabinet(
-                            self.project_cabinet.id
-                        )
-                        if refreshed_cabinet:
-                            self.project_cabinet = refreshed_cabinet
-                        self._refresh_parts_display()
-                    else:
-                        QMessageBox.warning(
-                            self, "Błąd", "Nie udało się dodać części do bazy."
-                        )
-                elif self.cabinet_type:
-                    # For catalog templates, save directly using template service
-                    template_service = self.catalog_service.cabinet_type_service
-                    template_service.add_part(
-                        cabinet_type_id=self.cabinet_type.id,
-                        part_name=part_data["part_name"],
-                        width_mm=part_data["width_mm"],
-                        height_mm=part_data["height_mm"],
-                        pieces=part_data["pieces"],
-                        material=part_data.get("material"),
-                        wrapping=part_data.get("wrapping"),
-                        comments=part_data.get("comments"),
-                    )
-                    self._refresh_parts()
-                else:
-                    # For custom cabinets (no DB backing), use pending changes
-                    self.pending_parts_to_add.append(part_data)
-                    self._mark_dirty()
-                    self._refresh_parts_display()
+                # Always add to pending changes - will be saved on dialog Save button
+                self.pending_parts_to_add.append(part_data)
+                self._mark_dirty()
+                self._refresh_parts_display()
 
             except Exception as e:
                 QMessageBox.critical(
@@ -455,7 +416,7 @@ class PartsForm(QWidget):
                 )
 
     def _edit_part(self):
-        """Edit the selected part."""
+        """Edit the selected part (saved on dialog save button)."""
         current_row = self.parts_table.currentIndex().row()
         if current_row < 0:
             return
@@ -468,47 +429,21 @@ class PartsForm(QWidget):
                     try:
                         part_data = dialog.part_data
 
-                        # Project instance - update via ProjectService
-                        if (
-                            self.project_cabinet
-                            and self.project_service
-                            and hasattr(part, "id")
-                            and part.id > 0
-                        ):
-                            success = self.project_service.update_part(
-                                part.id, part_data
-                            )
-                            if success:
-                                # Reload cabinet from database
-                                refreshed_cabinet = self.project_service.get_cabinet(
-                                    self.project_cabinet.id
-                                )
-                                if refreshed_cabinet:
-                                    self.project_cabinet = refreshed_cabinet
-                                self._refresh_parts_display()
-                            else:
-                                QMessageBox.warning(
-                                    self, "Błąd", "Nie udało się zaktualizować części."
-                                )
-                        elif self.cabinet_type and self.catalog_service:
-                            # Catalog template - update via TemplateService
-                            template_service = self.catalog_service.cabinet_type_service
-
-                            # Update the part in the database
-                            for key, value in part_data.items():
-                                if hasattr(part, key):
-                                    setattr(part, key, value)
-
-                            template_service.db.commit()
-                            template_service.db.refresh(part)
-                            self._refresh_parts()
+                        # Always add to pending changes - will be saved on dialog Save button
+                        part_id = getattr(part, "id", None)
+                        if part_id and part_id > 0:
+                            # Existing part from database - track change
+                            self.pending_parts_changes[part_id] = part_data
                         else:
-                            # Custom cabinet - use pending changes
-                            part_id = getattr(part, "id", None)
-                            if part_id:
-                                self.pending_parts_changes[part_id] = part_data
-                            self._mark_dirty()
-                            self._refresh_parts_display()
+                            # Newly added part (in pending_parts_to_add) - update in place
+                            # Find and update the pending part
+                            for i, pending_part in enumerate(self.pending_parts_to_add):
+                                if pending_part.get("part_name") == part.part_name:
+                                    self.pending_parts_to_add[i] = part_data
+                                    break
+
+                        self._mark_dirty()
+                        self._refresh_parts_display()
 
                     except Exception as e:
                         QMessageBox.critical(
@@ -518,7 +453,7 @@ class PartsForm(QWidget):
                         )
 
     def _delete_part(self):
-        """Delete the selected part."""
+        """Delete the selected part (saved on dialog save button)."""
         current_row = self.parts_table.currentIndex().row()
         if current_row < 0:
             return
@@ -536,46 +471,23 @@ class PartsForm(QWidget):
 
                 if reply == QMessageBox.Yes:
                     try:
-                        # Project instance - remove via ProjectService
-                        if (
-                            self.project_cabinet
-                            and self.project_service
-                            and hasattr(part, "id")
-                            and part.id > 0
-                        ):
-                            success = self.project_service.remove_part_from_cabinet(
-                                part.id
-                            )
-                            if success:
-                                # Reload cabinet from database
-                                refreshed_cabinet = self.project_service.get_cabinet(
-                                    self.project_cabinet.id
-                                )
-                                if refreshed_cabinet:
-                                    self.project_cabinet = refreshed_cabinet
-                                self._refresh_parts_display()
-                            else:
-                                QMessageBox.warning(
-                                    self, "Błąd", "Nie udało się usunąć części."
-                                )
-                        elif self.cabinet_type and self.catalog_service:
-                            # Catalog template - delete via TemplateService
-                            template_service = self.catalog_service.cabinet_type_service
-                            success = template_service.delete_part(part.id)
-
-                            if success:
-                                self._refresh_parts()
-                            else:
-                                QMessageBox.warning(
-                                    self, "Błąd", "Nie udało się usunąć części."
-                                )
+                        # Always add to pending changes - will be saved on dialog Save button
+                        part_id = getattr(part, "id", None)
+                        if part_id and part_id > 0:
+                            # Existing part from database - mark for removal
+                            self.pending_parts_to_remove.append(part_id)
+                            # Also remove any pending changes for this part
+                            if part_id in self.pending_parts_changes:
+                                del self.pending_parts_changes[part_id]
                         else:
-                            # Custom cabinet - use pending removal
-                            part_id = getattr(part, "id", None)
-                            if part_id:
-                                self.pending_parts_to_remove.append(part_id)
-                            self._mark_dirty()
-                            self._refresh_parts_display()
+                            # Newly added part (in pending_parts_to_add) - remove from pending
+                            for i, pending_part in enumerate(self.pending_parts_to_add):
+                                if pending_part.get("part_name") == part.part_name:
+                                    self.pending_parts_to_add.pop(i)
+                                    break
+
+                        self._mark_dirty()
+                        self._refresh_parts_display()
 
                     except Exception as e:
                         QMessageBox.critical(

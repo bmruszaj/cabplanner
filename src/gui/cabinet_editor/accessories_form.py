@@ -383,7 +383,7 @@ class AccessoriesForm(QWidget):
         self.delete_accessory_btn.setEnabled(has_selection)
 
     def _add_accessory(self):
-        """Add a new accessory directly to the database."""
+        """Add a new accessory to pending changes (saved on dialog save button)."""
         if not self.project_cabinet and not self.cabinet_type:
             QMessageBox.warning(self, "Błąd", "Najpierw wybierz szafkę.")
             return
@@ -397,37 +397,16 @@ class AccessoriesForm(QWidget):
                 # Get accessory data from dialog
                 accessory_data = dialog.accessory_data
 
-                # Save directly to database
-                if self.project_cabinet and self.project_service:
-                    success = self.project_service.add_accessory_to_cabinet(
-                        cabinet_id=self.project_cabinet.id,
-                        name=accessory_data["name"],
-                        sku=accessory_data["sku"],
-                        count=accessory_data["quantity"],
-                    )
-                    if success:
-                        # Reload cabinet from database to get fresh data
-                        refreshed_cabinet = self.project_service.get_cabinet(
-                            self.project_cabinet.id
-                        )
-                        if refreshed_cabinet:
-                            self.project_cabinet = refreshed_cabinet
-                        self._refresh_accessories_display()
-                    else:
-                        QMessageBox.warning(
-                            self, "Błąd", "Nie udało się dodać akcesorium do bazy."
-                        )
-                elif self.cabinet_type:
-                    # For catalog templates, keep pending behavior
-                    self.pending_accessories_to_add.append(
-                        {
-                            "name": accessory_data["name"],
-                            "sku": accessory_data["sku"],
-                            "count": accessory_data["quantity"],
-                        }
-                    )
-                    self._mark_dirty()
-                    self._refresh_accessories_display()
+                # Always add to pending changes - will be saved on dialog Save button
+                self.pending_accessories_to_add.append(
+                    {
+                        "name": accessory_data["name"],
+                        "sku": accessory_data["sku"],
+                        "count": accessory_data["quantity"],
+                    }
+                )
+                self._mark_dirty()
+                self._refresh_accessories_display()
 
             except Exception as e:
                 QMessageBox.critical(
@@ -435,7 +414,7 @@ class AccessoriesForm(QWidget):
                 )
 
     def _edit_quantity(self):
-        """Edit the quantity of the selected accessory."""
+        """Edit the quantity of the selected accessory (saved on dialog save button)."""
         current_row = self.accessories_table.currentIndex().row()
         if current_row < 0:
             return
@@ -445,40 +424,26 @@ class AccessoriesForm(QWidget):
             if accessory:
                 dialog = AccessoryQuantityDialog(accessory, parent=self)
                 if dialog.exec() == QDialog.Accepted:
-                    # Update quantity using ProjectService directly
-                    if (
-                        self.project_cabinet
-                        and self.project_service
-                        and hasattr(accessory, "id")
-                        and accessory.id > 0
-                    ):
-                        success = self.project_service.update_accessory_quantity(
-                            accessory.id, dialog.new_quantity
-                        )
-                        if success:
-                            # Reload cabinet from database
-                            refreshed_cabinet = self.project_service.get_cabinet(
-                                self.project_cabinet.id
-                            )
-                            if refreshed_cabinet:
-                                self.project_cabinet = refreshed_cabinet
-                            self._refresh_accessories_display()
-                        else:
-                            QMessageBox.warning(
-                                self, "Błąd", "Nie udało się zaktualizować ilości."
-                            )
-                    elif self.cabinet_type:
-                        # For catalog templates, use pending changes
-                        acc_id = getattr(accessory, "id", None) or getattr(
-                            accessory, "accessory_id", None
-                        )
-                        if acc_id:
-                            self.pending_quantity_changes[acc_id] = dialog.new_quantity
-                        self._mark_dirty()
-                        self._refresh_accessories_display()
+                    # Always add to pending changes - will be saved on dialog Save button
+                    acc_id = getattr(accessory, "id", None) or getattr(
+                        accessory, "accessory_id", None
+                    )
+                    if acc_id and acc_id > 0:
+                        # Existing accessory from database - track change
+                        self.pending_quantity_changes[acc_id] = dialog.new_quantity
+                    else:
+                        # Newly added accessory (in pending_accessories_to_add) - update in place
+                        acc_name = getattr(accessory, "name", None)
+                        for pending_acc in self.pending_accessories_to_add:
+                            if pending_acc.get("name") == acc_name:
+                                pending_acc["count"] = dialog.new_quantity
+                                break
+
+                    self._mark_dirty()
+                    self._refresh_accessories_display()
 
     def _delete_accessory(self):
-        """Delete the selected accessory."""
+        """Delete the selected accessory (saved on dialog save button)."""
         current_row = self.accessories_table.currentIndex().row()
         if current_row < 0:
             return
@@ -502,37 +467,26 @@ class AccessoriesForm(QWidget):
                 )
 
                 if reply == QMessageBox.Yes:
-                    # Remove accessory using ProjectService directly
-                    if (
-                        self.project_cabinet
-                        and self.project_service
-                        and hasattr(accessory, "id")
-                        and accessory.id > 0
-                    ):
-                        success = self.project_service.remove_accessory_from_cabinet(
-                            accessory.id
-                        )
-                        if success:
-                            # Reload cabinet from database
-                            refreshed_cabinet = self.project_service.get_cabinet(
-                                self.project_cabinet.id
-                            )
-                            if refreshed_cabinet:
-                                self.project_cabinet = refreshed_cabinet
-                            self._refresh_accessories_display()
-                        else:
-                            QMessageBox.warning(
-                                self, "Błąd", "Nie udało się usunąć akcesorium."
-                            )
-                    elif self.cabinet_type:
-                        # For catalog templates, use pending removal
-                        acc_id = getattr(accessory, "id", None) or getattr(
-                            accessory, "accessory_id", None
-                        )
-                        if acc_id:
-                            self.pending_accessories_to_remove.append(acc_id)
-                        self._mark_dirty()
-                        self._refresh_accessories_display()
+                    # Always add to pending changes - will be saved on dialog Save button
+                    acc_id = getattr(accessory, "id", None) or getattr(
+                        accessory, "accessory_id", None
+                    )
+                    if acc_id and acc_id > 0:
+                        # Existing accessory from database - mark for removal
+                        self.pending_accessories_to_remove.append(acc_id)
+                        # Also remove any pending quantity changes for this accessory
+                        if acc_id in self.pending_quantity_changes:
+                            del self.pending_quantity_changes[acc_id]
+                    else:
+                        # Newly added accessory (in pending_accessories_to_add) - remove from pending
+                        acc_name = getattr(accessory, "name", None)
+                        for i, pending_acc in enumerate(self.pending_accessories_to_add):
+                            if pending_acc.get("name") == acc_name:
+                                self.pending_accessories_to_add.pop(i)
+                                break
+
+                    self._mark_dirty()
+                    self._refresh_accessories_display()
 
     def _refresh_accessories(self):
         """Refresh the accessories table (original method - loads from database)."""

@@ -403,10 +403,8 @@ class CabinetEditorDialog(QDialog):
                         return True
 
                 elif current_form == self.parts_form:
-                    parts_data = current_form.values()
-                    success = self.project_service.update_cabinet_parts(
-                        self.project_instance.id, parts_data
-                    )
+                    parts_changes = current_form.values()
+                    success = self._apply_parts_changes(parts_changes)
                     if success:
                         current_form.reset_dirty()
                         return True
@@ -474,11 +472,17 @@ class CabinetEditorDialog(QDialog):
                             saved_count += 1
 
                     elif form_type == "parts":
-                        parts_data = form.values()
-                        success = self.project_service.update_cabinet_parts(
-                            self.project_instance.id, parts_data
-                        )
+                        parts_changes = form.values()
+                        success = self._apply_parts_changes(parts_changes)
                         if success:
+                            # Reload cabinet from database to get updated parts with IDs
+                            refreshed_cabinet = self.project_service.get_cabinet(
+                                self.project_instance.id
+                            )
+                            if refreshed_cabinet:
+                                self.project_instance = refreshed_cabinet
+                                # Update form's project_cabinet reference
+                                form.project_cabinet = refreshed_cabinet
                             form.reset_dirty()
                             saved_count += 1
                         else:
@@ -492,6 +496,14 @@ class CabinetEditorDialog(QDialog):
                         accessories_changes = form.values()
                         success = self._apply_accessories_changes(accessories_changes)
                         if success:
+                            # Reload cabinet from database to get updated accessories with IDs
+                            refreshed_cabinet = self.project_service.get_cabinet(
+                                self.project_instance.id
+                            )
+                            if refreshed_cabinet:
+                                self.project_instance = refreshed_cabinet
+                                # Update form's project_cabinet reference
+                                form.project_cabinet = refreshed_cabinet
                             form.reset_dirty()
                             saved_count += 1
                         else:
@@ -654,6 +666,54 @@ class CabinetEditorDialog(QDialog):
 
         # Update buttons
         self._update_buttons()
+
+    def _apply_parts_changes(self, parts_changes) -> bool:
+        """Apply pending parts changes using ProjectService."""
+        try:
+            if not self.project_instance or not self.project_service:
+                return False
+
+            # Check if parts_changes is a list (custom cabinet mode) or dict (regular mode)
+            if isinstance(parts_changes, list):
+                # Custom cabinet mode - replace all parts
+                success = self.project_service.update_cabinet_parts(
+                    self.project_instance.id, parts_changes
+                )
+                return success
+            else:
+                # Regular mode - apply individual changes
+                # Apply parts to remove first
+                for part_id in parts_changes.get("parts_to_remove", []):
+                    success = self.project_service.remove_part_from_cabinet(part_id)
+                    if not success:
+                        return False
+
+                # Apply parts changes (edits)
+                for part_id, part_data in parts_changes.get("parts_changes", {}).items():
+                    success = self.project_service.update_part(part_id, part_data)
+                    if not success:
+                        return False
+
+                # Apply parts to add
+                for part_data in parts_changes.get("parts_to_add", []):
+                    success = self.project_service.add_part_to_cabinet(
+                        cabinet_id=self.project_instance.id,
+                        part_name=part_data.get("part_name", ""),
+                        width_mm=part_data.get("width_mm", 0),
+                        height_mm=part_data.get("height_mm", 0),
+                        pieces=part_data.get("pieces", 1),
+                        material=part_data.get("material"),
+                        wrapping=part_data.get("wrapping"),
+                        comments=part_data.get("comments"),
+                    )
+                    if not success:
+                        return False
+
+                return True
+
+        except Exception as e:
+            print(f"Error applying parts changes: {e}")
+            return False
 
     def _apply_accessories_changes(self, accessories_changes: dict) -> bool:
         """Apply pending accessories changes using ProjectService."""
