@@ -10,7 +10,7 @@ Features:
 - New accessories are automatically added to catalog on save
 """
 
-from typing import Optional, List
+from typing import List
 
 from PySide6.QtWidgets import (
     QDialog,
@@ -29,10 +29,12 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt
 
+from src.gui.resources.styles import PRIMARY
+
 
 class AccessoryEditDialog(QDialog):
     """Dialog for editing an accessory with catalog support.
-    
+
     Supports two modes:
     - Selection from catalog: Shows ComboBox with existing accessories
     - New accessory: User types a new name, which is added to catalog on save
@@ -47,7 +49,7 @@ class AccessoryEditDialog(QDialog):
     ):
         """
         Initialize the accessory edit dialog.
-        
+
         Args:
             accessory: Dict with accessory data for edit mode (name, unit, count)
             existing_names: List of names already in current cabinet (for validation)
@@ -58,14 +60,14 @@ class AccessoryEditDialog(QDialog):
         self.accessory = accessory
         self.accessory_service = accessory_service
         self.is_edit_mode = accessory is not None
-        
+
         # Store existing names for uniqueness validation (excluding current name in edit mode)
         self.existing_names = set(n.lower() for n in (existing_names or []))
         if self.is_edit_mode and accessory:
             # Exclude current accessory name from uniqueness check
             current_name = accessory.get("name", "").lower()
             self.existing_names.discard(current_name)
-        
+
         # Load catalog accessories
         self.catalog_accessories = self._load_catalog_accessories()
 
@@ -76,6 +78,7 @@ class AccessoryEditDialog(QDialog):
 
         self._setup_ui()
         self._setup_connections()
+        self._apply_styles()
 
         if self.is_edit_mode:
             self._load_accessory_data()
@@ -86,10 +89,7 @@ class AccessoryEditDialog(QDialog):
             return []
         try:
             accessories = self.accessory_service.list_accessories()
-            return [
-                {"name": acc.name, "unit": acc.unit}
-                for acc in accessories
-            ]
+            return [{"name": acc.name, "unit": acc.unit} for acc in accessories]
         except Exception:
             return []
 
@@ -111,18 +111,18 @@ class AccessoryEditDialog(QDialog):
         self.name_combo.lineEdit().setPlaceholderText(
             "Wybierz z listy lub wpisz nową nazwę..."
         )
-        
+
         # Add catalog items to combo
         self.name_combo.addItem("")  # Empty option for new entry
         for acc in self.catalog_accessories:
             self.name_combo.addItem(acc["name"])
-        
+
         # Setup completer for autocomplete
         completer = QCompleter([acc["name"] for acc in self.catalog_accessories], self)
         completer.setCaseSensitivity(Qt.CaseInsensitive)
         completer.setFilterMode(Qt.MatchContains)
         self.name_combo.setCompleter(completer)
-        
+
         accessory_layout.addRow("Nazwa akcesorium*:", self.name_combo)
 
         # Hint label
@@ -131,7 +131,9 @@ class AccessoryEditDialog(QDialog):
                 f"💡 {len(self.catalog_accessories)} akcesoriów w katalogu. "
                 "Nowe nazwy zostaną dodane automatycznie."
             )
-            hint_label.setStyleSheet("color: #666; font-size: 10px; font-style: italic;")
+            hint_label.setStyleSheet(
+                "color: #666; font-size: 10px; font-style: italic;"
+            )
             hint_label.setWordWrap(True)
             accessory_layout.addRow("", hint_label)
 
@@ -174,7 +176,7 @@ class AccessoryEditDialog(QDialog):
         name = name.strip()
         if not name:
             return
-        
+
         # Find accessory in catalog
         for acc in self.catalog_accessories:
             if acc["name"].lower() == name.lower():
@@ -192,7 +194,7 @@ class AccessoryEditDialog(QDialog):
 
         name = self.accessory.get("name", "")
         self.name_combo.setCurrentText(name)
-        
+
         unit = self.accessory.get("unit", "szt")
         if unit == "kpl":
             self.kpl_radio.setChecked(True)
@@ -204,8 +206,7 @@ class AccessoryEditDialog(QDialog):
         """Check if name is not in catalog (new entry)."""
         name_lower = name.lower()
         return not any(
-            acc["name"].lower() == name_lower 
-            for acc in self.catalog_accessories
+            acc["name"].lower() == name_lower for acc in self.catalog_accessories
         )
 
     def accept(self):
@@ -230,7 +231,7 @@ class AccessoryEditDialog(QDialog):
             return
 
         unit = "kpl" if self.kpl_radio.isChecked() else "szt"
-        
+
         # Add to catalog if new and service is available
         if self.accessory_service and self._is_new_catalog_entry(name):
             try:
@@ -247,3 +248,68 @@ class AccessoryEditDialog(QDialog):
         }
 
         super().accept()
+
+    def _apply_styles(self):
+        """Apply visual styling to match other dialogs."""
+        self.setStyleSheet(f"""
+            QGroupBox {{
+                font-weight: bold;
+                font-size: 10pt;
+                border: 2px solid #e0e0e0;
+                border-radius: 8px;
+                margin-top: 8px;
+                padding-top: 8px;
+                background-color: white;
+            }}
+            QGroupBox::title {{
+                subcontrol-origin: margin;
+                left: 12px;
+                padding: 0 6px 0 6px;
+                background-color: white;
+            }}
+            QLineEdit, QSpinBox, QComboBox {{
+                padding: 6px;
+                border: 1px solid #ddd;
+                border-radius: 4px;
+                background-color: white;
+            }}
+            QLineEdit:focus, QSpinBox:focus, QComboBox:focus {{
+                border-color: {PRIMARY};
+            }}
+            QDialogButtonBox QPushButton {{
+                background-color: {PRIMARY};
+                color: white;
+                border: none;
+                border-radius: 4px;
+                padding: 6px 16px;
+                font-size: 9pt;
+                min-width: 80px;
+            }}
+            QDialogButtonBox QPushButton:hover {{
+                background-color: #085f56;
+            }}
+            QDialogButtonBox QPushButton:disabled {{
+                background-color: #cccccc;
+                color: #666666;
+            }}
+            QRadioButton {{
+                font-size: 10pt;
+                spacing: 8px;
+                padding: 4px 8px;
+                background-color: transparent;
+            }}
+            QRadioButton::indicator {{
+                width: 16px;
+                height: 16px;
+                border-radius: 8px;
+                border: 2px solid #D0D0D0;
+                background-color: white;
+            }}
+            QRadioButton::indicator:checked {{
+                background-color: {PRIMARY};
+                border: 2px solid {PRIMARY};
+            }}
+            QLabel {{
+                background-color: transparent;
+            }}
+        """)
