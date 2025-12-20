@@ -56,10 +56,13 @@ class CabinetEditorDialog(QDialog):
         """Setup the user interface."""
         self.setWindowTitle("Edytor szafek")
         self.setWindowIcon(get_icon("cabinet"))
-        self.resize(900, 650)
-        self.setMinimumSize(800, 500)
+        self.resize(900, 750)
+        self.setMinimumSize(800, 600)
         # Enable window resizing and minimize/maximize buttons
         self.setWindowFlags(self.windowFlags() | Qt.WindowMinMaxButtonsHint)
+
+        # Position window at top of screen with small margin
+        self._position_at_top()
 
         layout = QVBoxLayout(self)
         layout.setSpacing(12)
@@ -198,6 +201,21 @@ class CabinetEditorDialog(QDialog):
         # Buttons
         self.cancel_button.clicked.connect(self._cancel)
         self.save_button.clicked.connect(self._save)
+
+    def _position_at_top(self):
+        """Position the dialog near the top of the screen with small margin."""
+        from PySide6.QtGui import QGuiApplication
+
+        # Get the primary screen
+        screen = QGuiApplication.primaryScreen()
+        if screen:
+            screen_geometry = screen.availableGeometry()
+            # Position at top with 20px margin
+            top_margin = 20
+            left_center = (
+                screen_geometry.left() + (screen_geometry.width() - self.width()) // 2
+            )
+            self.move(left_center, screen_geometry.top() + top_margin)
 
     def _apply_styles(self):
         """Apply visual styling."""
