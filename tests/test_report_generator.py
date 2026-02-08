@@ -162,7 +162,7 @@ def test_body_tables_count_and_headers(tmp_path, sample_project_orm):
         ["Lp.", "Nazwa", "Ilość", "Wymiary (mm)", "Okleina", "Kolor", "Uwagi"],
         ["Lp.", "Nazwa", "Ilość", "Wymiary (mm)", "Okleina", "Kolor", "Uwagi"],
         ["Lp.", "Nazwa", "Ilość", "Wymiary (mm)", "Okleina", "Kolor", "Uwagi"],
-        ["Lp.", "Nazwa akcesorium", "Ilość", "Jedn.", "Uwagi"],
+        ["Poz.", "Nazwa akcesorium", "Ilość", "Jedn.", "Uwagi"],
     ]
     for table, hdr in zip(body_tables, expected_hdr):
         assert [cell.text for cell in table.rows[0].cells] == hdr
@@ -209,6 +209,70 @@ def test_accessories_section(tmp_path, sample_project_orm):
     # Name at index 1, quantity at 2, unit at 3
     assert cells[1].text == "Hinge X"
     assert cells[2].text == str(4 * sample_project_orm.cabinets[0].quantity)
+    assert cells[3].text == "szt"
+
+
+def test_accessories_are_aggregated_without_sequence(tmp_path):
+    """
+    Given: two cabinets with the same accessory name
+    When: generating AKCESORIA
+    Then: accessory is summed into a single row and Poz. is a row index (not cabinet seq)
+    """
+    project = Project(
+        name="Accessory Aggregate Project",
+        kitchen_type="LOFT",
+        order_number="ORM002",
+        client_name="Client",
+        client_address="Address",
+        client_phone="555-000",
+        client_email="client@example.com",
+    )
+
+    cabinet_1 = ProjectCabinet(
+        sequence_number=1,
+        body_color="Oak",
+        front_color="Maple",
+        handle_type="KROMA",
+        quantity=2,
+    )
+    cabinet_2 = ProjectCabinet(
+        sequence_number=2,
+        body_color="Oak",
+        front_color="Maple",
+        handle_type="KROMA",
+        quantity=1,
+    )
+    cabinet_1.project = project
+    cabinet_2.project = project
+    project.cabinets = [cabinet_1, cabinet_2]
+
+    accessory_1 = Accessory(name="Hinge X", unit="szt")
+    accessory_2 = Accessory(name="Hinge X", unit="szt")
+
+    link_1 = ProjectCabinetAccessory(count=4)
+    link_1.project_cabinet = cabinet_1
+    link_1.accessory = accessory_1
+
+    link_2 = ProjectCabinetAccessory(count=5)
+    link_2.project_cabinet = cabinet_2
+    link_2.accessory = accessory_2
+
+    cabinet_1.accessories = [link_1]
+    cabinet_2.accessories = [link_2]
+
+    rg = ReportGenerator()
+    output = rg.generate(project, output_dir=str(tmp_path), auto_open=False)
+    doc = Document(output)
+    header_tables = doc.sections[0].header.tables
+    footer_tables = doc.sections[0].footer.tables
+    body_tables = [t for t in doc.tables if t not in header_tables + footer_tables]
+    acc_table = body_tables[0]
+
+    assert len(acc_table.rows) == 2
+    cells = acc_table.rows[1].cells
+    assert cells[0].text == "1"
+    assert cells[1].text == "Hinge X"
+    assert cells[2].text == str((4 * 2) + (5 * 1))
     assert cells[3].text == "szt"
 
 

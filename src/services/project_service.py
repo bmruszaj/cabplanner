@@ -567,7 +567,7 @@ class ProjectService:
             )
 
             # Process accessories from snapshot
-            self._process_accessories_snapshot(cab, qty, seq, seq_symbol, akcesoria)
+            self._process_accessories_snapshot(cab, qty, akcesoria)
 
         return {
             "formatki": formatki,
@@ -599,6 +599,7 @@ class ProjectService:
                 fronty.append(
                     {
                         "seq": seq_symbol,
+                        "sequence": seq,
                         "name": part.part_name,
                         "quantity": part_qty,
                         "width": part.width_mm,
@@ -612,6 +613,7 @@ class ProjectService:
                 hdf.append(
                     {
                         "seq": seq_symbol,
+                        "sequence": seq,
                         "name": part.part_name,
                         "quantity": part_qty,
                         "width": part.width_mm,
@@ -626,6 +628,7 @@ class ProjectService:
                 formatki.append(
                     {
                         "seq": seq_symbol,
+                        "sequence": seq,
                         "name": part.part_name,
                         "quantity": part_qty,
                         "width": part.width_mm,
@@ -637,19 +640,18 @@ class ProjectService:
                     }
                 )
 
-    def _process_accessories_snapshot(self, cab, qty, seq, seq_symbol, akcesoria):
+    def _process_accessories_snapshot(self, cab, qty, akcesoria):
         """Process accessories from snapshot (works for both standard and custom)"""
         # Process accessory snapshots
         for acc_snapshot in cab.accessory_snapshots:
             total = acc_snapshot.count * qty
             akcesoria.append(
                 {
-                    "seq": seq_symbol,
                     "name": acc_snapshot.name,
+                    "source_accessory_id": acc_snapshot.source_accessory_id,
                     "unit": acc_snapshot.unit,
                     "quantity": total,
                     "notes": "",
-                    "sequence": seq,
                 }
             )
 
@@ -659,11 +661,10 @@ class ProjectService:
             total = link.count * qty
             akcesoria.append(
                 {
-                    "seq": seq_symbol,
                     "name": acc.name,
+                    "source_accessory_id": getattr(acc, "id", None),
                     "unit": acc.unit,
                     "quantity": total,
                     "notes": "",
-                    "sequence": seq,
                 }
             )

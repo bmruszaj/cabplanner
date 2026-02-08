@@ -74,9 +74,6 @@ class ReportGenerator:
             self._add_header(section, project)
             self._add_footer(section)
 
-            # Get sorting preference from settings
-            sort_by_color = self._get_sort_preference()
-
             # Get data for report
             if self.project_service and project.id:
                 # Get aggregated elements from service
@@ -97,12 +94,11 @@ class ReportGenerator:
                     project
                 )
 
-            # Sort parts based on preference
-            if sort_by_color:
-                formatki = self._sort_by_color(formatki)
-                fronty = self._sort_by_color(fronty)
-                hdf = self._sort_by_color(hdf)
-            # else: keep original order (by LP/sequence)
+            # Always sort by cabinet number first, then by color.
+            formatki = self._sort_by_cabinet_and_color(formatki)
+            fronty = self._sort_by_cabinet_and_color(fronty)
+            hdf = self._sort_by_cabinet_and_color(hdf)
+            akcesoria = self._aggregate_accessories(akcesoria)
 
             # Split formatki by material type
             formatki_plyta_12 = [
@@ -155,31 +151,62 @@ class ReportGenerator:
             logger.error(f"Error generating report: {str(e)}", exc_info=True)
             raise ReportGenerationError(f"Failed to generate report: {str(e)}")
 
-    def _get_sort_preference(self) -> bool:
-        """Get sorting preference from settings. Returns True if sorting by color."""
-        if not self.db_session:
-            return True  # Default to color sorting
-
-        try:
-            from src.services.settings_service import SettingsService
-
-            settings = SettingsService(self.db_session)
-            sort_setting = settings.get_setting_value("report_sort_by", "Kolor")
-            return sort_setting == "Kolor"
-        except Exception as e:
-            logger.warning(f"Could not get sort preference: {e}, defaulting to color")
-            return True
-
-    def _sort_by_color(self, items: List[SimpleNamespace]) -> List[SimpleNamespace]:
-        """Sort items by color, then by name within each color group."""
+    def _sort_by_cabinet_and_color(
+        self, items: List[SimpleNamespace]
+    ) -> List[SimpleNamespace]:
+        """Sort items by cabinet sequence number and then by color."""
         return sorted(
             items,
-            key=lambda x: (getattr(x, "color", "") or "", getattr(x, "name", "") or ""),
+            key=lambda item: (
+                item.sequence,
+                (getattr(item, "color", "") or "").strip().lower(),
+                getattr(item, "name", "") or "",
+            ),
         )
 
     def _dict_to_namespace_list(self, dict_list: List[Dict]) -> List[SimpleNamespace]:
         """Convert a list of dictionaries to a list of SimpleNamespace objects"""
         return [SimpleNamespace(**item) for item in dict_list]
+
+    def _aggregate_accessories(
+        self, accessories: List[SimpleNamespace]
+    ) -> List[SimpleNamespace]:
+        """
+        Aggregate accessories across cabinets.
+        Group by source_accessory_id when available, otherwise by normalized name + unit.
+        """
+        aggregated: Dict[tuple, SimpleNamespace] = {}
+
+        for accessory in accessories:
+            source_accessory_id = getattr(accessory, "source_accessory_id", None)
+            name = (getattr(accessory, "name", "") or "").strip()
+            unit = (getattr(accessory, "unit", "szt") or "szt").strip()
+            notes = (getattr(accessory, "notes", "") or "").strip()
+            quantity = int(getattr(accessory, "quantity", 0) or 0)
+
+            if source_accessory_id is not None:
+                key = ("id", source_accessory_id, unit)
+            else:
+                key = ("name", name.lower(), unit)
+
+            if key not in aggregated:
+                aggregated[key] = SimpleNamespace(
+                    source_accessory_id=source_accessory_id,
+                    name=name,
+                    unit=unit,
+                    quantity=0,
+                    notes=notes,
+                )
+
+            aggregated[key].quantity += quantity
+
+            if not aggregated[key].notes and notes:
+                aggregated[key].notes = notes
+
+        return sorted(
+            aggregated.values(),
+            key=lambda accessory: ((accessory.name or "").lower(), accessory.unit),
+        )
 
     def _extract_elements_directly(
         self, project: Project
@@ -255,6 +282,7 @@ class ReportGenerator:
                 fronty.append(
                     SimpleNamespace(
                         seq=seq_symbol,
+                        sequence=seq_num,
                         name=part.part_name,
                         quantity=part_qty,
                         width=part.width_mm,
@@ -268,6 +296,7 @@ class ReportGenerator:
                 hdf.append(
                     SimpleNamespace(
                         seq=seq_symbol,
+                        sequence=seq_num,
                         name=part.part_name,
                         quantity=part_qty,
                         width=part.width_mm,
@@ -282,6 +311,7 @@ class ReportGenerator:
                 formatki.append(
                     SimpleNamespace(
                         seq=seq_symbol,
+                        sequence=seq_num,
                         name=part.part_name,
                         quantity=part_qty,
                         width=part.width_mm,
@@ -295,19 +325,13 @@ class ReportGenerator:
 
     def _process_accessories(self, cab, qty, akcesoria):
         """Process accessories for a cabinet and add them to the accessories list"""
-        # Get the sequence number for this cabinet
-        seq_num = getattr(cab, "sequence_number", 0)
-        from src.services.project_service import get_circled_number
-
-        seq_symbol = get_circled_number(seq_num)
-
         for link in getattr(cab, "accessories", []):
             acc = link.accessory
             total = link.count * qty
             akcesoria.append(
                 SimpleNamespace(
-                    seq=seq_symbol,
                     name=acc.name,
+                    source_accessory_id=getattr(acc, "id", None),
                     unit=acc.unit,
                     quantity=total,
                     notes="",
@@ -386,7 +410,7 @@ class ReportGenerator:
             return
 
         cols = (
-            ["Lp.", "Nazwa akcesorium", "Ilość", "Jedn.", "Uwagi"]
+            ["Poz.", "Nazwa akcesorium", "Ilość", "Jedn.", "Uwagi"]
             if accessory
             else [
                 "Lp.",
@@ -403,17 +427,19 @@ class ReportGenerator:
         for i, col in enumerate(cols):
             hdr[i].text = col
 
-        for part in parts:
+        for row_index, part in enumerate(parts, start=1):
             cells = table.add_row().cells
-            # Add sequence number as the first column
-            cells[0].text = getattr(part, "seq", "")
 
             if accessory:
+                # Accessories are project-wide aggregate; use row index, not cabinet sequence.
+                cells[0].text = str(row_index)
                 cells[1].text = part.name
                 cells[2].text = str(part.quantity)
                 cells[3].text = getattr(part, "unit", "szt") or "szt"
                 cells[4].text = getattr(part, "notes", "") or ""
             else:
+                # Parts keep cabinet sequence marker.
+                cells[0].text = getattr(part, "seq", "")
                 cells[1].text = part.name
                 cells[2].text = str(part.quantity)
                 cells[3].text = f"{part.width} x {part.height}"
