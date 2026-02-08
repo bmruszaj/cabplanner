@@ -2,7 +2,13 @@
 GUI constants package.
 """
 
-from .colors import CABINET_COLORS, COLOR_MAP, POPULAR_COLORS, get_color_hex
+from .colors import (
+    CABINET_COLORS,
+    COLOR_MAP,
+    POPULAR_COLORS,
+    get_color_hex,
+    register_runtime_colors,
+)
 
 # Re-export constants from the parent constants.py file to maintain compatibility
 from PySide6.QtCore import QSize
@@ -19,6 +25,7 @@ __all__ = [
     "COLOR_MAP",
     "POPULAR_COLORS",
     "get_color_hex",
+    "register_runtime_colors",
     "CARD_HEIGHT",
     "CARD_WIDTH",
     "ICON_SIZE",

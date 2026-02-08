@@ -15,11 +15,17 @@ from PySide6.QtWidgets import (
     QPlainTextEdit,
     QFrame,
     QGroupBox,
+    QPushButton,
+    QCompleter,
+    QDialog,
 )
-from PySide6.QtCore import Signal
+from PySide6.QtCore import Signal, Qt
 from PySide6.QtGui import QFont
 
 from src.gui.resources.styles import get_theme, PRIMARY
+from src.gui.constants.colors import POPULAR_COLORS
+from src.gui.dialogs.color_edit_dialog import ColorEditDialog
+from src.services.color_palette_service import ColorPaletteService
 
 
 class InstanceForm(QWidget):
@@ -27,14 +33,16 @@ class InstanceForm(QWidget):
 
     sig_dirty_changed = Signal(bool)
 
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, color_service: ColorPaletteService | None = None):
         super().__init__(parent)
+        self.color_service = color_service
         self.project_cabinet = None
         self.cabinet_type = None
         self._is_dirty = False
         self._setup_ui()
         self._setup_connections()
         self._apply_styles()
+        self._load_color_controls()
 
     def _setup_ui(self):
         """Setup the user interface."""
@@ -95,12 +103,12 @@ class InstanceForm(QWidget):
         body_color_layout = QHBoxLayout()
         self.body_color_combo = QComboBox()
         self.body_color_combo.setEditable(True)
-        # Import popular colors from central location
-        from ..constants.colors import POPULAR_COLORS
-
-        self.body_color_combo.addItems(POPULAR_COLORS)
         self.body_color_combo.setCurrentText("Biały")
         body_color_layout.addWidget(self.body_color_combo)
+
+        self.body_add_color_btn = QPushButton("Dodaj kolor")
+        self.body_add_color_btn.setObjectName("addColorBtn")
+        body_color_layout.addWidget(self.body_add_color_btn)
 
         # Add color preview chip for body color
         from ..project_details.widgets.color_chip import ColorChip
@@ -115,9 +123,12 @@ class InstanceForm(QWidget):
         front_color_layout = QHBoxLayout()
         self.front_color_combo = QComboBox()
         self.front_color_combo.setEditable(True)
-        self.front_color_combo.addItems(POPULAR_COLORS)
         self.front_color_combo.setCurrentText("Biały")
         front_color_layout.addWidget(self.front_color_combo)
+
+        self.front_add_color_btn = QPushButton("Dodaj kolor")
+        self.front_add_color_btn.setObjectName("addColorBtn")
+        front_color_layout.addWidget(self.front_add_color_btn)
 
         # Add color preview chip for front color
         self.front_color_preview = ColorChip("Biały", "Front", parent=self)
@@ -171,6 +182,13 @@ class InstanceForm(QWidget):
         )
         self.front_color_combo.currentTextChanged.connect(
             self._update_front_color_preview
+        )
+
+        self.body_add_color_btn.clicked.connect(
+            lambda: self._open_add_color_dialog(self.body_color_combo)
+        )
+        self.front_add_color_btn.clicked.connect(
+            lambda: self._open_add_color_dialog(self.front_color_combo)
         )
 
     def _apply_styles(self):
@@ -269,6 +287,19 @@ class InstanceForm(QWidget):
                 background-color: {PRIMARY};
                 opacity: 0.9;
             }}
+            QPushButton#addColorBtn {{
+                background-color: white;
+                color: #333333;
+                border: 1px solid #D0D0D0;
+                border-radius: 4px;
+                padding: 4px 8px;
+                font-size: 9pt;
+                font-weight: normal;
+            }}
+            QPushButton#addColorBtn:hover {{
+                border-color: {PRIMARY};
+                background-color: #f8f8f8;
+            }}
         """)
 
     def _block_dirty_signals(self, block: bool):
@@ -349,6 +380,60 @@ class InstanceForm(QWidget):
         # Reset dirty flag
         self._is_dirty = False
         self.sig_dirty_changed.emit(False)
+
+    def _load_color_controls(self) -> None:
+        """Populate recent-first color controls and searchable completers."""
+        recent_names = self._recent_names()
+        searchable_names = self._searchable_names()
+
+        current_body = self.body_color_combo.currentText() or "Biały"
+        current_front = self.front_color_combo.currentText() or "Biały"
+
+        for combo in (self.body_color_combo, self.front_color_combo):
+            combo.blockSignals(True)
+            combo.clear()
+            combo.addItems(recent_names)
+            combo.blockSignals(False)
+
+            completer = QCompleter(searchable_names, self)
+            completer.setCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
+            completer.setFilterMode(Qt.MatchFlag.MatchContains)
+            combo.setCompleter(completer)
+
+        self.body_color_combo.setCurrentText(current_body)
+        self.front_color_combo.setCurrentText(current_front)
+
+    def _recent_names(self) -> list[str]:
+        if self.color_service:
+            try:
+                self.color_service.ensure_seeded()
+                names = self.color_service.list_recent(limit=12)
+                if names:
+                    return names
+            except Exception:
+                pass
+        return POPULAR_COLORS[:12]
+
+    def _searchable_names(self) -> list[str]:
+        if self.color_service:
+            try:
+                self.color_service.ensure_seeded()
+                names = self.color_service.list_searchable_names()
+                if names:
+                    return names
+            except Exception:
+                pass
+        return list(POPULAR_COLORS)
+
+    def _open_add_color_dialog(self, target_combo: QComboBox) -> None:
+        """Open dialog for adding a custom color and select it."""
+        if not self.color_service:
+            return
+
+        dialog = ColorEditDialog(self.color_service, parent=self)
+        if dialog.exec() == QDialog.DialogCode.Accepted and dialog.created_color_name:
+            self._load_color_controls()
+            target_combo.setCurrentText(dialog.created_color_name)
 
     def is_dirty(self) -> bool:
         """Check if form has unsaved changes."""

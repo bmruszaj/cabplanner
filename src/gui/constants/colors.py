@@ -1,81 +1,78 @@
 """
-Centralne miejsce dla definicji kolorów używanych w całej aplikacji.
+Centralne miejsce dla definicji kolorow uzywanych w GUI.
 """
 
-# Mapowanie polskich nazw kolorów na kody hex
+# Mapowanie polskich nazw kolorow na kody HEX (fallback statyczny).
 CABINET_COLORS = {
-    # Kolory podstawowe
+    "Bialy": "#FFFFFF",
     "Biały": "#FFFFFF",
     "Czarny": "#000000",
     "Szary": "#808080",
+    "Brazowy": "#8B4513",
     "Brązowy": "#8B4513",
     "Orzech": "#A0522D",
     "Niebieski": "#4169E1",
-    # Kolory drewniane
-    "Dąb": "#C2B280",  # jasny beżowo-brązowy
-    "Dąb Sonoma": "#D2B48C",  # klasyczny meblowy kolor
+    "Dab": "#C2B280",
+    "Dąb": "#C2B280",
+    "Dab Sonoma": "#D2B48C",
+    "Dąb Sonoma": "#D2B48C",
+    "Dab Artisan": "#A17C5B",
     "Dąb Artisan": "#A17C5B",
+    "Dab Craft": "#C49E70",
     "Dąb Craft": "#C49E70",
+    "Dab Bielony": "#E3D9C7",
     "Dąb Bielony": "#E3D9C7",
     "Jesion": "#D7B98E",
     "Buk": "#DEB887",
     "Olcha": "#C08A4D",
     "Wenge": "#4B3621",
-    # Kolory nowoczesne
     "Antracyt": "#2F4F4F",
     "Grafit": "#3B3B3B",
     "Kremowy": "#FFFDD0",
+    "Bezowy": "#F5F5DC",
     "Beżowy": "#F5F5DC",
-    # Kolory dodatkowe
     "Zielony": "#228B22",
     "Czerwony": "#B22222",
     "Granatowy": "#000080",
 }
 
-# Problemy kodowania - mapowania dla różnych wariantów zapisu
+# Problemy kodowania - mapowania dla wariantow zapisu.
 ENCODING_VARIANTS = {
-    # cp1250 encoding issues
     "Bia�y": "Biały",
     "Br�zowy": "Brązowy",
     "D�b": "Dąb",
-    "Be¿owy": "Beżowy",
-    "Be¿owa": "Beżowy",
     "D�b Sonoma": "Dąb Sonoma",
     "D�b Artisan": "Dąb Artisan",
     "D�b Craft": "Dąb Craft",
     "D�b Bielony": "Dąb Bielony",
-    "Jesio�": "Jesion",
-    "Wêngê": "Wenge",
-    "Wêngé": "Wenge",
-    # other encoding issues
-    "Bia³y": "Biały",
-    "Br¹zowy": "Brązowy",
-    "D¹b": "Dąb",
-    "Be³owy": "Beżowy",
-    "D¹b Sonoma": "Dąb Sonoma",
-    "D¹b Artisan": "Dąb Artisan",
-    "D¹b Craft": "Dąb Craft",
-    "D¹b Bielony": "Dąb Bielony",
-    "Jesio¬": "Jesion",
-    # Odmiany żeńskie
+    "Be�owy": "Beżowy",
+    "BiaÂły": "Biały",
+    "BrÂązowy": "Brązowy",
+    "DÂąb": "Dąb",
+    "DÂąb Sonoma": "Dąb Sonoma",
+    "DÂąb Artisan": "Dąb Artisan",
+    "DÂąb Craft": "Dąb Craft",
+    "DÂąb Bielony": "Dąb Bielony",
+    "BeÂżowy": "Beżowy",
     "Zielona": "Zielony",
     "Czerwona": "Czerwony",
     "Szara": "Szary",
     "Czarna": "Czarny",
-    "Bia³a": "Biały",
+    "Biała": "Biały",
     "Bia�a": "Biały",
 }
 
-# Połączone mapowanie - wszystkie warianty na kody hex
+# Połączone mapowanie - wszystkie warianty na HEX.
 COLOR_MAP = {}
 COLOR_MAP.update(CABINET_COLORS)
-
-# Dodaj mapowania dla problemów kodowania
 for variant, canonical in ENCODING_VARIANTS.items():
     if canonical in CABINET_COLORS:
         COLOR_MAP[variant] = CABINET_COLORS[canonical]
 
-# Lista kolorów do wyświetlenia w GUI (najczęściej używane)
+# Runtime mapowanie z bazy (system + user).
+RUNTIME_COLOR_MAP: dict[str, str] = {}
+
+# Lista kolorow do wyswietlenia w GUI, gdy brak historii.
 POPULAR_COLORS = [
     "Biały",
     "Czarny",
@@ -96,20 +93,60 @@ POPULAR_COLORS = [
 ]
 
 
-# Funkcja pomocnicza do konwersji nazw kolorów na kody hex
+def _normalize_hex(value: str) -> str:
+    value = (value or "").strip().upper()
+    if not value.startswith("#"):
+        return value
+    if len(value) == 4:
+        return "#" + value[1] * 2 + value[2] * 2 + value[3] * 2
+    return value
+
+
+def register_runtime_colors(color_map: dict[str, str]) -> None:
+    """Rejestruje mapowanie kolorów dostarczone z bazy danych."""
+    RUNTIME_COLOR_MAP.clear()
+    for name, hex_code in (color_map or {}).items():
+        if not name:
+            continue
+        RUNTIME_COLOR_MAP[name] = _normalize_hex(hex_code)
+
+
+def _casefold_lookup(color_name: str, mapping: dict[str, str]) -> str | None:
+    normalized = color_name.casefold()
+    for key, value in mapping.items():
+        if key.casefold() == normalized:
+            return value
+    return None
+
+
 def get_color_hex(color_name: str) -> str:
-    """Konwertuje nazwę koloru na kod hex, obsługując problemy kodowania."""
+    """Konwertuje nazwę koloru na kod HEX."""
     if not color_name:
-        return "#FFFFFF"  # domyślnie biały
+        return "#FFFFFF"
 
-    # Spróbuj znaleźć w mapowaniu
-    hex_color = COLOR_MAP.get(color_name)
-    if hex_color:
-        return hex_color
+    name = color_name.strip()
 
-    # Jeśli to już kod hex, zwróć bez zmian
-    if color_name.startswith("#"):
-        return color_name
+    # Runtime mapowanie z bazy ma wyzszy priorytet.
+    if name in RUNTIME_COLOR_MAP:
+        return RUNTIME_COLOR_MAP[name]
 
-    # Fallback na biały
+    # Statyczne mapowania.
+    if name in COLOR_MAP:
+        return COLOR_MAP[name]
+
+    # Case-insensitive lookup.
+    runtime_casefold = _casefold_lookup(name, RUNTIME_COLOR_MAP)
+    if runtime_casefold:
+        return runtime_casefold
+
+    static_casefold = _casefold_lookup(name, COLOR_MAP)
+    if static_casefold:
+        return static_casefold
+
+    # Jeśli to juz HEX, zwroc bez zmian (z normalizacja #RGB -> #RRGGBB).
+    if name.startswith("#"):
+        normalized = _normalize_hex(name)
+        if len(normalized) == 7:
+            return normalized
+
     return "#FFFFFF"

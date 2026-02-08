@@ -22,6 +22,7 @@ from src.gui.cabinet_editor import CabinetEditorDialog
 from src.services.catalog_service import CatalogService
 from src.gui.resources.resources import get_icon
 from src.services.project_service import ProjectService
+from src.services.color_palette_service import ColorPaletteService
 from src.db_schema.orm_models import Project
 
 from .browser_widget import CatalogBrowserWidget
@@ -52,6 +53,12 @@ class CatalogWindow(QDialog):
         self.project_service = project_service
         self.target_project = target_project
         self.current_mode = initial_mode
+        self.color_service = None
+
+        if getattr(self.catalog_service, "session", None) is not None:
+            self.color_service = ColorPaletteService(self.catalog_service.session)
+            self.color_service.ensure_seeded()
+            self.color_service.sync_runtime_color_map()
 
         self._setup_ui()
         self._setup_connections()
@@ -99,7 +106,7 @@ class CatalogWindow(QDialog):
         layout.addWidget(self.browser_widget)
 
         # Add footer
-        self.add_footer = AddFooter()
+        self.add_footer = AddFooter(color_service=self.color_service)
         layout.addWidget(self.add_footer)
 
     def _setup_connections(self):
@@ -331,6 +338,7 @@ class CatalogWindow(QDialog):
             editor = CabinetEditorDialog(
                 catalog_service=self.catalog_service,
                 project_service=None,  # Not needed for type editing
+                color_service=self.color_service,
                 parent=self,
             )
             editor.load_type(cabinet_type)

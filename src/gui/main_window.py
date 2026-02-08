@@ -32,6 +32,7 @@ from src.gui.project_dialog import ProjectDialog
 from src.services.project_service import ProjectService
 from src.services.report_generator import ReportGenerator
 from src.services.settings_service import SettingsService
+from src.services.color_palette_service import ColorPaletteService
 from src.gui.project_details.widget import ProjectDetailsWidget
 from src.gui.settings_dialog import SettingsDialog
 
@@ -69,8 +70,15 @@ class MainWindow(QMainWindow):
         self.catalog_service = CatalogService(db_session)
         self.report_generator = ReportGenerator(db_session=db_session)
         self.settings_service = SettingsService(db_session)
+        self.color_palette_service = ColorPaletteService(db_session)
         self.updater_service = UpdaterService(parent=self)
         self.is_dark_mode = self.settings_service.get_setting_value("dark_mode", False)
+
+        try:
+            self.color_palette_service.ensure_seeded()
+            self.color_palette_service.sync_runtime_color_map()
+        except Exception as exc:
+            logger.warning("Failed to initialize color palette cache: %s", exc)
 
         # UX: Search debounce timer for better performance
         self._search_timer = QTimer(self)

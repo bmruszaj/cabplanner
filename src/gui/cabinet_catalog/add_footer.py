@@ -14,11 +14,16 @@ from PySide6.QtWidgets import (
     QPushButton,
     QSizePolicy,
     QGroupBox,
+    QCompleter,
+    QDialog,
 )
-from PySide6.QtCore import Signal, QSize
+from PySide6.QtCore import Signal, QSize, Qt
 
 from src.gui.resources.styles import get_theme, PRIMARY
 from src.gui.resources.resources import get_icon
+from src.gui.constants.colors import POPULAR_COLORS
+from src.gui.dialogs.color_edit_dialog import ColorEditDialog
+from src.services.color_palette_service import ColorPaletteService
 
 
 class AddFooter(QWidget):
@@ -27,11 +32,13 @@ class AddFooter(QWidget):
     # Signals
     sig_add_to_project = Signal()
 
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, color_service: ColorPaletteService | None = None):
         super().__init__(parent)
+        self.color_service = color_service
         self._setup_ui()
         self._setup_connections()
         self._apply_styles()
+        self._load_color_controls()
         self.set_enabled(False)
 
     def _setup_ui(self):
@@ -63,20 +70,26 @@ class AddFooter(QWidget):
         body_layout = QHBoxLayout()
         body_layout.addWidget(QLabel("Korpus:"))
         self.body_color_combo = QComboBox()
-        self.body_color_combo.addItems(["Biały", "Czarny", "Szary", "Dąb", "Orzech"])
+        self.body_color_combo.setEditable(True)
         self.body_color_combo.setCurrentText("Biały")
         body_layout.addWidget(self.body_color_combo)
+
+        self.body_add_color_btn = QPushButton("Dodaj kolor")
+        self.body_add_color_btn.setObjectName("addColorBtn")
+        body_layout.addWidget(self.body_add_color_btn)
         options_layout.addLayout(body_layout)
 
         # Front color
         front_layout = QHBoxLayout()
         front_layout.addWidget(QLabel("Front:"))
         self.front_color_combo = QComboBox()
-        self.front_color_combo.addItems(
-            ["Biały", "Czarny", "Szary", "Dąb", "Orzech", "Lacobel"]
-        )
+        self.front_color_combo.setEditable(True)
         self.front_color_combo.setCurrentText("Biały")
         front_layout.addWidget(self.front_color_combo)
+
+        self.front_add_color_btn = QPushButton("Dodaj kolor")
+        self.front_add_color_btn.setObjectName("addColorBtn")
+        front_layout.addWidget(self.front_add_color_btn)
         options_layout.addLayout(front_layout)
 
         # Handle type
@@ -108,6 +121,12 @@ class AddFooter(QWidget):
     def _setup_connections(self):
         """Setup signal connections."""
         self.add_button.clicked.connect(self.sig_add_to_project.emit)
+        self.body_add_color_btn.clicked.connect(
+            lambda: self._open_add_color_dialog(self.body_color_combo)
+        )
+        self.front_add_color_btn.clicked.connect(
+            lambda: self._open_add_color_dialog(self.front_color_combo)
+        )
 
     def _apply_styles(self):
         """Apply styling to the footer."""
@@ -182,6 +201,20 @@ class AddFooter(QWidget):
                 background-color: #CCCCCC;
                 color: #666666;
             }}
+            QPushButton#addColorBtn {{
+                background-color: white;
+                color: #333333;
+                border: 1px solid #D0D0D0;
+                border-radius: 4px;
+                padding: 4px 8px;
+                font-size: 9pt;
+                font-weight: normal;
+                min-width: 0;
+            }}
+            QPushButton#addColorBtn:hover {{
+                border-color: {PRIMARY};
+                background-color: #f8f8f8;
+            }}
             QLabel {{
                 font-size: 9pt;
                 font-weight: normal;
@@ -195,6 +228,8 @@ class AddFooter(QWidget):
         self.qty_spinbox.setEnabled(enabled)
         self.body_color_combo.setEnabled(enabled)
         self.front_color_combo.setEnabled(enabled)
+        self.body_add_color_btn.setEnabled(enabled)
+        self.front_add_color_btn.setEnabled(enabled)
         self.handle_combo.setEnabled(enabled)
         self.add_button.setEnabled(enabled)
 
@@ -212,3 +247,57 @@ class AddFooter(QWidget):
             "handle_type": self.handle_combo.currentText(),
         }
         return quantity, options
+
+    def _open_add_color_dialog(self, target_combo: QComboBox) -> None:
+        """Open dialog for adding a custom color entry."""
+        if not self.color_service:
+            return
+
+        dialog = ColorEditDialog(self.color_service, parent=self)
+        if dialog.exec() == QDialog.DialogCode.Accepted and dialog.created_color_name:
+            self._load_color_controls()
+            target_combo.setCurrentText(dialog.created_color_name)
+
+    def _load_color_controls(self) -> None:
+        """Populate recent-first color controls and searchable completers."""
+        recent_names = self._recent_names()
+        searchable_names = self._searchable_names()
+
+        current_body = self.body_color_combo.currentText() or "Biały"
+        current_front = self.front_color_combo.currentText() or "Biały"
+
+        for combo in (self.body_color_combo, self.front_color_combo):
+            combo.blockSignals(True)
+            combo.clear()
+            combo.addItems(recent_names)
+            combo.blockSignals(False)
+
+            completer = QCompleter(searchable_names, self)
+            completer.setCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
+            completer.setFilterMode(Qt.MatchFlag.MatchContains)
+            combo.setCompleter(completer)
+
+        self.body_color_combo.setCurrentText(current_body)
+        self.front_color_combo.setCurrentText(current_front)
+
+    def _recent_names(self) -> list[str]:
+        if self.color_service:
+            try:
+                self.color_service.ensure_seeded()
+                names = self.color_service.list_recent(limit=12)
+                if names:
+                    return names
+            except Exception:
+                pass
+        return POPULAR_COLORS[:12]
+
+    def _searchable_names(self) -> list[str]:
+        if self.color_service:
+            try:
+                self.color_service.ensure_seeded()
+                names = self.color_service.list_searchable_names()
+                if names:
+                    return names
+            except Exception:
+                pass
+        return list(POPULAR_COLORS)

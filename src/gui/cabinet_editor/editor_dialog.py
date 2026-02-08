@@ -22,6 +22,7 @@ from src.gui.resources.resources import get_icon
 from src.gui.resources.styles import get_theme, PRIMARY
 from src.services.catalog_service import CatalogService
 from src.services.project_service import ProjectService
+from src.services.color_palette_service import ColorPaletteService
 
 from .instance_form import InstanceForm
 from .parts_form import PartsForm
@@ -38,11 +39,13 @@ class CabinetEditorDialog(QDialog):
         self,
         catalog_service: CatalogService,
         project_service: ProjectService = None,
+        color_service: ColorPaletteService | None = None,
         parent=None,
     ):
         super().__init__(parent)
         self.catalog_service = catalog_service
         self.project_service = project_service
+        self.color_service = color_service
 
         self.cabinet_type = None
         self.project_instance = None
@@ -156,7 +159,7 @@ class CabinetEditorDialog(QDialog):
         self.tab_widget.setTabPosition(QTabWidget.North)
 
         # Instance tab
-        self.instance_form = InstanceForm()
+        self.instance_form = InstanceForm(color_service=self.color_service)
         self.tab_widget.addTab(
             self.instance_form, get_icon("project"), "Instancja w projekcie"
         )

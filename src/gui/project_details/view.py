@@ -27,6 +27,7 @@ from src.gui.resources.styles import get_theme
 from src.controllers.project_details_controller import ProjectDetailsController
 from src.gui.cabinet_catalog.window import CatalogWindow
 from src.services.catalog_service import CatalogService
+from src.services.color_palette_service import ColorPaletteService
 from .constants import (
     CARD_WIDTH,
     TOOLBAR_HEIGHT,
@@ -185,6 +186,7 @@ class ProjectDetailsView(QDialog):
         self.modal = modal
         self._current_view_mode = VIEW_MODE_CARDS
         self.is_dark_mode = False  # Default value
+        self.color_service = None
 
         self._dbg("Setting visibility flags...")
         # Prevent any visibility during construction
@@ -218,6 +220,10 @@ class ProjectDetailsView(QDialog):
 
             # Initialize catalog service for unified catalog access
             self.catalog_service = CatalogService(session)
+
+            self.color_service = ColorPaletteService(session)
+            self.color_service.ensure_seeded()
+            self.color_service.sync_runtime_color_map()
 
         # Initialize services for compatibility (removed in favor of controller)
         if session and project:
@@ -801,6 +807,7 @@ class ProjectDetailsView(QDialog):
                 project_service=getattr(self.controller, "project_service", None)
                 if self.controller
                 else None,
+                color_service=self.color_service,
                 parent=self,
             )
             editor.load_instance(cabinet_type, cabinet)
@@ -834,6 +841,7 @@ class ProjectDetailsView(QDialog):
                 project_service=getattr(self.controller, "project_service", None)
                 if self.controller
                 else None,
+                color_service=self.color_service,
                 parent=self,
             )
 
