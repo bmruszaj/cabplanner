@@ -4,9 +4,10 @@ from datetime import datetime
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-from src.db_schema.orm_models import Base
+from src.db_schema.orm_models import Base, CabinetColor
 from src.services.project_service import ProjectService
 from src.services.template_service import TemplateService
+from src.services.color_palette_service import ColorPaletteService
 
 
 @pytest.fixture(scope="module")
@@ -187,6 +188,88 @@ def test_get_cabinet_nonexistent_returns_none(service):
     result = service.get_cabinet(-1)
     # THEN it should return None
     assert result is None
+
+
+def test_add_cabinet_marks_color_usage(service, template_service, session):
+    """Adding cabinet should increase usage stats for body/front colors."""
+    palette = ColorPaletteService(session)
+    palette.ensure_seeded()
+
+    proj = service.create_project(
+        name="ColorUsageAdd",
+        kitchen_type="LOFT",
+        order_number="COLOR-USAGE-ADD",
+    )
+    template = template_service.create_template(
+        kitchen_type="LOFT", name="ColorTemplate1"
+    )
+
+    before_body = session.query(CabinetColor).filter_by(normalized_name="biały").one()
+    before_front = session.query(CabinetColor).filter_by(normalized_name="czarny").one()
+    before_body_count = before_body.usage_count
+    before_front_count = before_front.usage_count
+
+    service.add_cabinet(
+        proj.id,
+        sequence_number=1,
+        type_id=template.id,
+        body_color="Biały",
+        front_color="Czarny",
+        handle_type="Standardowy",
+        quantity=1,
+    )
+
+    session.expire_all()
+    after_body = session.query(CabinetColor).filter_by(normalized_name="biały").one()
+    after_front = session.query(CabinetColor).filter_by(normalized_name="czarny").one()
+
+    assert after_body.usage_count == before_body_count + 1
+    assert after_front.usage_count == before_front_count + 1
+    assert after_body.last_used_at is not None
+    assert after_front.last_used_at is not None
+
+
+def test_update_cabinet_marks_only_changed_colors(service, template_service, session):
+    """Updating cabinet should mark only colors that actually changed."""
+    palette = ColorPaletteService(session)
+    palette.ensure_seeded()
+
+    proj = service.create_project(
+        name="ColorUsageUpdate",
+        kitchen_type="LOFT",
+        order_number="COLOR-USAGE-UPD",
+    )
+    template = template_service.create_template(
+        kitchen_type="LOFT", name="ColorTemplate2"
+    )
+
+    cabinet = service.add_cabinet(
+        proj.id,
+        sequence_number=1,
+        type_id=template.id,
+        body_color="Biały",
+        front_color="Czarny",
+        handle_type="Standardowy",
+        quantity=1,
+    )
+
+    before_front = session.query(CabinetColor).filter_by(normalized_name="czarny").one()
+    before_body_target = (
+        session.query(CabinetColor).filter_by(normalized_name="zielony").one()
+    )
+    before_front_count = before_front.usage_count
+    before_body_target_count = before_body_target.usage_count
+
+    service.update_cabinet(cabinet.id, body_color="Zielony", front_color="Czarny")
+
+    session.expire_all()
+    after_front = session.query(CabinetColor).filter_by(normalized_name="czarny").one()
+    after_body_target = (
+        session.query(CabinetColor).filter_by(normalized_name="zielony").one()
+    )
+
+    assert after_front.usage_count == before_front_count
+    assert after_body_target.usage_count == before_body_target_count + 1
 
 
 def test_list_cabinets_empty(service):
