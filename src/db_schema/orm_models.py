@@ -55,6 +55,41 @@ class FormulaConstant(Base):
     )
 
 
+class CabinetColor(Base):
+    """
+    Dictionary entry for cabinet colors.
+    Stores both system and user-defined names mapped to HEX values.
+    """
+
+    __tablename__ = "cabinet_colors"
+
+    id = Column(Integer, primary_key=True)
+    name = Column(String(120), nullable=False)
+    normalized_name = Column(String(120), nullable=False, unique=True)
+    hex_code = Column(String(7), nullable=False)  # #RRGGBB
+    source = Column(String(16), nullable=False, default="system")  # system | user
+    usage_count = Column(Integer, nullable=False, default=0)
+    last_used_at = Column(DateTime(timezone=True), nullable=True)
+    is_active = Column(Boolean, nullable=False, default=True)
+
+    created_at = Column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+    __table_args__ = (
+        CheckConstraint("source IN ('system', 'user')", name="ck_cabinet_color_source"),
+        CheckConstraint("usage_count >= 0", name="ck_cabinet_color_usage_nonneg"),
+        Index("ix_cabinet_colors_last_used_at", "last_used_at"),
+        Index("ix_cabinet_colors_source", "source"),
+    )
+
+
 # ---------- Core domain ----------
 
 

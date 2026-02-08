@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+import logging
 from typing import List, Optional, Dict, Any
 
 from sqlalchemy import func, select
@@ -11,6 +12,8 @@ from src.db_schema.orm_models import (
     ProjectCabinetAccessorySnapshot,
     CabinetTemplate,
 )
+
+logger = logging.getLogger(__name__)
 
 
 def get_circled_number(n: int) -> str:
@@ -109,17 +112,40 @@ class ProjectService:
 
         self.db.commit()
         self.db.refresh(cab)
+        self._mark_colors_used(body_color, front_color)
         return cab
 
     def update_cabinet(self, cabinet_id: int, **fields) -> Optional[ProjectCabinet]:
         cab = self.get_cabinet(cabinet_id)
         if not cab:
             return None
+
+        previous_body_color = cab.body_color
+        previous_front_color = cab.front_color
+
         for attr, val in fields.items():
             setattr(cab, attr, val)
         cab.updated_at = datetime.now(timezone.utc)
         self.db.commit()
         self.db.refresh(cab)
+
+        body_changed = (
+            "body_color" in fields
+            and fields.get("body_color") is not None
+            and fields.get("body_color") != previous_body_color
+        )
+        front_changed = (
+            "front_color" in fields
+            and fields.get("front_color") is not None
+            and fields.get("front_color") != previous_front_color
+        )
+        colors_to_mark = []
+        if body_changed:
+            colors_to_mark.append(cab.body_color)
+        if front_changed:
+            colors_to_mark.append(cab.front_color)
+        if colors_to_mark:
+            self._mark_colors_used(*colors_to_mark)
         return cab
 
     def delete_cabinet(self, cabinet_id: int) -> bool:
@@ -242,7 +268,21 @@ class ProjectService:
 
         self.db.commit()
         self.db.refresh(cab)
+        self._mark_colors_used(body_color, front_color)
         return cab
+
+    def _mark_colors_used(self, *color_names: str) -> None:
+        """Best-effort color usage tracking for recent-color UX."""
+        try:
+            from src.services.color_palette_service import ColorPaletteService
+
+            palette = ColorPaletteService(self.db)
+            palette.ensure_seeded()
+            for name in color_names:
+                palette.mark_used(name)
+            palette.sync_runtime_color_map()
+        except Exception as exc:
+            logger.warning("Color usage tracking failed: %s", exc)
 
     def _materialize_standard_cabinet_parts(
         self, cabinet: ProjectCabinet, type_id: int
