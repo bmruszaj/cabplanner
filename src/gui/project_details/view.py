@@ -28,9 +28,9 @@ from src.controllers.project_details_controller import ProjectDetailsController
 from src.gui.cabinet_catalog.window import CatalogWindow
 from src.services.catalog_service import CatalogService
 from src.services.color_palette_service import ColorPaletteService
+from src.services.settings_service import SettingsService
 from .constants import (
     CARD_WIDTH,
-    TOOLBAR_HEIGHT,
     VIEW_MODE_CARDS,
     VIEW_MODE_TABLE,
     CONTENT_MARGINS,
@@ -172,8 +172,10 @@ class ProjectDetailsView(QDialog):
         self._dbg_start_time = _time.perf_counter()
 
         # Small helper to log elapsed ms from constructor start
-        self._dbg = lambda msg: print(
-            f"[VIEW DEBUG][{(_time.perf_counter() - self._dbg_start_time) * 1000:.1f}ms] {msg}"
+        self._dbg = lambda msg: logger.debug(
+            "[VIEW DEBUG][%.1fms] %s",
+            (_time.perf_counter() - self._dbg_start_time) * 1000,
+            msg,
         )
 
         self._dbg(
@@ -185,8 +187,15 @@ class ProjectDetailsView(QDialog):
         self.project = project
         self.modal = modal
         self._current_view_mode = VIEW_MODE_CARDS
-        self.is_dark_mode = False  # Default value
+        self.is_dark_mode = False
         self.color_service = None
+        if self.session:
+            try:
+                self.is_dark_mode = bool(
+                    SettingsService(self.session).get_setting_value("dark_mode", False)
+                )
+            except Exception as exc:
+                logger.warning("Failed to read dark mode setting: %s", exc)
 
         self._dbg("Setting visibility flags...")
         # Prevent any visibility during construction
@@ -286,7 +295,6 @@ class ProjectDetailsView(QDialog):
 
         # Toolbar
         self.toolbar = Toolbar()
-        self.toolbar.setFixedHeight(TOOLBAR_HEIGHT)
         main_layout.addWidget(self.toolbar)
 
         # Main content area (no splitter - cabinet cards are the focus)
@@ -342,23 +350,6 @@ class ProjectDetailsView(QDialog):
         # Add from catalog button - below cards, scrolls with them
         self.add_catalog_btn = QPushButton("+ Dodaj z katalogu")
         self.add_catalog_btn.clicked.connect(self._handle_add_from_catalog)
-        self.add_catalog_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #0A766C;
-                color: white;
-                border: none;
-                border-radius: 6px;
-                padding: 10px 16px;
-                font-weight: 500;
-                font-size: 10pt;
-            }
-            QPushButton:hover {
-                background-color: #085f56;
-            }
-            QPushButton:pressed {
-                background-color: #064e46;
-            }
-        """)
         scroll_content_layout.addWidget(
             self.add_catalog_btn, 0, Qt.AlignmentFlag.AlignCenter
         )
@@ -376,27 +367,6 @@ class ProjectDetailsView(QDialog):
         self.table_view = QTableView()
         self.table_view.setAlternatingRowColors(True)
         self.table_view.horizontalHeader().setStretchLastSection(True)
-        self.table_view.setStyleSheet("""
-            QTableView {
-                background-color: white;
-                border: 1px solid #e0e0e0;
-                border-radius: 8px;
-                gridline-color: #f0f0f0;
-            }
-            QHeaderView::section {
-                background-color: #f8f9fa;
-                border: none;
-                border-bottom: 1px solid #e0e0e0;
-                padding: 8px;
-                font-weight: 500;
-            }
-            QTableView::item {
-                padding: 8px;
-            }
-            QTableView::item:alternate {
-                background-color: #f9f9f9;
-            }
-        """)
         self.stacked_widget.addWidget(self.table_view)
         central_layout.addWidget(self.stacked_widget)
 
@@ -451,20 +421,11 @@ class ProjectDetailsView(QDialog):
         # Set property classes for individual components for additional styling
         self.setProperty("class", "dialog")
 
-        # Ensure theme is applied to all child widgets
-        self._apply_theme_to_children()
+        # Child widgets inherit dialog theme from the parent stylesheet.
 
     def _apply_theme_to_children(self) -> None:
-        """Apply theme to all child widgets to ensure consistent styling."""
-        try:
-            theme = get_theme(self.is_dark_mode)
-
-            # Apply theme to major components
-            for widget in [self.header_bar, self.toolbar, self.central_widget]:
-                if widget:
-                    widget.setStyleSheet(theme)
-        except Exception as e:
-            logger.warning(f"Failed to apply theme to children: {e}")
+        """Backward-compatible no-op; children inherit parent theme."""
+        return
 
     def apply_card_order(self, ordered_cabinets: List[ProjectCabinet]) -> None:
         """
@@ -746,7 +707,7 @@ class ProjectDetailsView(QDialog):
                     self.sig_cabinet_edit.emit(cabinet_id)
         except Exception as e:
             # Log error but don't crash
-            print(f"Error handling table double-click: {e}")
+            logger.exception("Error handling table double-click: %s", e)
 
     def _on_cabinet_updated(self, updated_cabinet: ProjectCabinet) -> None:
         """Handle cabinet update notification from controller."""

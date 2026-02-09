@@ -6,7 +6,6 @@ with inline editing capabilities for quantity and sequence numbers.
 """
 
 from typing import Dict, Any
-import time as _time
 from PySide6.QtWidgets import (
     QFrame,
     QVBoxLayout,
@@ -44,11 +43,7 @@ class CabinetCard(QFrame):
         self._selected = False
         # Prevent any chance of flashing as a separate window during construction
         self.setAttribute(Qt.WA_DontShowOnScreen, True)
-        # Per-card instrumentation
-        self._card_start = _time.perf_counter()
-        self._card_dbg = lambda msg: print(
-            f"[CARD DEBUG][{self.cabinet_id}][{(_time.perf_counter() - self._card_start) * 1000:.1f}ms] {msg}"
-        )
+        self._card_dbg = lambda _msg: None
 
         # Timer for delayed single-click handling to prevent conflict with double-click
         self._click_timer = QTimer()

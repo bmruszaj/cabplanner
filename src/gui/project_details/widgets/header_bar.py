@@ -63,7 +63,7 @@ class HeaderBar(QWidget):
         separator = QFrame()
         separator.setFrameShape(QFrame.VLine)
         separator.setFrameShadow(QFrame.Sunken)
-        separator.setStyleSheet("QFrame { color: #e0e0e0; }")
+        separator.setStyleSheet("QFrame { color: palette(mid); }")
         layout.addWidget(separator)
 
         # Center section: Project info
@@ -151,15 +151,13 @@ class HeaderBar(QWidget):
         # Button styles come from global theme (primary/secondary)
         self.setStyleSheet("""
             HeaderBar {
-                background-color: #ffffff;
-                border-bottom: 2px solid #e2e8f0;
+                border-bottom: 1px solid palette(mid);
             }
             QLabel[class="project-title"] {
-                color: #0f172a;
                 font-weight: 700;
             }
             QLabel[class="metadata"] {
-                color: #64748b;
+                color: palette(mid);
                 font-size: 12px;
             }
         """)

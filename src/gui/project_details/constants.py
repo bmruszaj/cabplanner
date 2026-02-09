@@ -14,7 +14,8 @@ BANNER_ICON_SIZE = QSize(20, 20)
 
 # Layout dimensions
 HEADER_HEIGHT = 60
-TOOLBAR_HEIGHT = 40
+# Keep enough vertical room for 24px icons, button padding, and font descenders.
+TOOLBAR_HEIGHT = 56
 CONTENT_MARGINS = (12, 12, 12, 12)
 LAYOUT_SPACING = 8
 SECTION_SPACING = 16

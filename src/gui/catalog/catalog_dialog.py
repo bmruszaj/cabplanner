@@ -30,9 +30,10 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtGui import QFont, QKeySequence, QShortcut
 
-from src.gui.resources.styles import get_theme, BG_LIGHT, BORDER_LIGHT
+from src.gui.resources.styles import get_theme
 from src.gui.resources.resources import get_icon
 from src.gui.common.layouts import ResponsiveFlowLayout
+from src.services.settings_service import SettingsService
 from .catalog_card import CatalogCard
 from .catalog_service import CatalogService
 from .catalog_models import CatalogItem
@@ -78,6 +79,17 @@ class CatalogDialog(QDialog):
         self._selected_item: Optional[CatalogItem] = None
         self._selected_card: Optional[CatalogCard] = None
         self._cards: List[CatalogCard] = []
+        self._selected_category_ids: set[int] = set()
+        self.is_dark_mode = False
+        if self.catalog and self.catalog.session:
+            try:
+                self.is_dark_mode = bool(
+                    SettingsService(self.catalog.session).get_setting_value(
+                        "dark_mode", False
+                    )
+                )
+            except Exception:
+                self.is_dark_mode = False
 
         # Settings for persistence
         self.settings = QSettings()
@@ -95,7 +107,7 @@ class CatalogDialog(QDialog):
         self.setMinimumSize(1000, 600)
 
         # Apply theme
-        self.setStyleSheet(get_theme(False))
+        self.setStyleSheet(get_theme(self.is_dark_mode))
 
         # Main layout
         main_layout = QVBoxLayout(self)
@@ -119,7 +131,7 @@ class CatalogDialog(QDialog):
         # Search
         self.search_input = QLineEdit()
         self.search_input.setPlaceholderText("Szukaj w katalogu... (Ctrl+F)")
-        self.search_input.setMinimumWidth(300)
+        self.search_input.setMinimumWidth(220)
 
         self.clear_search_btn = QToolButton()
         self.clear_search_btn.setIcon(get_icon("close"))
@@ -140,6 +152,7 @@ class CatalogDialog(QDialog):
         self.view_btn.setIcon(get_icon("dashboard"))
         self.view_btn.setToolTip("Przełącz widok siatki/listy")
         self.view_btn.setCheckable(True)
+        self.view_btn.setVisible(False)
 
         # Add to layout
         header_layout.addWidget(self.search_input, 1)
@@ -186,7 +199,7 @@ class CatalogDialog(QDialog):
 
         self.categories_tree = QTreeWidget()
         self.categories_tree.setHeaderHidden(True)
-        self.categories_tree.setMaximumHeight(200)
+        self.categories_tree.setMinimumHeight(160)
 
         # Filters section
         filters_label = QLabel("Filtry")
@@ -288,14 +301,13 @@ class CatalogDialog(QDialog):
         self.preview_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.preview_label.setFrameShape(QFrame.Shape.StyledPanel)
         self.preview_label.setMinimumHeight(180)
-        self.preview_label.setStyleSheet(f"""
-            QLabel {{
-                background-color: {BG_LIGHT};
-                border: 1px solid {BORDER_LIGHT};
+        self.preview_label.setStyleSheet("""
+            QLabel {
+                border: 1px solid palette(mid);
                 border-radius: 8px;
-                color: #666666;
+                color: palette(window-text);
                 font-size: 14px;
-            }}
+            }
         """)
 
         # Configuration form
@@ -359,7 +371,6 @@ class CatalogDialog(QDialog):
 
         self.sort_combo.currentTextChanged.connect(self._reload_search)
         self.order_btn.clicked.connect(self._reload_search)
-        self.view_btn.clicked.connect(self._toggle_view_mode)
 
         # Left pane
         self.categories_tree.itemClicked.connect(self._on_category_selected)
@@ -389,10 +400,6 @@ class CatalogDialog(QDialog):
         # Escape to close (store on self so it isn't garbage-collected)
         self.close_shortcut = QShortcut(QKeySequence("Escape"), self)
         self.close_shortcut.activated.connect(self.reject)
-
-        # Ctrl+L for view toggle
-        self.view_shortcut = QShortcut(QKeySequence("Ctrl+L"), self)
-        self.view_shortcut.activated.connect(self._toggle_view_mode)
 
     def _load_initial_data(self):
         """Load initial data (categories and first page of items)."""
@@ -495,11 +502,14 @@ class CatalogDialog(QDialog):
 
     def _get_current_filters(self) -> Dict[str, Any]:
         """Get current filter values."""
-        return {
+        filters = {
             "width": self.width_combo.currentText(),
             "kind": self.type_combo.currentText(),
             "height": self.height_combo.currentText(),
         }
+        if self._selected_category_ids:
+            filters["category_ids"] = list(self._selected_category_ids)
+        return filters
 
     def _get_current_sort(self) -> tuple:
         """Get current sort field and order."""
@@ -536,21 +546,31 @@ class CatalogDialog(QDialog):
 
     def _on_category_selected(self, item: QTreeWidgetItem):
         """Handle category selection."""
-        item.data(0, Qt.ItemDataRole.UserRole)
-        # TODO: Implement category filtering
+        self._selected_category_ids = set(self._collect_category_ids(item))
         self._reload_search()
+
+    def _collect_category_ids(self, item: QTreeWidgetItem) -> List[int]:
+        """Collect selected category id and all descendant ids."""
+        category_ids: List[int] = []
+        category_id = item.data(0, Qt.ItemDataRole.UserRole)
+        if isinstance(category_id, int):
+            category_ids.append(category_id)
+        for idx in range(item.childCount()):
+            category_ids.extend(self._collect_category_ids(item.child(idx)))
+        return category_ids
 
     def _clear_filters(self):
         """Clear all filters and reload."""
         self.width_combo.setCurrentIndex(0)
         self.type_combo.setCurrentIndex(0)
         self.height_combo.setCurrentIndex(0)
+        self._selected_category_ids.clear()
+        self.categories_tree.clearSelection()
         self._reload_search()
 
     def _toggle_view_mode(self):
-        """Toggle between grid and list view modes."""
-        # TODO: Implement list view mode
-        pass
+        """View toggle is intentionally disabled until list mode is implemented."""
+        return
 
     def _on_card_selected(self, item_id: int):
         """Handle card selection."""

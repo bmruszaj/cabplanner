@@ -84,6 +84,22 @@ class CatalogItem:
 
     def matches_filter(self, filters: Dict[str, Any]) -> bool:
         """Check if item matches the given filters."""
+        # Category filter (single id or expanded list of ids)
+        category_ids = filters.get("category_ids")
+        if category_ids:
+            try:
+                valid_ids = {int(cid) for cid in category_ids}
+            except (TypeError, ValueError):
+                valid_ids = set()
+            if valid_ids and self.category_id not in valid_ids:
+                return False
+        elif filters.get("category_id"):
+            try:
+                if self.category_id != int(filters["category_id"]):
+                    return False
+            except (TypeError, ValueError):
+                return False
+
         # Width filter
         if filters.get("width") and filters["width"] != "Szer.: dowolna":
             try:
@@ -101,6 +117,15 @@ class CatalogItem:
                 tag.lower() for tag in self.tags
             ]:
                 return False
+
+        # Height filter
+        if filters.get("height") and filters["height"] != "Wys.: dowolna":
+            try:
+                filter_height = int(filters["height"])
+                if self.height != filter_height:
+                    return False
+            except ValueError:
+                pass
 
         return True
 

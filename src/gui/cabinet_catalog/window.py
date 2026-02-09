@@ -23,6 +23,7 @@ from src.services.catalog_service import CatalogService
 from src.gui.resources.resources import get_icon
 from src.services.project_service import ProjectService
 from src.services.color_palette_service import ColorPaletteService
+from src.services.settings_service import SettingsService
 from src.db_schema.orm_models import Project
 
 from .browser_widget import CatalogBrowserWidget
@@ -54,11 +55,20 @@ class CatalogWindow(QDialog):
         self.target_project = target_project
         self.current_mode = initial_mode
         self.color_service = None
+        self.is_dark_mode = False
 
         if getattr(self.catalog_service, "session", None) is not None:
             self.color_service = ColorPaletteService(self.catalog_service.session)
             self.color_service.ensure_seeded()
             self.color_service.sync_runtime_color_map()
+            try:
+                self.is_dark_mode = bool(
+                    SettingsService(self.catalog_service.session).get_setting_value(
+                        "dark_mode", False
+                    )
+                )
+            except Exception:
+                self.is_dark_mode = False
 
         self._setup_ui()
         self._setup_connections()
@@ -79,7 +89,7 @@ class CatalogWindow(QDialog):
         # Header with search and mode toggle
         header_frame = QFrame()
         header_frame.setObjectName("headerFrame")
-        header_frame.setFixedHeight(60)
+        header_frame.setMinimumHeight(60)
         header_layout = QHBoxLayout(header_frame)
         header_layout.setContentsMargins(16, 8, 16, 8)
 
@@ -89,7 +99,8 @@ class CatalogWindow(QDialog):
 
         self.search_edit = QLineEdit()
         self.search_edit.setPlaceholderText("Szukaj typów szafek...")
-        self.search_edit.setFixedWidth(300)
+        self.search_edit.setMinimumWidth(240)
+        self.search_edit.setMaximumWidth(480)
         header_layout.addWidget(self.search_edit)
 
         # Spacer
@@ -102,7 +113,9 @@ class CatalogWindow(QDialog):
         layout.addWidget(self.manage_toolbar)
 
         # Browser area
-        self.browser_widget = CatalogBrowserWidget(self.catalog_service)
+        self.browser_widget = CatalogBrowserWidget(
+            self.catalog_service, is_dark_mode=self.is_dark_mode
+        )
         layout.addWidget(self.browser_widget)
 
         # Add footer
@@ -130,18 +143,16 @@ class CatalogWindow(QDialog):
     def _apply_styles(self):
         """Apply styling to the window."""
         self.setStyleSheet(
-            get_theme()
+            get_theme(self.is_dark_mode)
             + f"""
             QFrame#headerFrame {{
-                background-color: #F8F9FA;
-                border-bottom: 1px solid #E0E0E0;
+                border-bottom: 1px solid palette(mid);
             }}
             QLineEdit {{
                 padding: 8px;
                 border: 1px solid #D0D0D0;
                 border-radius: 4px;
                 font-size: 10pt;
-                background-color: white;
             }}
             QLineEdit:focus {{
                 border-color: {PRIMARY};
@@ -295,8 +306,8 @@ class CatalogWindow(QDialog):
         # Confirm deletion
         reply = QMessageBox.question(
             self,
-            "Confirm Delete",
-            f"Are you sure you want to delete '{item.name}'?\n\nThis action cannot be undone.",
+            "Potwierdzenie usunięcia",
+            f"Czy na pewno chcesz usunąć '{item.name}'?\n\nTej operacji nie można cofnąć.",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.No,
         )
@@ -309,18 +320,18 @@ class CatalogWindow(QDialog):
                     self.sig_catalog_changed.emit()
                     QMessageBox.information(
                         self,
-                        "Success",
-                        f"Cabinet type '{item.name}' deleted successfully",
+                        "Sukces",
+                        f"Typ szafki '{item.name}' został usunięty.",
                     )
                 else:
                     QMessageBox.warning(
                         self,
-                        "Warning",
-                        "Cabinet type could not be deleted (may be in use)",
+                        "Ostrzeżenie",
+                        "Nie udało się usunąć typu szafki (może być używany).",
                     )
             except Exception as e:
                 QMessageBox.critical(
-                    self, "Error", f"Failed to delete cabinet type: {str(e)}"
+                    self, "Błąd", f"Nie udało się usunąć typu szafki: {str(e)}"
                 )
 
     def _edit_cabinet_type(self, cabinet_type_id: int):
@@ -390,7 +401,7 @@ class CatalogWindow(QDialog):
 
         except Exception as e:
             QMessageBox.critical(
-                self, "Error", f"Failed to add cabinet to project: {str(e)}"
+                self, "Błąd", f"Nie udało się dodać szafki do projektu: {str(e)}"
             )
 
     def done(self, result):

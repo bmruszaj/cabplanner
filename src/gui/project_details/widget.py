@@ -30,8 +30,9 @@ class ProjectDetailsWidget(QWidget):
     closed = Signal()
 
     def __init__(self, session: Session, project: Project, parent=None):
-        print(
-            f"[WIDGET DEBUG] Creating ProjectDetailsWidget for project: {project.name}"
+        logger.debug(
+            "Creating ProjectDetailsWidget for project: %s",
+            getattr(project, "name", "<unknown>"),
         )
         super().__init__(parent)
         self.session = session
@@ -46,8 +47,9 @@ class ProjectDetailsWidget(QWidget):
         self.setVisible(False)
         self.hide()
 
-        print(
-            f"[WIDGET DEBUG][{(_time.perf_counter() - self._dbg_start_time) * 1000:.1f}ms] Creating minimal UI..."
+        logger.debug(
+            "[WIDGET DEBUG][%.1fms] Creating minimal UI...",
+            (_time.perf_counter() - self._dbg_start_time) * 1000,
         )
         # Create minimal UI immediately - just a layout
         layout = QVBoxLayout(self)
@@ -76,8 +78,9 @@ class ProjectDetailsWidget(QWidget):
 
         # Defer the heavy UI setup to prevent flash
         self.details_view = None
-        print(
-            f"[WIDGET DEBUG][{(_time.perf_counter() - self._dbg_start_time) * 1000:.1f}ms] Minimal UI created, deferring heavy setup..."
+        logger.debug(
+            "[WIDGET DEBUG][%.1fms] Minimal UI created, deferring heavy setup...",
+            (_time.perf_counter() - self._dbg_start_time) * 1000,
         )
 
         QTimer.singleShot(10, self._setup_heavy_ui)  # Very small delay
@@ -86,8 +89,9 @@ class ProjectDetailsWidget(QWidget):
         """Set up the actual heavy UI components after initial widget is shown."""
         import time as _time
 
-        print(
-            f"[WIDGET DEBUG][{(_time.perf_counter() - self._dbg_start_time) * 1000:.1f}ms] Setting up heavy UI..."
+        logger.debug(
+            "[WIDGET DEBUG][%.1fms] Setting up heavy UI...",
+            (_time.perf_counter() - self._dbg_start_time) * 1000,
         )
 
         # Remove loading label and spacer so content starts at top
@@ -143,8 +147,9 @@ class ProjectDetailsWidget(QWidget):
 
         import time as _time2
 
-        print(
-            f"[WIDGET DEBUG][{(_time2.perf_counter() - self._dbg_start_time) * 1000:.1f}ms] Heavy UI setup complete"
+        logger.debug(
+            "[WIDGET DEBUG][%.1fms] Heavy UI setup complete",
+            (_time2.perf_counter() - self._dbg_start_time) * 1000,
         )
 
     def closeEvent(self, event):

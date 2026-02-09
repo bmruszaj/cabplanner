@@ -47,8 +47,8 @@ class CatalogCard(QWidget):
         self._selected = False
 
         self.setObjectName("catalogCard")
-        self.setFixedSize(QSize(280, 160))
-        self.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        self.setMinimumSize(QSize(260, 160))
+        self.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Minimum)
 
         self._setup_ui()
         self._setup_styling()
@@ -71,7 +71,6 @@ class CatalogCard(QWidget):
         title_font.setPointSize(11)
         self.title_label.setFont(title_font)
         self.title_label.setWordWrap(True)
-        self.title_label.setMaximumHeight(40)
 
         # Quick add button
         self.add_button = QPushButton("+")
@@ -112,7 +111,6 @@ class CatalogCard(QWidget):
             self.description_label.setFont(desc_font)
             self.description_label.setStyleSheet("color: #999999;")
             self.description_label.setWordWrap(True)
-            self.description_label.setMaximumHeight(30)
             layout.addWidget(self.description_label)
 
         # Add stretch to push content to top
@@ -126,7 +124,6 @@ class CatalogCard(QWidget):
             tags_font.setPointSize(8)
             self.tags_label.setFont(tags_font)
             self.tags_label.setStyleSheet(f"color: {PRIMARY}; font-style: italic;")
-            self.tags_label.setMaximumHeight(16)
             layout.addWidget(self.tags_label)
 
     def _setup_styling(self):

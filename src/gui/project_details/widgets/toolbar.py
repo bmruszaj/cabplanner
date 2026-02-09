@@ -41,8 +41,8 @@ class Toolbar(QWidget):
 
         # Main layout
         layout = QHBoxLayout(self)
-        layout.setContentsMargins(16, 6, 16, 6)
-        layout.setSpacing(12)
+        layout.setContentsMargins(16, 8, 16, 8)
+        layout.setSpacing(10)
 
         # Left section: Add buttons
         self._create_add_buttons(layout)
@@ -78,8 +78,6 @@ class Toolbar(QWidget):
     def _create_sort_button(self, parent_layout: QHBoxLayout):
         """Create the sort button."""
         self.sort_btn = QPushButton("Sortuj")
-        self.sort_btn.setIcon(get_icon("filter"))  # Using filter icon for sort
-        self.sort_btn.setIconSize(ICON_SIZE)
         self.sort_btn.setProperty("class", "secondary")
         self.sort_btn.setToolTip("Sortuj według sekwencji")
         self.sort_btn.clicked.connect(self.sig_sort_by_sequence.emit)
@@ -139,7 +137,6 @@ class Toolbar(QWidget):
         # Button styles (primary/secondary) come from global theme
         self.setStyleSheet("""
             Toolbar {
-                background-color: #ffffff;
-                border-bottom: 1px solid #e0e0e0;
+                border-bottom: 1px solid palette(mid);
             }
         """)

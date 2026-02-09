@@ -211,9 +211,7 @@ class MainWindow(QMainWindow):
 
         self.btn_table = QToolButton()
         self.btn_table.setText(self.tr("Tabela"))
-        self.btn_table.setIcon(
-            get_icon("filter")
-        )  # Use available filter icon for table
+        self.btn_table.setIcon(get_icon("menu"))  # Use list-style icon for table mode
         self.btn_table.setToolTip(self.tr("Przełącz na widok tabeli (Ctrl+2)"))
         self.btn_table.setCheckable(True)
         self.btn_table.setAutoRaise(True)

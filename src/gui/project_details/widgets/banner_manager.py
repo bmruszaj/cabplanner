@@ -8,9 +8,10 @@ with automatic timeout and manual dismissal capabilities.
 from typing import List
 from PySide6.QtWidgets import QWidget, QVBoxLayout, QLabel
 from PySide6.QtCore import QTimer
+from PySide6.QtGui import QPalette
 
 # Import colors from the app's theme system
-from src.gui.resources.styles import PRIMARY
+from src.gui.resources.styles import PRIMARY, PRIMARY_LIGHT
 
 
 class BannerManager(QWidget):
@@ -42,23 +43,22 @@ class BannerManager(QWidget):
         """Create and display a banner with the specified type and timeout."""
         banner = QLabel(message)
         banner.setWordWrap(True)
-        # Define colors based on banner type using app theme
-        if banner_type == "success":
-            bg_color = "transparent"
-            border_color = PRIMARY
-            text_color = "#000000"
-        elif banner_type == "error":
-            bg_color = "transparent"
-            border_color = "#f44336"
-            text_color = "#000000"
-        elif banner_type == "warning":
-            bg_color = "transparent"
-            border_color = "#ff9800"
-            text_color = "#000000"
-        else:  # info
-            bg_color = "transparent"
-            border_color = "#2196F3"
-            text_color = "#000000"
+        is_dark = self.palette().color(QPalette.ColorRole.Window).lightness() < 128
+        if is_dark:
+            palette = {
+                "success": ("#0f2a24", PRIMARY_LIGHT, "#d8fff7"),
+                "error": ("#2b1212", "#f87171", "#ffe0e0"),
+                "warning": ("#2c2210", "#fbbf24", "#fff4cf"),
+                "info": ("#102739", "#60a5fa", "#dbeeff"),
+            }
+        else:
+            palette = {
+                "success": ("#e8f7f5", PRIMARY, "#133c38"),
+                "error": ("#fdecec", "#f44336", "#611717"),
+                "warning": ("#fff7e8", "#ff9800", "#5c3c00"),
+                "info": ("#eaf4ff", "#2196F3", "#0a3552"),
+            }
+        bg_color, border_color, text_color = palette.get(banner_type, palette["info"])
 
         banner.setStyleSheet(f"""
             QLabel {{

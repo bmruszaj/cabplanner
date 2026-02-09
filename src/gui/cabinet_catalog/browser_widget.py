@@ -5,6 +5,7 @@ Provides search, filtering, and display of catalog items in list/grid view.
 """
 
 from typing import Optional
+import logging
 from PySide6.QtWidgets import (
     QWidget,
     QVBoxLayout,
@@ -27,6 +28,8 @@ from PySide6.QtGui import QFont
 
 from src.gui.resources.styles import get_theme, PRIMARY
 from src.services.catalog_service import CatalogService, CatalogCabinetType
+
+logger = logging.getLogger(__name__)
 
 
 class CatalogTableModel(QAbstractTableModel):
@@ -98,11 +101,14 @@ class CatalogBrowserWidget(QWidget):
     sig_item_activated = Signal(int)  # cabinet_type_id
     sig_selection_changed = Signal(bool)  # has_selection
 
-    def __init__(self, catalog_service: CatalogService, parent=None):
+    def __init__(
+        self, catalog_service: CatalogService, parent=None, is_dark_mode: bool = False
+    ):
         super().__init__(parent)
         self.catalog_service = catalog_service
         self._current_query = ""
         self._current_filters = {}
+        self.is_dark_mode = is_dark_mode
 
         self._setup_ui()
         self._setup_connections()
@@ -120,7 +126,7 @@ class CatalogBrowserWidget(QWidget):
         search_layout.setContentsMargins(8, 8, 8, 0)
 
         search_label = QLabel("Szukaj:")
-        search_label.setFixedWidth(50)
+        search_label.setMinimumWidth(50)
         search_layout.addWidget(search_label)
 
         self.search_edit = QLineEdit()
@@ -168,7 +174,7 @@ class CatalogBrowserWidget(QWidget):
 
         # Optional details panel (placeholder for future)
         details_frame = QFrame()
-        details_frame.setFixedHeight(80)
+        details_frame.setMinimumHeight(80)
         details_frame.setFrameStyle(QFrame.Shape.StyledPanel)
         details_layout = QVBoxLayout(details_frame)
 
@@ -190,7 +196,7 @@ class CatalogBrowserWidget(QWidget):
     def _apply_styles(self):
         """Apply styling to the widget."""
         self.setStyleSheet(
-            get_theme()
+            get_theme(self.is_dark_mode)
             + f"""
             QLineEdit {{
                 padding: 6px;
@@ -265,7 +271,7 @@ class CatalogBrowserWidget(QWidget):
                 self.results_label.setText(f"{count} elementów")
 
         except Exception as e:
-            print(f"Error refreshing catalog browser: {e}")
+            logger.exception("Error refreshing catalog browser: %s", e)
             self.model.set_items([])
             self.results_label.setText("Błąd ładowania elementów")
 

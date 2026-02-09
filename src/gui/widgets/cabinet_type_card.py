@@ -29,8 +29,8 @@ class CabinetTypeCard(QFrame):
         self.cabinet_type = cabinet_type
         self.setObjectName("cabinetTypeCard")
         self.setProperty("class", "card")
-        self.setFixedHeight(200)
-        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.setMinimumHeight(200)
+        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Minimum)
         self.setCursor(Qt.PointingHandCursor)
         self.setFocusPolicy(Qt.StrongFocus)
         self.setAccessibleName(f"Typ szafki {self.cabinet_type.name}")

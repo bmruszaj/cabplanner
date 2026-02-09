@@ -32,10 +32,11 @@ class ProjectCard(QFrame):
         self.project = project
         self.setObjectName("projectCard")
         self.setProperty("class", "card")
-        # UX: Fixed width with minimum height to allow text wrapping without clipping
-        self.setFixedWidth(CARD_WIDTH)
+        # Allow some width elasticity for DPI scaling and longer content.
+        self.setMinimumWidth(max(260, CARD_WIDTH - 40))
+        self.setMaximumWidth(CARD_WIDTH + 60)
         self.setMinimumHeight(CARD_HEIGHT)
-        self.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Minimum)
+        self.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Minimum)
         self.setContextMenuPolicy(Qt.CustomContextMenu)
         self.customContextMenuRequested.connect(self._show_context_menu)
         self._build_ui()
