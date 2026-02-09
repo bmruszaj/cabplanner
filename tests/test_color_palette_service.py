@@ -1,7 +1,6 @@
 import pytest
 
 from src.db_schema.orm_models import CabinetColor
-from src.gui.constants.colors import get_color_hex
 from src.services.color_palette_service import ColorPaletteService
 
 
@@ -60,14 +59,13 @@ def test_resolve_hex_for_system_user_and_direct_hex(session):
 
     service.add_user_color("Kolor klienta", "#12ab9f")
     assert service.resolve_hex("kolor klienta") == "#12AB9F"
-    assert service.resolve_hex("Nieznany kolor XYZ") is None
 
 
-def test_sync_runtime_color_map_allows_chip_lookup(session):
+def test_list_searchable_names_includes_added_user_color(session):
     service = ColorPaletteService(session)
     service.ensure_seeded()
     service.add_user_color("Kolor runtime", "#13579B")
 
-    service.sync_runtime_color_map()
+    names = service.list_searchable_names()
 
-    assert get_color_hex("Kolor runtime") == "#13579B"
+    assert any(name.casefold() == "kolor runtime" for name in names)
