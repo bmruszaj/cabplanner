@@ -3,6 +3,7 @@ import pytest
 from datetime import date
 from docx import Document
 from src.services.report_generator import ReportGenerator
+from src.services.project_service import get_circled_number
 from src.db_schema.orm_models import (
     Project,
     CabinetTemplate,
@@ -159,9 +160,9 @@ def test_body_tables_count_and_headers(tmp_path, sample_project_orm):
     body_tables = [t for t in doc.tables if t not in header_tables + footer_tables]
 
     expected_hdr = [
-        ["Lp.", "Nazwa", "Ilość", "Wymiary (mm)", "Okleina", "Kolor", "Uwagi"],
-        ["Lp.", "Nazwa", "Ilość", "Wymiary (mm)", "Okleina", "Kolor", "Uwagi"],
-        ["Lp.", "Nazwa", "Ilość", "Wymiary (mm)", "Okleina", "Kolor", "Uwagi"],
+        ["Lp.", "Nazwa", "Wymiary (mm)", "Ilość", "Okleina", "Kolor", "Uwagi"],
+        ["Lp.", "Nazwa", "Wymiary (mm)", "Ilość", "Okleina", "Kolor", "Uwagi"],
+        ["Lp.", "Nazwa", "Wymiary (mm)", "Ilość", "Okleina", "Kolor", "Uwagi"],
         ["Poz.", "Nazwa akcesorium", "Ilość", "Jedn.", "Uwagi"],
     ]
     for table, hdr in zip(body_tables, expected_hdr):
@@ -186,8 +187,8 @@ def test_derived_formatki_quantities(tmp_path, sample_project_orm):
     # Header + 3 data rows (bok, wieniec, polka)
     assert len(fmt_table.rows) == 4
 
-    # Quantity is now in cell index 2 (after "Lp." and "Nazwa")
-    quantities = [int(row.cells[2].text) for row in fmt_table.rows[1:]]
+    # Quantity is now in cell index 3 (after "Lp.", "Nazwa" and "Wymiary")
+    quantities = [int(row.cells[3].text) for row in fmt_table.rows[1:]]
     assert quantities == [2, 2, 4]  # (1*2), (1*2), (2*2)
 
 
@@ -428,20 +429,22 @@ def test_custom_cabinets_in_report(tmp_path, project_with_custom_cabinets):
     # Row 2: custom side panels (2 pieces * 2 quantity = 4)
     assert len(formatki_table.rows) >= 3  # Header + at least 2 data rows
 
-    # Find catalog panel row (sequence ①)
+    # Find catalog panel row by sequence symbol
     catalog_panel_found = False
     custom_panel_found = False
+    seq1 = get_circled_number(1)
+    seq2 = get_circled_number(2)
 
     for row in formatki_table.rows[1:]:  # Skip header
         cells = row.cells
         seq = cells[0].text.strip()
         name = cells[1].text.strip()
-        quantity = cells[2].text.strip()
+        quantity = cells[3].text.strip()
 
-        if seq == "①" and "Catalog Panel" in name:
+        if seq == seq1 and "Catalog Panel" in name:
             catalog_panel_found = True
             assert quantity == "2"  # 2 pieces * 1 cabinet
-        elif seq == "②" and "Custom Side Panel" in name:
+        elif seq == seq2 and "Custom Side Panel" in name:
             custom_panel_found = True
             assert quantity == "4"  # 2 pieces * 2 cabinets
 
@@ -459,16 +462,16 @@ def test_custom_cabinets_in_report(tmp_path, project_with_custom_cabinets):
         cells = row.cells
         seq = cells[0].text.strip()
         name = cells[1].text.strip()
-        quantity = cells[2].text.strip()
+        quantity = cells[3].text.strip()
         color = (
             cells[5].text.strip()
-        )  # Color column (index: Lp, Nazwa, Ilość, Wymiary, Okleina, Kolor, Uwagi)
+        )  # Color column (index: Lp, Nazwa, Wymiary, Ilość, Okleina, Kolor, Uwagi)
 
-        if seq == "①" and "Catalog Front" in name:
+        if seq == seq1 and "Catalog Front" in name:
             catalog_front_found = True
             assert quantity == "1"  # 1 piece * 1 cabinet
             assert "Oak" in color
-        elif seq == "②" and "Custom Front Door" in name:
+        elif seq == seq2 and "Custom Front Door" in name:
             custom_front_found = True
             assert quantity == "2"  # 1 piece * 2 cabinets
             assert "Black" in color
@@ -486,9 +489,9 @@ def test_custom_cabinets_in_report(tmp_path, project_with_custom_cabinets):
         cells = row.cells
         seq = cells[0].text.strip()
         name = cells[1].text.strip()
-        quantity = cells[2].text.strip()
+        quantity = cells[3].text.strip()
 
-        if seq == "②" and "Custom Back Panel" in name:
+        if seq == seq2 and "Custom Back Panel" in name:
             custom_hdf_found = True
             assert quantity == "2"  # 1 piece * 2 cabinets
 
@@ -516,15 +519,17 @@ def test_custom_cabinet_sequence_numbers(tmp_path, project_with_custom_cabinets)
 
     seq_1_found = False  # Catalog cabinet (sequence 1)
     seq_2_found = False  # Custom cabinet (sequence 2)
+    seq1 = get_circled_number(1)
+    seq2 = get_circled_number(2)
 
     for row in formatki_table.rows[1:]:  # Skip header
         cells = row.cells
         seq = cells[0].text.strip()
 
-        if seq == "①":  # Sequence 1
+        if seq == seq1:  # Sequence 1
             seq_1_found = True
-        elif seq == "②":  # Sequence 2
+        elif seq == seq2:  # Sequence 2
             seq_2_found = True
 
-    assert seq_1_found, "Sequence number ① not found (catalog cabinet)"
-    assert seq_2_found, "Sequence number ② not found (custom cabinet)"
+    assert seq_1_found, f"Sequence number {seq1} not found (catalog cabinet)"
+    assert seq_2_found, f"Sequence number {seq2} not found (custom cabinet)"

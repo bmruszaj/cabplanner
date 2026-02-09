@@ -415,8 +415,8 @@ class ReportGenerator:
             else [
                 "Lp.",
                 "Nazwa",
-                "Ilość",
                 "Wymiary (mm)",
+                "Ilość",
                 "Okleina",
                 "Kolor",
                 "Uwagi",
@@ -426,6 +426,8 @@ class ReportGenerator:
         hdr = table.rows[0].cells
         for i, col in enumerate(cols):
             hdr[i].text = col
+        qty_col_idx = 2 if accessory else 3
+        hdr[qty_col_idx].paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
 
         for row_index, part in enumerate(parts, start=1):
             cells = table.add_row().cells
@@ -435,14 +437,16 @@ class ReportGenerator:
                 cells[0].text = str(row_index)
                 cells[1].text = part.name
                 cells[2].text = str(part.quantity)
+                cells[2].paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
                 cells[3].text = getattr(part, "unit", "szt") or "szt"
                 cells[4].text = getattr(part, "notes", "") or ""
             else:
                 # Parts keep cabinet sequence marker.
                 cells[0].text = getattr(part, "seq", "")
                 cells[1].text = part.name
-                cells[2].text = str(part.quantity)
-                cells[3].text = f"{part.width} x {part.height}"
+                cells[2].text = f"{part.width} x {part.height}"
+                cells[3].text = str(part.quantity)
+                cells[3].paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
                 cells[4].text = getattr(part, "wrapping", "") or ""
                 cells[5].text = getattr(part, "color", "") or ""
                 cells[6].text = getattr(part, "notes", "") or ""
@@ -487,9 +491,9 @@ class ReportGenerator:
 
             # If all alternatives fail, raise the original error
             raise PermissionError(
-                f"Nie można zapisać raportu. Plik '{base_name}.docx' "
+                f"Nie moĹĽna zapisaÄ‡ raportu. Plik '{base_name}.docx' "
                 "jest prawdopodobnie otwarty w innym programie. "
-                "Zamknij plik i spróbuj ponownie."
+                "Zamknij plik i sprĂłbuj ponownie."
             )
 
     def _should_break_page_for_section(
