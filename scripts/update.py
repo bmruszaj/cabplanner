@@ -137,10 +137,11 @@ try {
         Write-Log "Removed _internal backup"
     }
     
-    # Restart the application
+    # Restart the application. We pass --force-restart because the updater
+    # process inherits CABPLANNER_RESTARTING from the old app instance.
     Write-Log "Restarting application: $exe"
     try {
-        Start-Process -FilePath $exe -WorkingDirectory $InstallDir -ErrorAction Stop
+        Start-Process -FilePath $exe -WorkingDirectory $InstallDir -ArgumentList '--force-restart' -ErrorAction Stop
         Write-Log "Application restarted successfully"
     } catch {
         Write-Log "ERROR: Failed to restart application: $($_.Exception.Message)"
