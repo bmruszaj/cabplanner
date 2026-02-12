@@ -34,6 +34,7 @@ $piArgs = @(
 
   # Hidden imports
   '--hidden-import'; 'docx'
+  '--collect-data'; 'docx'
   '--hidden-import'; 'logging.config'
   '--hidden-import'; 'requests'
 
