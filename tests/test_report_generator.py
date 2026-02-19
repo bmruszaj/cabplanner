@@ -122,6 +122,48 @@ def test_generate_creates_file(tmp_path, sample_project_orm):
     assert output.endswith("projekt_ORM001.docx")
 
 
+def test_generate_uses_incremented_filename_when_file_exists(
+    tmp_path, sample_project_orm
+):
+    """
+    Given: a target filename that already exists
+    When: generate is called
+    Then: report is saved using incremented suffix "(1)"
+    """
+    existing = tmp_path / "projekt_ORM001.docx"
+    existing.write_bytes(b"existing")
+
+    rg = ReportGenerator()
+    output = rg.generate(sample_project_orm, output_dir=str(tmp_path), auto_open=False)
+
+    assert os.path.isfile(output)
+    assert output.endswith("projekt_ORM001 (1).docx")
+
+
+def test_generate_sanitizes_invalid_characters_in_filename(tmp_path):
+    """
+    Given: order number with filesystem-invalid characters
+    When: generate is called
+    Then: output filename is sanitized and report is saved
+    """
+    project = Project(
+        name="Sanitize Project",
+        kitchen_type="LOFT",
+        order_number="GAMA 9080/13",
+        client_name="Client",
+        client_address="Address",
+        client_phone="555-000",
+        client_email="client@example.com",
+    )
+    project.cabinets = []
+
+    rg = ReportGenerator()
+    output = rg.generate(project, output_dir=str(tmp_path), auto_open=False)
+
+    assert os.path.isfile(output)
+    assert output.endswith("projekt_GAMA 9080_13.docx")
+
+
 def test_header_contains_orm_metadata(tmp_path, sample_project_orm):
     """
     Given: a generated report

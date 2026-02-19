@@ -1,4 +1,5 @@
 import os
+import re
 import sys
 import subprocess
 import logging
@@ -141,7 +142,9 @@ class ReportGenerator:
             # Save with handling for open files
             out_dir = Path(output_dir)
             out_dir.mkdir(parents=True, exist_ok=True)
-            base_name = f"projekt_{project.order_number}"
+            base_name = self._sanitize_filename_component(
+                f"projekt_{project.order_number}"
+            )
             output_path = self._get_available_filename(out_dir, base_name)
             doc.save(str(output_path))
             logger.info(f"Report saved to: {output_path}")
@@ -507,35 +510,31 @@ class ReportGenerator:
             p.add_run(project.uwagi_note)
 
     def _get_available_filename(self, output_dir: Path, base_name: str) -> Path:
-        """Get an available filename, handling case when file is already open."""
-        original_path = output_dir / f"{base_name}.docx"
+        """
+        Return the first free filename.
+        Examples: raport.docx, raport (1).docx, raport (2).docx.
+        """
+        safe_base_name = self._sanitize_filename_component(base_name)
 
-        # Try to save to original path first
-        try:
-            # Test if we can write to the file by opening it
-            with open(original_path, "ab"):
-                pass  # Just test write access
-            return original_path
-        except (PermissionError, OSError):
-            # File is likely open, try alternative names
-            for i in range(1, 100):  # Try up to 99 alternatives
-                alt_path = output_dir / f"{base_name}_({i}).docx"
-                try:
-                    with open(alt_path, "ab"):
-                        pass  # Test write access
+        for i in range(0, 100):
+            suffix = "" if i == 0 else f" ({i})"
+            candidate = output_dir / f"{safe_base_name}{suffix}.docx"
+            if not candidate.exists():
+                if i > 0:
                     logger.info(
-                        f"Original file appears to be open, using alternative: {alt_path.name}"
+                        f"Report file already exists, using alternative name: {candidate.name}"
                     )
-                    return alt_path
-                except (PermissionError, OSError):
-                    continue
+                return candidate
 
-            # If all alternatives fail, raise the original error
-            raise PermissionError(
-                f"Nie moĹĽna zapisaÄ‡ raportu. Plik '{base_name}.docx' "
-                "jest prawdopodobnie otwarty w innym programie. "
-                "Zamknij plik i sprĂłbuj ponownie."
-            )
+        raise OSError(
+            f"Nie można utworzyć unikalnej nazwy raportu dla '{safe_base_name}.docx'."
+        )
+
+    def _sanitize_filename_component(self, name: str) -> str:
+        """Normalize file name to be safe on common file systems."""
+        sanitized = re.sub(r'[<>:"/\\|?*\x00-\x1F]', "_", (name or "").strip())
+        sanitized = re.sub(r"\s+", " ", sanitized).strip(" .")
+        return sanitized or "raport"
 
     def _should_break_page_for_section(
         self, doc: DocxDocument, items_count: int
