@@ -585,14 +585,21 @@ class ProjectService:
     ) -> Dict[str, List[Dict[str, Any]]]:
         """
         Get all elements in a project from snapshot data.
-        Returns a dictionary with lists for formatki, fronty, hdf, and akcesoria.
+        Returns a dictionary with lists for formatki, fronty, witryny, hdf, and akcesoria.
         """
         project = self.get_project(project_id)
         if not project:
-            return {"formatki": [], "fronty": [], "hdf": [], "akcesoria": []}
+            return {
+                "formatki": [],
+                "fronty": [],
+                "witryny": [],
+                "hdf": [],
+                "akcesoria": [],
+            }
 
         formatki = []
         fronty = []
+        witryny = []
         hdf = []
         akcesoria = []
 
@@ -603,7 +610,7 @@ class ProjectService:
 
             # Process all parts from snapshot (works for both standard and custom)
             self._process_cabinet_parts_snapshot(
-                cab, qty, seq, seq_symbol, formatki, fronty, hdf
+                cab, qty, seq, seq_symbol, formatki, fronty, hdf, witryny
             )
 
             # Process accessories from snapshot
@@ -612,12 +619,13 @@ class ProjectService:
         return {
             "formatki": formatki,
             "fronty": fronty,
+            "witryny": witryny,
             "hdf": hdf,
             "akcesoria": akcesoria,
         }
 
     def _process_cabinet_parts_snapshot(
-        self, cab, qty, seq, seq_symbol, formatki, fronty, hdf
+        self, cab, qty, seq, seq_symbol, formatki, fronty, hdf, witryny
     ):
         """Process elements from cabinet parts snapshot (works for both standard and custom)"""
         # Process all parts from the snapshot
@@ -627,15 +635,32 @@ class ProjectService:
             # Determine material from part data (with fallback logic)
             material = part.material
             if not material:
-                if "front" in part.part_name.lower():
+                part_name_lc = part.part_name.lower()
+                if "witryn" in part_name_lc:
+                    material = "WITRYNA"
+                elif "front" in part_name_lc:
                     material = "FRONT"
-                elif "hdf" in part.part_name.lower():
+                elif "hdf" in part_name_lc:
                     material = "HDF"
                 else:
                     material = "PLYTA 18"  # Default for panels
 
             # Determine category based on material
-            if material and material.upper().startswith("FRONT"):
+            if material and material.upper().startswith("WITRYNA"):
+                witryny.append(
+                    {
+                        "seq": seq_symbol,
+                        "sequence": seq,
+                        "name": part.part_name,
+                        "quantity": part_qty,
+                        "width": part.width_mm,
+                        "height": part.height_mm,
+                        "color": cab.front_color,
+                        "wrapping": part.wrapping or "",
+                        "notes": f"Handle: {cab.handle_type}",
+                    }
+                )
+            elif material and material.upper().startswith("FRONT"):
                 fronty.append(
                     {
                         "seq": seq_symbol,

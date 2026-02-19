@@ -83,6 +83,7 @@ class ReportGenerator:
                 )
                 formatki = self._dict_to_namespace_list(elements["formatki"])
                 fronty = self._dict_to_namespace_list(elements["fronty"])
+                witryny = self._dict_to_namespace_list(elements.get("witryny", []))
                 hdf = self._dict_to_namespace_list(elements["hdf"])
                 akcesoria = self._dict_to_namespace_list(elements["akcesoria"])
             else:
@@ -90,13 +91,14 @@ class ReportGenerator:
                 logger.warning(
                     "Project service not available, using direct data extraction"
                 )
-                formatki, fronty, hdf, akcesoria = self._extract_elements_directly(
-                    project
+                formatki, fronty, witryny, hdf, akcesoria = (
+                    self._extract_elements_directly_with_witryny(project)
                 )
 
             # Always sort by cabinet number first, then by color.
             formatki = self._sort_by_cabinet_and_color(formatki)
             fronty = self._sort_by_cabinet_and_color(fronty)
+            witryny = self._sort_by_cabinet_and_color(witryny)
             hdf = self._sort_by_cabinet_and_color(hdf)
             akcesoria = self._aggregate_accessories(akcesoria)
 
@@ -128,6 +130,8 @@ class ReportGenerator:
             if formatki_other:
                 self._add_parts_section(doc, "FORMATKI", formatki_other)
             self._add_parts_section(doc, "FRONTY", fronty)
+            if witryny:
+                self._add_parts_section(doc, "WITRYNY", witryny)
             self._add_parts_section(doc, "HDF", hdf)
             self._add_parts_section(doc, "AKCESORIA", akcesoria, accessory=True)
 
@@ -217,31 +221,51 @@ class ReportGenerator:
         List[SimpleNamespace],
     ]:
         """
+        Backward-compatible extraction used by existing tests/callers.
+        Returns: formatki, fronty, hdf, akcesoria.
+        """
+        formatki, fronty, witryny, hdf, akcesoria = (
+            self._extract_elements_directly_with_witryny(project)
+        )
+        # Legacy API had no separate WITRYNY bucket; keep front-like semantics.
+        return formatki, fronty + witryny, hdf, akcesoria
+
+    def _extract_elements_directly_with_witryny(
+        self, project: Project
+    ) -> Tuple[
+        List[SimpleNamespace],
+        List[SimpleNamespace],
+        List[SimpleNamespace],
+        List[SimpleNamespace],
+        List[SimpleNamespace],
+    ]:
+        """
         Extract parts lists directly from project object.
         This is a fallback method when ProjectService is not available.
         """
         formatki = []
         fronty = []
+        witryny = []
         hdf = []
         akcesoria = []
 
         # This is a minimal implementation - ideally this logic should be in the service layer
         if not hasattr(project, "cabinets"):
             logger.warning("Project has no cabinets, returning empty lists")
-            return formatki, fronty, hdf, akcesoria
+            return formatki, fronty, witryny, hdf, akcesoria
 
         for cab in project.cabinets:
             qty = cab.quantity
 
             # Process both catalog and custom cabinets
-            self._process_cabinet(cab, qty, formatki, fronty, hdf)
+            self._process_cabinet(cab, qty, formatki, fronty, hdf, witryny)
 
             # Process accessories for all cabinet types
             self._process_accessories(cab, qty, akcesoria)
 
-        return formatki, fronty, hdf, akcesoria
+        return formatki, fronty, witryny, hdf, akcesoria
 
-    def _process_cabinet(self, cab, qty, formatki, fronty, hdf):
+    def _process_cabinet(self, cab, qty, formatki, fronty, hdf, witryny):
         """Process a cabinet (catalog or custom) and add its parts to the appropriate lists"""
         # Get the sequence number for this cabinet
         seq_num = getattr(cab, "sequence_number", 0)
@@ -267,9 +291,12 @@ class ReportGenerator:
             if not material:
                 # For catalog cabinets, infer material from part name if not set
                 if ct and not material:
-                    if "front" in part.part_name.lower():
+                    part_name_lc = part.part_name.lower()
+                    if "witryn" in part_name_lc:
+                        material = "WITRYNA"
+                    elif "front" in part_name_lc:
                         material = "FRONT"
-                    elif "hdf" in part.part_name.lower():
+                    elif "hdf" in part_name_lc:
                         material = "HDF"
                     else:
                         material = "PLYTA"  # Default for panels
@@ -278,7 +305,21 @@ class ReportGenerator:
                     material = "PLYTA"
 
             # Determine category based on material (use startswith for variants like "FRONT 18", "HDF 3")
-            if material and material.upper().startswith("FRONT"):
+            if material and material.upper().startswith("WITRYNA"):
+                witryny.append(
+                    SimpleNamespace(
+                        seq=seq_symbol,
+                        sequence=seq_num,
+                        name=part.part_name,
+                        quantity=part_qty,
+                        width=part.width_mm,
+                        height=part.height_mm,
+                        color=cab.front_color,
+                        wrapping=getattr(part, "wrapping", "") or "",
+                        notes=f"Handle: {cab.handle_type}",
+                    )
+                )
+            elif material and material.upper().startswith("FRONT"):
                 fronty.append(
                     SimpleNamespace(
                         seq=seq_symbol,
