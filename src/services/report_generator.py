@@ -530,9 +530,7 @@ class ReportGenerator:
             return self.program_logo_path
 
         preferred_name = (
-            "logo.png"
-            if self._get_report_logo_variant() == "color"
-            else "logo_bw.png"
+            "logo.png" if self._get_report_logo_variant() == "color" else "logo_bw.png"
         )
         fallback_name = "logo_bw.png" if preferred_name == "logo.png" else "logo.png"
 
