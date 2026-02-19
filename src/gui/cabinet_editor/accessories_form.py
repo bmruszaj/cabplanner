@@ -15,8 +15,10 @@ from PySide6.QtWidgets import (
     QAbstractItemView,
     QMessageBox,
     QDialog,
+    QStyledItemDelegate,
+    QToolTip,
 )
-from PySide6.QtCore import Signal, Qt, QAbstractTableModel, QModelIndex
+from PySide6.QtCore import Signal, Qt, QAbstractTableModel, QModelIndex, QEvent
 from PySide6.QtGui import QFont
 
 from src.gui.resources.resources import get_icon
@@ -79,6 +81,36 @@ class AccessoriesTableModel(QAbstractTableModel):
         if 0 <= row < len(self.accessories):
             return self.accessories[row]
         return None
+
+
+class ElidedTextTooltipDelegate(QStyledItemDelegate):
+    """Show tooltip with full text only when it is elided in the cell."""
+
+    def helpEvent(self, event, view, option, index):
+        if event is None or view is None:
+            return super().helpEvent(event, view, option, index)
+
+        if event.type() == QEvent.ToolTip:
+            text = index.data(Qt.DisplayRole)
+            if text is None:
+                return False
+
+            text = str(text).strip()
+            if not text:
+                return False
+
+            # Account for table cell padding/margins.
+            available_width = max(0, option.rect.width() - 8)
+            is_elided = option.fontMetrics.horizontalAdvance(text) > available_width
+            if is_elided:
+                QToolTip.showText(event.globalPos(), text, view)
+                return True
+
+            QToolTip.hideText()
+            event.ignore()
+            return False
+
+        return super().helpEvent(event, view, option, index)
 
 
 class AccessoriesForm(QWidget):
@@ -155,6 +187,9 @@ class AccessoriesForm(QWidget):
         )
         self.accessories_table.horizontalHeader().setSectionResizeMode(
             0, QHeaderView.Stretch
+        )
+        self.accessories_table.setItemDelegateForColumn(
+            0, ElidedTextTooltipDelegate(self.accessories_table)
         )
         self.accessories_table.setAlternatingRowColors(True)
         self.accessories_table.setSortingEnabled(True)
