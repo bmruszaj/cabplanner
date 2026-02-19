@@ -18,6 +18,7 @@ from docx.oxml.shared import qn
 
 from src.db_schema.orm_models import Project
 from src.services.project_service import ProjectService
+from src.services.settings_service import SettingsService
 from sqlalchemy.orm import Session
 
 # Configure logging
@@ -38,6 +39,16 @@ class ReportGenerator:
         company_logo_path: Optional[Path] = None,
         db_session: Optional[Session] = None,
     ) -> None:
+        # Backward compatibility:
+        # some callers passed Session as first positional argument.
+        resolved_db_session = db_session
+        if resolved_db_session is None and isinstance(program_logo_path, Session):
+            resolved_db_session = program_logo_path
+            program_logo_path = None
+        elif resolved_db_session is None and isinstance(company_logo_path, Session):
+            resolved_db_session = company_logo_path
+            company_logo_path = None
+
         # Make sure paths are either None or proper Path objects
         self.program_logo_path = (
             program_logo_path
@@ -49,10 +60,15 @@ class ReportGenerator:
             if company_logo_path and not isinstance(company_logo_path, Session)
             else None
         )
-        self.db_session = db_session
+        self.db_session = resolved_db_session
 
         # Initialize ProjectService if session is provided
-        self.project_service = ProjectService(db_session) if db_session else None
+        self.project_service = (
+            ProjectService(resolved_db_session) if resolved_db_session else None
+        )
+        self.settings_service = (
+            SettingsService(resolved_db_session) if resolved_db_session else None
+        )
 
     def generate(
         self,
@@ -99,7 +115,7 @@ class ReportGenerator:
                     self._extract_elements_directly_with_witryny(project)
                 )
 
-            # Always sort by cabinet number first, then by color.
+            # Default sort by cabinet number first, then by color.
             formatki = self._sort_by_cabinet_and_color(formatki)
             fronty = self._sort_by_cabinet_and_color(fronty)
             witryny = self._sort_by_cabinet_and_color(witryny)
@@ -127,7 +143,9 @@ class ReportGenerator:
 
             # Add sections - split FORMATKI by material type
             if formatki_plyta_18:
-                self._add_parts_section(doc, "FORMATKI (PLYTA 18)", formatki_plyta_18)
+                self._add_parts_sections_grouped_by_color(
+                    doc, "FORMATKI (PLYTA 18)", formatki_plyta_18
+                )
             if formatki_plyta_16:
                 self._add_parts_section(
                     doc,
@@ -136,10 +154,12 @@ class ReportGenerator:
                     hide_color_values=True,
                 )
             if formatki_plyta_12:
-                self._add_parts_section(doc, "FORMATKI (PLYTA 12)", formatki_plyta_12)
+                self._add_parts_sections_grouped_by_color(
+                    doc, "FORMATKI (PLYTA 12)", formatki_plyta_12
+                )
             if formatki_other:
                 self._add_parts_section(doc, "FORMATKI", formatki_other)
-            self._add_parts_section(doc, "FRONTY", fronty)
+            self._add_parts_sections_grouped_by_color(doc, "FRONTY", fronty)
             if witryny:
                 self._add_parts_section(doc, "WITRYNY", witryny)
             if polki_szklane:
@@ -181,6 +201,37 @@ class ReportGenerator:
                 getattr(item, "name", "") or "",
             ),
         )
+
+    def _add_parts_sections_grouped_by_color(
+        self, doc: DocxDocument, base_title: str, parts: List[Any]
+    ) -> None:
+        """Render separate sections for each color: '<base title> - <color>'."""
+        if not parts:
+            self._add_parts_section(doc, base_title, parts)
+            return
+
+        grouped: Dict[str, List[Any]] = {}
+        color_labels: Dict[str, str] = {}
+
+        for part in parts:
+            raw_color = (getattr(part, "color", "") or "").strip()
+            color_key = raw_color.lower()
+            grouped.setdefault(color_key, []).append(part)
+            color_labels.setdefault(color_key, raw_color or "BRAK KOLORU")
+
+        for color_key in sorted(grouped.keys(), key=lambda key: (key == "", key)):
+            grouped_parts = sorted(
+                grouped[color_key],
+                key=lambda item: (
+                    getattr(item, "sequence", 0),
+                    getattr(item, "name", "") or "",
+                ),
+            )
+            self._add_parts_section(
+                doc,
+                f"{base_title} - {color_labels[color_key]}",
+                grouped_parts,
+            )
 
     def _dict_to_namespace_list(self, dict_list: List[Dict]) -> List[SimpleNamespace]:
         """Convert a list of dictionaries to a list of SimpleNamespace objects"""
@@ -484,7 +535,9 @@ class ReportGenerator:
         if parts and self._should_break_page_for_section(doc, len(parts)):
             doc.add_page_break()
 
-        doc.add_heading(title, level=2)
+        heading = doc.add_heading(title, level=2)
+        # Keep heading with the following content to avoid orphaned section titles.
+        heading.paragraph_format.keep_with_next = True
         if not parts:
             doc.add_paragraph("Brak pozycji.")
             return
@@ -573,28 +626,70 @@ class ReportGenerator:
         sanitized = re.sub(r"\s+", " ", sanitized).strip(" .")
         return sanitized or "raport"
 
+    def _get_page_break_strictness(self) -> str:
+        """
+        Get report pagination strictness from settings.
+
+        Returns one of: "lagodna", "standardowa", "ostra".
+        """
+        if not self.settings_service:
+            return "standardowa"
+
+        try:
+            raw_value = (
+                self.settings_service.get_setting_value(
+                    "report_page_break_strictness", "Standardowa"
+                )
+                or "Standardowa"
+            )
+            normalized = str(raw_value).strip().lower()
+        except Exception as exc:
+            logger.warning("Failed to read report pagination strictness: %s", exc)
+            return "standardowa"
+
+        if normalized in ("lagodna", "łagodna", "soft", "low"):
+            return "lagodna"
+        if normalized in ("ostra", "strict", "high"):
+            return "ostra"
+        return "standardowa"
+
     def _should_break_page_for_section(
         self, doc: DocxDocument, items_count: int
     ) -> bool:
         """Check if we should add a page break before a new section."""
-        if items_count == 0:
+        if items_count <= 0:
             return False
 
-        # Rough calculation: if we have less than 6 lines remaining on page
-        # (header + 2 table header rows + at least 1 data row + some margin)
-        # This is a simple heuristic - Word's actual pagination is more complex
+        strictness = self._get_page_break_strictness()
         current_elements = len(doc.paragraphs) + sum(
             len(table.rows) for table in doc.tables
         )
 
-        # Assume ~50 lines per page, break if we have less than 6 lines left
-        lines_used = current_elements % 50
-        lines_remaining = 50 - lines_used
+        # "Ostra": every next section starts on a new page.
+        if strictness == "ostra":
+            return current_elements > 0
 
-        # Need at least: title (1) + table header (1) + 1 data row (1) + margin (3) = 6 lines
-        min_lines_needed = 6
+        policy = {
+            "lagodna": {"section_margin": 0, "min_start_lines": 3},
+            "standardowa": {"section_margin": 2, "min_start_lines": 4},
+            "ostra": {"section_margin": 4, "min_start_lines": 6},
+        }
+        current_policy = policy[strictness]
 
-        return lines_remaining < min_lines_needed
+        # Simple pagination heuristic based on already generated paragraphs and table rows.
+        # It is not exact, but it helps keep each section on one page whenever feasible.
+        lines_per_page = 45
+        lines_used = current_elements % lines_per_page
+        lines_remaining = lines_per_page - lines_used if lines_used else lines_per_page
+
+        # Full section estimate: heading + table header + all rows + policy margin.
+        section_lines_needed = items_count + 3 + current_policy["section_margin"]
+        if section_lines_needed <= lines_per_page:
+            return lines_remaining < section_lines_needed
+
+        # Very large sections cannot fit entirely on one page.
+        # In that case, require enough space for heading + table header + first rows.
+        return lines_remaining < current_policy["min_start_lines"]
 
     def _open_file(self, path: Path) -> None:
         try:

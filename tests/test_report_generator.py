@@ -184,7 +184,7 @@ def test_body_tables_count_and_headers(tmp_path, sample_project_orm):
     """
     Given: a report with derived parts
     When: collecting body tables
-    Then: there are four tables titled FORMATKI (PLYTA 18), FRONTY, HDF, AKCESORIA
+    Then: there are four tables titled with color-specific headings for FORMATKI/FRONTY
     """
     rg = ReportGenerator()
     output = rg.generate(sample_project_orm, output_dir=str(tmp_path), auto_open=False)
@@ -194,7 +194,12 @@ def test_body_tables_count_and_headers(tmp_path, sample_project_orm):
 
     # Then: there should be exactly four Heading 2 titles in this order
     headings = [p.text for p in doc.paragraphs if p.style.name == "Heading 2"]
-    assert headings == ["FORMATKI (PLYTA 18)", "FRONTY", "HDF", "AKCESORIA"]
+    assert headings == [
+        "FORMATKI (PLYTA 18) - Oak",
+        "FRONTY - Maple",
+        "HDF",
+        "AKCESORIA",
+    ]
 
     # And: the four body tables have the correct column headers
     header_tables = doc.sections[0].header.tables
@@ -322,6 +327,142 @@ def test_plyta_16_hides_color_values_but_keeps_column(tmp_path):
     assert plyta_18_row.cells[5].text.strip() == "White"
 
 
+def test_color_grouped_sections_for_selected_sections(tmp_path):
+    """
+    Given: FRONTY, PLYTA 12 and PLYTA 18 with multiple colors
+    When: generating report
+    Then: each color is rendered in a separate section and rows are sorted by LP in each group
+    """
+    project = Project(
+        name="Color Grouping Project",
+        kitchen_type="LOFT",
+        order_number="COLOR-GROUP-001",
+        client_name="Client",
+        client_address="Address",
+        client_phone="555-000",
+        client_email="client@example.com",
+    )
+
+    ct = CabinetTemplate(kitchen_type="LOFT", name="Color Group Template")
+    ct.parts = [
+        CabinetPart(
+            part_name="Panel 18",
+            height_mm=720,
+            width_mm=500,
+            pieces=1,
+            material="PLYTA 18",
+            wrapping="D",
+        ),
+        CabinetPart(
+            part_name="Panel 12",
+            height_mm=300,
+            width_mm=500,
+            pieces=1,
+            material="PLYTA 12",
+            wrapping="D",
+        ),
+        CabinetPart(
+            part_name="Front drzwi",
+            height_mm=700,
+            width_mm=500,
+            pieces=1,
+            material="FRONT 18",
+            wrapping="DD",
+        ),
+    ]
+
+    cab_1 = ProjectCabinet(
+        sequence_number=1,
+        body_color="White",
+        front_color="Maple",
+        handle_type="A",
+        quantity=1,
+    )
+    cab_2 = ProjectCabinet(
+        sequence_number=2,
+        body_color="Gray",
+        front_color="Black",
+        handle_type="B",
+        quantity=1,
+    )
+    cab_3 = ProjectCabinet(
+        sequence_number=3,
+        body_color="White",
+        front_color="Maple",
+        handle_type="C",
+        quantity=1,
+    )
+    for cab in (cab_1, cab_2, cab_3):
+        cab.project = project
+        cab.cabinet_type = ct
+    project.cabinets = [cab_1, cab_2, cab_3]
+
+    rg = ReportGenerator()
+    output = rg.generate(project, output_dir=str(tmp_path), auto_open=False)
+    doc = Document(output)
+
+    header_tables = doc.sections[0].header.tables
+    footer_tables = doc.sections[0].footer.tables
+    body_tables = [t for t in doc.tables if t not in header_tables + footer_tables]
+
+    headings = [p.text for p in doc.paragraphs if p.style.name == "Heading 2"]
+    assert "FORMATKI (PLYTA 18) - Gray" in headings
+    assert "FORMATKI (PLYTA 18) - White" in headings
+    assert "FORMATKI (PLYTA 12) - Gray" in headings
+    assert "FORMATKI (PLYTA 12) - White" in headings
+    assert "FRONTY - Black" in headings
+    assert "FRONTY - Maple" in headings
+
+    def find_tables_with_name(name: str):
+        return [
+            table
+            for table in body_tables
+            if any(row.cells[1].text.strip() == name for row in table.rows[1:])
+        ]
+
+    plyta_18_tables = find_tables_with_name("Panel 18")
+    plyta_12_tables = find_tables_with_name("Panel 12")
+    fronty_tables = find_tables_with_name("Front drzwi")
+
+    assert len(plyta_18_tables) == 2
+    assert len(plyta_12_tables) == 2
+    assert len(fronty_tables) == 2
+
+    seq1 = get_circled_number(1)
+    seq2 = get_circled_number(2)
+    seq3 = get_circled_number(3)
+
+    # PLYTA 18: Gray group has seq2; White group has seq1 then seq3
+    gray_plyta_18 = next(
+        t for t in plyta_18_tables if t.rows[1].cells[5].text.strip() == "Gray"
+    )
+    white_plyta_18 = next(
+        t for t in plyta_18_tables if t.rows[1].cells[5].text.strip() == "White"
+    )
+    assert [r.cells[0].text.strip() for r in gray_plyta_18.rows[1:]] == [seq2]
+    assert [r.cells[0].text.strip() for r in white_plyta_18.rows[1:]] == [seq1, seq3]
+
+    # PLYTA 12: Gray group has seq2; White group has seq1 then seq3
+    gray_plyta_12 = next(
+        t for t in plyta_12_tables if t.rows[1].cells[5].text.strip() == "Gray"
+    )
+    white_plyta_12 = next(
+        t for t in plyta_12_tables if t.rows[1].cells[5].text.strip() == "White"
+    )
+    assert [r.cells[0].text.strip() for r in gray_plyta_12.rows[1:]] == [seq2]
+    assert [r.cells[0].text.strip() for r in white_plyta_12.rows[1:]] == [seq1, seq3]
+
+    # FRONTY: Black group has seq2; Maple group has seq1 then seq3
+    black_fronty = next(
+        t for t in fronty_tables if t.rows[1].cells[5].text.strip() == "Black"
+    )
+    maple_fronty = next(
+        t for t in fronty_tables if t.rows[1].cells[5].text.strip() == "Maple"
+    )
+    assert [r.cells[0].text.strip() for r in black_fronty.rows[1:]] == [seq2]
+    assert [r.cells[0].text.strip() for r in maple_fronty.rows[1:]] == [seq1, seq3]
+
+
 def test_accessories_section(tmp_path, sample_project_orm):
     """
     Given: derived AKCESORIA table
@@ -341,6 +482,80 @@ def test_accessories_section(tmp_path, sample_project_orm):
     assert cells[1].text == "Hinge X"
     assert cells[2].text == str(4 * sample_project_orm.cabinets[0].quantity)
     assert cells[3].text == ""
+
+
+def test_should_break_page_when_section_would_not_fit():
+    """
+    Given: a page almost full
+    When: a section that normally fits one page is about to be added
+    Then: a page break is required to keep the section together
+    """
+    rg = ReportGenerator()
+    doc = Document()
+
+    # Leave very little estimated space on current page.
+    for _ in range(43):
+        doc.add_paragraph("x")
+
+    assert rg._should_break_page_for_section(doc, items_count=5) is True
+
+
+def test_should_not_break_page_when_section_fits():
+    """
+    Given: enough estimated space left on the page
+    When: adding a small section
+    Then: no page break is needed
+    """
+    rg = ReportGenerator()
+    doc = Document()
+
+    for _ in range(10):
+        doc.add_paragraph("x")
+
+    assert rg._should_break_page_for_section(doc, items_count=5) is False
+
+
+def test_should_break_page_respects_strictness_setting():
+    """
+    Given: the same amount of free space on page
+    When: changing strictness setting
+    Then: break decision changes with strictness level
+    """
+
+    class _FakeSettingsService:
+        def __init__(self, value: str):
+            self.value = value
+
+        def get_setting_value(self, key: str, default=None):
+            if key == "report_page_break_strictness":
+                return self.value
+            return default
+
+    doc = Document()
+    for _ in range(20):
+        doc.add_paragraph("x")
+
+    rg = ReportGenerator()
+
+    rg.settings_service = _FakeSettingsService("Lagodna")
+    assert rg._should_break_page_for_section(doc, items_count=5) is False
+
+    rg.settings_service = _FakeSettingsService("Standardowa")
+    assert rg._should_break_page_for_section(doc, items_count=5) is False
+
+    rg.settings_service = _FakeSettingsService("Ostra")
+    assert rg._should_break_page_for_section(doc, items_count=5) is True
+
+
+def test_constructor_accepts_legacy_positional_session(session):
+    """
+    Given: legacy constructor call with Session as first positional argument
+    When: creating ReportGenerator
+    Then: db-backed services are correctly initialized
+    """
+    rg = ReportGenerator(session)
+    assert rg.project_service is not None
+    assert rg.settings_service is not None
 
 
 def test_report_contains_glass_shelves_section(tmp_path):
@@ -609,92 +824,50 @@ def test_custom_cabinets_in_report(tmp_path, project_with_custom_cabinets):
     footer_tables = doc.sections[0].footer.tables
     body_tables = [t for t in doc.tables if t not in header_tables + footer_tables]
 
-    # Should have 3 sections with tables: FORMATKI, FRONTY, HDF
-    # (AKCESORIA has no table when empty, just "Brak pozycji." text)
-    assert len(body_tables) == 3
+    # With color grouping we expect multiple FORMATKI/FRONTY sections plus HDF.
+    assert len(body_tables) >= 5
 
     # Check section headings
     headings = [p.text for p in doc.paragraphs if p.style.name == "Heading 2"]
-    assert any(h.startswith("FORMATKI") for h in headings)
-    assert "FRONTY" in headings
+    assert any(h.startswith("FORMATKI (PLYTA 18) - ") for h in headings)
+    assert any(h.startswith("FRONTY - ") for h in headings)
     assert "HDF" in headings
     assert "AKCESORIA" in headings
 
-    # Test FORMATKI section (panels)
-    formatki_table = body_tables[0]
-
-    # Should have catalog panel + custom side panels
-    # Row 1: catalog panel (2 pieces * 1 quantity = 2)
-    # Row 2: custom side panels (2 pieces * 2 quantity = 4)
-    assert len(formatki_table.rows) >= 3  # Header + at least 2 data rows
-
-    # Find catalog panel row by sequence symbol
-    catalog_panel_found = False
-    custom_panel_found = False
     seq1 = get_circled_number(1)
     seq2 = get_circled_number(2)
 
-    for row in formatki_table.rows[1:]:  # Skip header
-        cells = row.cells
-        seq = cells[0].text.strip()
-        name = cells[1].text.strip()
-        quantity = cells[3].text.strip()
+    def find_row_cells(part_name: str):
+        for table in body_tables:
+            for row in table.rows[1:]:
+                if row.cells[1].text.strip() == part_name:
+                    return row.cells
+        return None
 
-        if seq == seq1 and "Catalog Panel" in name:
-            catalog_panel_found = True
-            assert quantity == "2"  # 2 pieces * 1 cabinet
-        elif seq == seq2 and "Custom Side Panel" in name:
-            custom_panel_found = True
-            assert quantity == "4"  # 2 pieces * 2 cabinets
+    catalog_panel = find_row_cells("Catalog Panel")
+    custom_panel = find_row_cells("Custom Side Panel")
+    assert catalog_panel is not None, "Catalog panel not found in FORMATKI"
+    assert custom_panel is not None, "Custom side panel not found in FORMATKI"
+    assert catalog_panel[0].text.strip() == seq1
+    assert catalog_panel[3].text.strip() == "2"
+    assert custom_panel[0].text.strip() == seq2
+    assert custom_panel[3].text.strip() == "4"
 
-    assert catalog_panel_found, "Catalog panel not found in FORMATKI"
-    assert custom_panel_found, "Custom side panel not found in FORMATKI"
+    catalog_front = find_row_cells("Catalog Front")
+    custom_front = find_row_cells("Custom Front Door")
+    assert catalog_front is not None, "Catalog front not found in FRONTY"
+    assert custom_front is not None, "Custom front door not found in FRONTY"
+    assert catalog_front[0].text.strip() == seq1
+    assert catalog_front[3].text.strip() == "1"
+    assert catalog_front[5].text.strip() == "Oak"
+    assert custom_front[0].text.strip() == seq2
+    assert custom_front[3].text.strip() == "2"
+    assert custom_front[5].text.strip() == "Black"
 
-    # Test FRONTY section (fronts)
-    fronty_table = body_tables[1]
-
-    # Should have catalog front + custom front
-    catalog_front_found = False
-    custom_front_found = False
-
-    for row in fronty_table.rows[1:]:  # Skip header
-        cells = row.cells
-        seq = cells[0].text.strip()
-        name = cells[1].text.strip()
-        quantity = cells[3].text.strip()
-        color = (
-            cells[5].text.strip()
-        )  # Color column (index: Lp, Nazwa, Wymiary, Ilość, Okleina, Kolor, Uwagi)
-
-        if seq == seq1 and "Catalog Front" in name:
-            catalog_front_found = True
-            assert quantity == "1"  # 1 piece * 1 cabinet
-            assert "Oak" in color
-        elif seq == seq2 and "Custom Front Door" in name:
-            custom_front_found = True
-            assert quantity == "2"  # 1 piece * 2 cabinets
-            assert "Black" in color
-
-    assert catalog_front_found, "Catalog front not found in FRONTY"
-    assert custom_front_found, "Custom front door not found in FRONTY"
-
-    # Test HDF section
-    hdf_table = body_tables[2]
-
-    # Should have custom HDF back panel only
-    custom_hdf_found = False
-
-    for row in hdf_table.rows[1:]:  # Skip header
-        cells = row.cells
-        seq = cells[0].text.strip()
-        name = cells[1].text.strip()
-        quantity = cells[3].text.strip()
-
-        if seq == seq2 and "Custom Back Panel" in name:
-            custom_hdf_found = True
-            assert quantity == "2"  # 1 piece * 2 cabinets
-
-    assert custom_hdf_found, "Custom HDF back panel not found in HDF section"
+    custom_hdf = find_row_cells("Custom Back Panel")
+    assert custom_hdf is not None, "Custom HDF back panel not found in HDF section"
+    assert custom_hdf[0].text.strip() == seq2
+    assert custom_hdf[3].text.strip() == "2"
 
 
 def test_custom_cabinet_sequence_numbers(tmp_path, project_with_custom_cabinets):
@@ -713,22 +886,17 @@ def test_custom_cabinet_sequence_numbers(tmp_path, project_with_custom_cabinets)
     footer_tables = doc.sections[0].footer.tables
     body_tables = [t for t in doc.tables if t not in header_tables + footer_tables]
 
-    # Check that sequence numbers are properly displayed
-    formatki_table = body_tables[0]
-
-    seq_1_found = False  # Catalog cabinet (sequence 1)
-    seq_2_found = False  # Custom cabinet (sequence 2)
     seq1 = get_circled_number(1)
     seq2 = get_circled_number(2)
+    found_sequences = set()
 
-    for row in formatki_table.rows[1:]:  # Skip header
-        cells = row.cells
-        seq = cells[0].text.strip()
+    for table in body_tables:
+        for row in table.rows[1:]:
+            name = row.cells[1].text.strip()
+            if name in ("Catalog Panel", "Custom Side Panel"):
+                found_sequences.add(row.cells[0].text.strip())
 
-        if seq == seq1:  # Sequence 1
-            seq_1_found = True
-        elif seq == seq2:  # Sequence 2
-            seq_2_found = True
-
-    assert seq_1_found, f"Sequence number {seq1} not found (catalog cabinet)"
-    assert seq_2_found, f"Sequence number {seq2} not found (custom cabinet)"
+    assert seq1 in found_sequences, (
+        f"Sequence number {seq1} not found (catalog cabinet)"
+    )
+    assert seq2 in found_sequences, f"Sequence number {seq2} not found (custom cabinet)"
