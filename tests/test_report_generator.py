@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 import pytest
 from datetime import date
 from docx import Document
@@ -556,6 +557,44 @@ def test_constructor_accepts_legacy_positional_session(session):
     rg = ReportGenerator(session)
     assert rg.project_service is not None
     assert rg.settings_service is not None
+
+
+def test_program_logo_defaults_to_bw_variant():
+    """
+    Given: no explicit logo path and no settings service
+    When: resolving program logo path
+    Then: bundled black-and-white logo is used by default
+    """
+    rg = ReportGenerator()
+
+    logo_path = rg._get_program_logo_path()
+
+    assert logo_path is not None
+    assert logo_path.name == "logo_bw.png"
+    assert Path(logo_path).exists()
+
+
+def test_program_logo_uses_color_variant_from_settings():
+    """
+    Given: report logo setting set to color
+    When: resolving program logo path
+    Then: bundled color logo is selected
+    """
+
+    class _FakeSettingsService:
+        def get_setting_value(self, key: str, default=None):
+            if key == "report_program_logo_variant":
+                return "Kolorowe"
+            return default
+
+    rg = ReportGenerator()
+    rg.settings_service = _FakeSettingsService()
+
+    logo_path = rg._get_program_logo_path()
+
+    assert logo_path is not None
+    assert logo_path.name == "logo.png"
+    assert Path(logo_path).exists()
 
 
 def test_report_contains_glass_shelves_section(tmp_path):
