@@ -234,6 +234,94 @@ def test_derived_formatki_quantities(tmp_path, sample_project_orm):
     assert quantities == [2, 2, 4]  # (1*2), (1*2), (2*2)
 
 
+def test_plyta_16_hides_color_values_but_keeps_column(tmp_path):
+    """
+    Given: formatki in both PLYTA 16 and PLYTA 18 sections
+    When: generating report
+    Then: PLYTA 16 rows have empty "Kolor", while PLYTA 18 still shows color
+    """
+    project = Project(
+        name="PLYTA 16 Color Test",
+        kitchen_type="LOFT",
+        order_number="PLYTA16-001",
+        client_name="Client",
+        client_address="Address",
+        client_phone="555-000",
+        client_email="client@example.com",
+    )
+
+    ct = CabinetTemplate(kitchen_type="LOFT", name="Panel Template")
+    ct.parts = [
+        CabinetPart(
+            part_name="Panel 16",
+            height_mm=720,
+            width_mm=500,
+            pieces=1,
+            material="PLYTA 16",
+            wrapping="D",
+        ),
+        CabinetPart(
+            part_name="Panel 18",
+            height_mm=720,
+            width_mm=500,
+            pieces=1,
+            material="PLYTA 18",
+            wrapping="D",
+        ),
+    ]
+
+    cab = ProjectCabinet(
+        sequence_number=1,
+        body_color="White",
+        front_color="Oak",
+        handle_type="KROMA",
+        quantity=1,
+    )
+    cab.project = project
+    cab.cabinet_type = ct
+    project.cabinets = [cab]
+
+    rg = ReportGenerator()
+    output = rg.generate(project, output_dir=str(tmp_path), auto_open=False)
+    doc = Document(output)
+
+    header_tables = doc.sections[0].header.tables
+    footer_tables = doc.sections[0].footer.tables
+    body_tables = [t for t in doc.tables if t not in header_tables + footer_tables]
+
+    plyta_16_table = None
+    plyta_18_table = None
+
+    for table in body_tables:
+        part_names = [row.cells[1].text.strip() for row in table.rows[1:]]
+        if "Panel 16" in part_names:
+            plyta_16_table = table
+        if "Panel 18" in part_names:
+            plyta_18_table = table
+
+    assert plyta_16_table is not None
+    assert plyta_18_table is not None
+
+    # Column still exists
+    assert plyta_16_table.rows[0].cells[5].text == "Kolor"
+
+    # PLYTA 16 hides values
+    plyta_16_row = next(
+        row
+        for row in plyta_16_table.rows[1:]
+        if row.cells[1].text.strip() == "Panel 16"
+    )
+    assert plyta_16_row.cells[5].text.strip() == ""
+
+    # Other sections keep color values
+    plyta_18_row = next(
+        row
+        for row in plyta_18_table.rows[1:]
+        if row.cells[1].text.strip() == "Panel 18"
+    )
+    assert plyta_18_row.cells[5].text.strip() == "White"
+
+
 def test_accessories_section(tmp_path, sample_project_orm):
     """
     Given: derived AKCESORIA table

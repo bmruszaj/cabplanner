@@ -129,7 +129,12 @@ class ReportGenerator:
             if formatki_plyta_18:
                 self._add_parts_section(doc, "FORMATKI (PLYTA 18)", formatki_plyta_18)
             if formatki_plyta_16:
-                self._add_parts_section(doc, "FORMATKI (PLYTA 16)", formatki_plyta_16)
+                self._add_parts_section(
+                    doc,
+                    "FORMATKI (PLYTA 16)",
+                    formatki_plyta_16,
+                    hide_color_values=True,
+                )
             if formatki_plyta_12:
                 self._add_parts_section(doc, "FORMATKI (PLYTA 12)", formatki_plyta_12)
             if formatki_other:
@@ -468,7 +473,12 @@ class ReportGenerator:
         p_page._p.append(fld)
 
     def _add_parts_section(
-        self, doc: DocxDocument, title: str, parts: List[Any], accessory: bool = False
+        self,
+        doc: DocxDocument,
+        title: str,
+        parts: List[Any],
+        accessory: bool = False,
+        hide_color_values: bool = False,
     ) -> None:
         # Check if we need a page break before adding section
         if parts and self._should_break_page_for_section(doc, len(parts)):
@@ -517,7 +527,9 @@ class ReportGenerator:
                 cells[3].text = str(part.quantity)
                 cells[3].paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
                 cells[4].text = getattr(part, "wrapping", "") or ""
-                cells[5].text = getattr(part, "color", "") or ""
+                cells[5].text = (
+                    "" if hide_color_values else getattr(part, "color", "") or ""
+                )
                 cells[6].text = getattr(part, "notes", "") or ""
 
     def _add_notes(self, doc: DocxDocument, project: Project) -> None:
