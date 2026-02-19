@@ -33,9 +33,15 @@ class InstanceForm(QWidget):
 
     sig_dirty_changed = Signal(bool)
 
-    def __init__(self, parent=None, color_service: ColorPaletteService | None = None):
+    def __init__(
+        self,
+        parent=None,
+        color_service: ColorPaletteService | None = None,
+        is_dark_mode: bool = False,
+    ):
         super().__init__(parent)
         self.color_service = color_service
+        self.is_dark_mode = is_dark_mode
         self.project_cabinet = None
         self.cabinet_type = None
         self._is_dirty = False
@@ -67,7 +73,8 @@ class InstanceForm(QWidget):
 
         self.type_info_label = QLabel("—")
         self.type_info_label.setWordWrap(True)
-        self.type_info_label.setStyleSheet("color: #666; margin-top: 4px;")
+        info_text = "#B0B0B0" if self.is_dark_mode else "#666666"
+        self.type_info_label.setStyleSheet(f"color: {info_text}; margin-top: 4px;")
         type_layout.addWidget(self.type_info_label)
 
         layout.addWidget(type_frame)
@@ -193,13 +200,26 @@ class InstanceForm(QWidget):
 
     def _apply_styles(self):
         """Apply visual styling."""
-        get_theme()
+        panel_border = "#4A4A4A" if self.is_dark_mode else "#E0E0E0"
+        panel_bg = "#2F2F2F" if self.is_dark_mode else "#F8F9FA"
+        group_title_bg = "#333333" if self.is_dark_mode else "#FFFFFF"
+        input_bg = "#333333" if self.is_dark_mode else "#FFFFFF"
+        input_border = "#5A5A5A" if self.is_dark_mode else "#DDDDDD"
+        spinner_button_bg = "#3A3A3A" if self.is_dark_mode else "#F8F9FA"
+        spinner_button_border = "#5A5A5A" if self.is_dark_mode else "#CCCCCC"
+        spinner_arrow = "#CFCFCF" if self.is_dark_mode else "#666666"
+        text_color = "#E0E0E0" if self.is_dark_mode else "#333333"
+        add_color_bg = "#333333" if self.is_dark_mode else "#FFFFFF"
+        add_color_border = "#5A5A5A" if self.is_dark_mode else "#D0D0D0"
+        add_color_hover = "#3A3A3A" if self.is_dark_mode else "#F8F8F8"
 
-        self.setStyleSheet(f"""
+        self.setStyleSheet(
+            get_theme(self.is_dark_mode)
+            + f"""
             QGroupBox {{
                 font-weight: bold;
                 font-size: 10pt;
-                border: 2px solid #e0e0e0;
+                border: 2px solid {panel_border};
                 border-radius: 8px;
                 margin-top: 8px;
                 padding-top: 8px;
@@ -208,18 +228,20 @@ class InstanceForm(QWidget):
                 subcontrol-origin: margin;
                 left: 12px;
                 padding: 0 6px 0 6px;
-                background-color: white;
+                background-color: {group_title_bg};
+                color: {text_color};
             }}
             QFrame {{
-                background-color: #f8f9fa;
-                border: 1px solid #e0e0e0;
+                background-color: {panel_bg};
+                border: 1px solid {panel_border};
                 border-radius: 8px;
             }}
             QSpinBox, QComboBox, QPlainTextEdit {{
                 padding: 6px;
-                border: 1px solid #ddd;
+                border: 1px solid {input_border};
                 border-radius: 4px;
-                background-color: white;
+                background-color: {input_bg};
+                color: {text_color};
             }}
             QSpinBox {{
                 padding-right: 32px; /* Make room for larger buttons */
@@ -228,8 +250,8 @@ class InstanceForm(QWidget):
             QSpinBox::up-button, QSpinBox::down-button {{
                 width: 28px;
                 height: 16px;
-                border: 1px solid #ccc;
-                background-color: #f8f9fa;
+                border: 1px solid {spinner_button_border};
+                background-color: {spinner_button_bg};
                 border-radius: 2px;
             }}
             QSpinBox::up-button {{
@@ -248,19 +270,19 @@ class InstanceForm(QWidget):
                 background-color: {PRIMARY};
             }}
             QSpinBox::up-button:pressed, QSpinBox::down-button:pressed {{
-                background-color: #0066cc;
+                background-color: #0066CC;
             }}
             QSpinBox::up-arrow {{
                 border-left: 5px solid transparent;
                 border-right: 5px solid transparent;
-                border-bottom: 8px solid #666;
+                border-bottom: 8px solid {spinner_arrow};
                 width: 0px;
                 height: 0px;
             }}
             QSpinBox::down-arrow {{
                 border-left: 5px solid transparent;
                 border-right: 5px solid transparent;
-                border-top: 8px solid #666;
+                border-top: 8px solid {spinner_arrow};
                 width: 0px;
                 height: 0px;
             }}
@@ -270,8 +292,6 @@ class InstanceForm(QWidget):
             QSpinBox::down-button:hover QSpinBox::down-arrow {{
                 border-top-color: white;
             }}
-
-
             QSpinBox:focus, QComboBox:focus, QPlainTextEdit:focus {{
                 border-color: {PRIMARY};
             }}
@@ -288,9 +308,9 @@ class InstanceForm(QWidget):
                 opacity: 0.9;
             }}
             QPushButton#addColorBtn {{
-                background-color: white;
-                color: #333333;
-                border: 1px solid #D0D0D0;
+                background-color: {add_color_bg};
+                color: {text_color};
+                border: 1px solid {add_color_border};
                 border-radius: 4px;
                 padding: 4px 8px;
                 font-size: 9pt;
@@ -298,9 +318,10 @@ class InstanceForm(QWidget):
             }}
             QPushButton#addColorBtn:hover {{
                 border-color: {PRIMARY};
-                background-color: #f8f8f8;
+                background-color: {add_color_hover};
             }}
-        """)
+        """
+        )
 
     def _block_dirty_signals(self, block: bool):
         """Block or unblock dirty tracking signals during data loading."""

@@ -622,6 +622,193 @@ class ProjectService:
             self.db.rollback()
             return False
 
+    def save_cabinet_editor_changes(
+        self,
+        cabinet_id: int,
+        *,
+        instance_values: Optional[Dict[str, Any]] = None,
+        parts_changes: Optional[Dict[str, Any] | List[Dict[str, Any]]] = None,
+        accessories_changes: Optional[Dict[str, Any]] = None,
+    ) -> bool:
+        """
+        Persist cabinet editor changes atomically in a single transaction.
+
+        This method is used by the cabinet editor dialog to avoid partial saves
+        when one section succeeds and another fails.
+        """
+        cabinet = self.get_cabinet(cabinet_id)
+        if not cabinet:
+            return False
+
+        previous_body_color = cabinet.body_color
+        previous_front_color = cabinet.front_color
+        had_changes = False
+
+        try:
+            if instance_values:
+                had_changes = True
+                for attr, val in instance_values.items():
+                    setattr(cabinet, attr, val)
+
+            if parts_changes is not None:
+                had_changes = True
+                if isinstance(parts_changes, list):
+                    # Custom cabinet mode: replace full parts snapshot.
+                    for part in list(cabinet.parts):
+                        self.db.delete(part)
+
+                    for part_data in parts_changes:
+                        self.db.add(
+                            ProjectCabinetPart(
+                                project_cabinet_id=cabinet.id,
+                                part_name=part_data.get("part_name", ""),
+                                height_mm=part_data.get("height_mm", 0),
+                                width_mm=part_data.get("width_mm", 0),
+                                pieces=part_data.get("pieces", 1),
+                                wrapping=part_data.get("wrapping"),
+                                comments=part_data.get("comments"),
+                                material=part_data.get("material"),
+                                processing_json=part_data.get("processing_json"),
+                                source_template_id=part_data.get("source_template_id"),
+                                source_part_id=part_data.get("source_part_id"),
+                                calc_context_json=part_data.get("calc_context_json"),
+                            )
+                        )
+                elif isinstance(parts_changes, dict):
+                    for part_id in parts_changes.get("parts_to_remove", []):
+                        db_part = self.db.get(ProjectCabinetPart, int(part_id))
+                        if not db_part or db_part.project_cabinet_id != cabinet.id:
+                            raise ValueError("Invalid part removal request")
+                        self.db.delete(db_part)
+
+                    for part_id, part_data in parts_changes.get(
+                        "parts_changes", {}
+                    ).items():
+                        db_part = self.db.get(ProjectCabinetPart, int(part_id))
+                        if not db_part or db_part.project_cabinet_id != cabinet.id:
+                            raise ValueError("Invalid part update request")
+
+                        for key, value in part_data.items():
+                            if hasattr(db_part, key):
+                                setattr(db_part, key, value)
+
+                    for part_data in parts_changes.get("parts_to_add", []):
+                        part_name = part_data.get("part_name", "")
+                        if not part_name:
+                            raise ValueError("Part name is required")
+
+                        self.db.add(
+                            ProjectCabinetPart(
+                                project_cabinet_id=cabinet.id,
+                                part_name=part_name,
+                                height_mm=part_data.get("height_mm", 0),
+                                width_mm=part_data.get("width_mm", 0),
+                                pieces=part_data.get("pieces", 1),
+                                material=part_data.get("material"),
+                                wrapping=part_data.get("wrapping"),
+                                comments=part_data.get("comments"),
+                                source_template_id=part_data.get("source_template_id"),
+                                source_part_id=part_data.get("source_part_id"),
+                                processing_json=part_data.get("processing_json"),
+                                calc_context_json=part_data.get("calc_context_json"),
+                            )
+                        )
+                else:
+                    raise ValueError("Unsupported parts payload")
+
+            if accessories_changes is not None:
+                had_changes = True
+                for acc_data in accessories_changes.get("accessories_to_add", []):
+                    name = (acc_data.get("name", "") or "").strip()
+                    count = acc_data.get("count", 1)
+                    if not name or count <= 0:
+                        raise ValueError("Invalid accessory add request")
+
+                    source_accessory = self.db.scalar(
+                        select(Accessory).where(Accessory.name == name)
+                    )
+                    source_accessory_id = (
+                        source_accessory.id
+                        if source_accessory
+                        else acc_data.get("source_accessory_id")
+                    )
+
+                    self.db.add(
+                        ProjectCabinetAccessorySnapshot(
+                            project_cabinet_id=cabinet.id,
+                            name=name,
+                            count=count,
+                            source_accessory_id=source_accessory_id,
+                        )
+                    )
+
+                for acc_id in accessories_changes.get("accessories_to_remove", []):
+                    snapshot = self.db.get(ProjectCabinetAccessorySnapshot, int(acc_id))
+                    if not snapshot or snapshot.project_cabinet_id != cabinet.id:
+                        raise ValueError("Invalid accessory removal request")
+                    self.db.delete(snapshot)
+
+                updates = accessories_changes.get("accessories_changes", {})
+                for acc_id, update_data in updates.items():
+                    snapshot = self.db.get(ProjectCabinetAccessorySnapshot, int(acc_id))
+                    if not snapshot or snapshot.project_cabinet_id != cabinet.id:
+                        raise ValueError("Invalid accessory update request")
+
+                    if "name" in update_data and update_data.get("name") is not None:
+                        cleaned_name = update_data.get("name", "").strip()
+                        if not cleaned_name:
+                            raise ValueError("Accessory name is required")
+
+                        previous_name = snapshot.name
+                        snapshot.name = cleaned_name
+                        if cleaned_name != previous_name:
+                            source_accessory = self.db.scalar(
+                                select(Accessory).where(Accessory.name == cleaned_name)
+                            )
+                            snapshot.source_accessory_id = (
+                                source_accessory.id if source_accessory else None
+                            )
+
+                    if "count" in update_data and update_data.get("count") is not None:
+                        new_count = update_data.get("count")
+                        if new_count <= 0:
+                            raise ValueError("Accessory count must be positive")
+                        snapshot.count = new_count
+
+                if not updates:
+                    for acc_id, new_quantity in accessories_changes.get(
+                        "quantity_changes", {}
+                    ).items():
+                        snapshot = self.db.get(
+                            ProjectCabinetAccessorySnapshot, int(acc_id)
+                        )
+                        if not snapshot or snapshot.project_cabinet_id != cabinet.id:
+                            raise ValueError(
+                                "Invalid accessory quantity update request"
+                            )
+                        if new_quantity <= 0:
+                            raise ValueError("Accessory count must be positive")
+                        snapshot.count = new_quantity
+
+            if had_changes:
+                cabinet.updated_at = datetime.now(timezone.utc)
+
+            self.db.commit()
+            self.db.refresh(cabinet)
+        except Exception:
+            self.db.rollback()
+            return False
+
+        colors_to_mark = []
+        if cabinet.body_color != previous_body_color and cabinet.body_color:
+            colors_to_mark.append(cabinet.body_color)
+        if cabinet.front_color != previous_front_color and cabinet.front_color:
+            colors_to_mark.append(cabinet.front_color)
+        if colors_to_mark:
+            self._mark_colors_used(*colors_to_mark)
+
+        return True
+
     def get_aggregated_project_elements(
         self, project_id: int
     ) -> Dict[str, List[Dict[str, Any]]]:

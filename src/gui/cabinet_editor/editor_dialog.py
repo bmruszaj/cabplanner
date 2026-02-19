@@ -40,12 +40,14 @@ class CabinetEditorDialog(QDialog):
         catalog_service: CatalogService,
         project_service: ProjectService = None,
         color_service: ColorPaletteService | None = None,
+        is_dark_mode: bool = False,
         parent=None,
     ):
         super().__init__(parent)
         self.catalog_service = catalog_service
         self.project_service = project_service
         self.color_service = color_service
+        self.is_dark_mode = is_dark_mode
 
         self.cabinet_type = None
         self.project_instance = None
@@ -88,19 +90,25 @@ class CabinetEditorDialog(QDialog):
         # Editable name field (visible only in type mode)
         self.name_edit = QLineEdit()
         self.name_edit.setPlaceholderText("Nazwa szafki...")
-        self.name_edit.setStyleSheet("""
-            QLineEdit {
+        name_bg = "#333333" if self.is_dark_mode else "#FFFFFF"
+        name_border = "#5A5A5A" if self.is_dark_mode else "#CCCCCC"
+        name_text = "#E0E0E0" if self.is_dark_mode else "#333333"
+        self.name_edit.setStyleSheet(
+            f"""
+            QLineEdit {{
                 font-size: 12pt;
                 font-weight: bold;
                 padding: 6px 10px;
-                border: 1px solid #ccc;
+                border: 1px solid {name_border};
                 border-radius: 4px;
-                background-color: #fff;
-            }
-            QLineEdit:focus {
+                background-color: {name_bg};
+                color: {name_text};
+            }}
+            QLineEdit:focus {{
                 border-color: #0A766C;
-            }
-        """)
+            }}
+        """
+        )
         self.name_edit.hide()  # Hidden by default
         header_layout.addWidget(self.name_edit)
 
@@ -108,7 +116,8 @@ class CabinetEditorDialog(QDialog):
         subtitle_font = QFont()
         subtitle_font.setPointSize(9)
         self.subtitle_label.setFont(subtitle_font)
-        self.subtitle_label.setStyleSheet("color: #666;")
+        subtitle_color = "#B0B0B0" if self.is_dark_mode else "#666666"
+        self.subtitle_label.setStyleSheet(f"color: {subtitle_color};")
         header_layout.addWidget(self.subtitle_label)
 
         layout.addWidget(header_frame)
@@ -139,16 +148,21 @@ class CabinetEditorDialog(QDialog):
             "Miejsce na rysunek szafki\n(bazowany na wymiarach)"
         )
         self.drawing_placeholder.setAlignment(Qt.AlignCenter)
-        self.drawing_placeholder.setStyleSheet("""
-            QLabel {
-                color: #666;
+        placeholder_text = "#B0B0B0" if self.is_dark_mode else "#666666"
+        placeholder_border = "#6A6A6A" if self.is_dark_mode else "#CCCCCC"
+        placeholder_bg = "#2A2A2A" if self.is_dark_mode else "#F9F9F9"
+        self.drawing_placeholder.setStyleSheet(
+            f"""
+            QLabel {{
+                color: {placeholder_text};
                 font-style: italic;
-                border: 2px dashed #ccc;
+                border: 2px dashed {placeholder_border};
                 border-radius: 8px;
                 padding: 40px;
-                background-color: #f9f9f9;
-            }
-        """)
+                background-color: {placeholder_bg};
+            }}
+        """
+        )
         drawing_layout.addWidget(self.drawing_placeholder)
 
         drawing_layout.addStretch()
@@ -159,20 +173,27 @@ class CabinetEditorDialog(QDialog):
         self.tab_widget.setTabPosition(QTabWidget.North)
 
         # Instance tab
-        self.instance_form = InstanceForm(color_service=self.color_service)
+        self.instance_form = InstanceForm(
+            color_service=self.color_service,
+            is_dark_mode=self.is_dark_mode,
+        )
         self.tab_widget.addTab(
             self.instance_form, get_icon("project"), "Instancja w projekcie"
         )
 
         # Parts tab
         self.parts_form = PartsForm(
-            catalog_service=self.catalog_service, project_service=self.project_service
+            catalog_service=self.catalog_service,
+            project_service=self.project_service,
+            is_dark_mode=self.is_dark_mode,
         )
         self.tab_widget.addTab(self.parts_form, get_icon("parts"), "Części")
 
         # Accessories tab
         self.accessories_form = AccessoriesForm(
-            catalog_service=self.catalog_service, project_service=self.project_service
+            catalog_service=self.catalog_service,
+            project_service=self.project_service,
+            is_dark_mode=self.is_dark_mode,
         )
         self.tab_widget.addTab(
             self.accessories_form, get_icon("accessories"), "Akcesoria"
@@ -187,7 +208,8 @@ class CabinetEditorDialog(QDialog):
 
         # Left side status
         self.status_label = QLabel("")
-        self.status_label.setStyleSheet("color: #666; font-size: 9pt;")
+        status_color = "#B0B0B0" if self.is_dark_mode else "#666666"
+        self.status_label.setStyleSheet(f"color: {status_color}; font-size: 9pt;")
         buttons_layout.addWidget(self.status_label)
 
         buttons_layout.addStretch()
@@ -245,27 +267,36 @@ class CabinetEditorDialog(QDialog):
 
     def _apply_styles(self):
         """Apply visual styling."""
-        get_theme()
+        dialog_bg = "#2A2A2A" if self.is_dark_mode else "#F8F9FA"
+        panel_bg = "#333333" if self.is_dark_mode else "#FFFFFF"
+        panel_border = "#4A4A4A" if self.is_dark_mode else "#E0E0E0"
+        tab_bg = "#2F2F2F" if self.is_dark_mode else "#F5F5F5"
+        tab_hover_bg = "#3A3A3A" if self.is_dark_mode else "#E8E8E8"
+        tab_text = "#E0E0E0" if self.is_dark_mode else "#333333"
+        disabled_bg = "#555555" if self.is_dark_mode else "#CCCCCC"
+        disabled_text = "#9A9A9A" if self.is_dark_mode else "#666666"
 
-        self.setStyleSheet(f"""
+        self.setStyleSheet(
+            get_theme(self.is_dark_mode)
+            + f"""
             QDialog {{
-                background-color: #f8f9fa;
+                background-color: {dialog_bg};
             }}
             QFrame {{
-                background-color: white;
-                border: 1px solid #e0e0e0;
+                background-color: {panel_bg};
+                border: 1px solid {panel_border};
                 border-radius: 8px;
             }}
             QTabWidget::pane {{
-                border: 1px solid #e0e0e0;
+                border: 1px solid {panel_border};
                 border-radius: 8px;
-                background-color: white;
+                background-color: {panel_bg};
                 margin-top: -1px;
             }}
             QTabWidget QTabBar::tab {{
-                background-color: #f5f5f5;
-                color: #333333;
-                border: 1px solid #ddd;
+                background-color: {tab_bg};
+                color: {tab_text};
+                border: 1px solid {panel_border};
                 border-bottom: none;
                 border-top-left-radius: 6px;
                 border-top-right-radius: 6px;
@@ -274,13 +305,13 @@ class CabinetEditorDialog(QDialog):
                 font-size: 9pt;
             }}
             QTabWidget QTabBar::tab:selected {{
-                background-color: white;
-                color: #333333;
-                border-bottom: 1px solid white;
+                background-color: {panel_bg};
+                color: {tab_text};
+                border-bottom: 1px solid {panel_bg};
             }}
             QTabWidget QTabBar::tab:hover:!selected {{
-                background-color: #e8e8e8;
-                color: #333333;
+                background-color: {tab_hover_bg};
+                color: {tab_text};
             }}
             QPushButton {{
                 background-color: {PRIMARY};
@@ -296,13 +327,14 @@ class CabinetEditorDialog(QDialog):
                 opacity: 0.9;
             }}
             QPushButton:disabled {{
-                background-color: #cccccc;
-                color: #666666;
+                background-color: {disabled_bg};
+                color: {disabled_text};
             }}
             QPushButton#cancel_button {{
                 background-color: #757575;
             }}
-        """)
+        """
+        )
 
         # Set object names for styling
         self.cancel_button.setObjectName("cancel_button")
@@ -331,31 +363,44 @@ class CabinetEditorDialog(QDialog):
 
         self._update_buttons()
 
-    def _on_dirty_changed(self, is_dirty):
+    def _on_dirty_changed(self, _is_dirty):
         """Handle dirty state changes."""
         self._update_buttons()
 
-        if is_dirty:
+        if self._has_unsaved_changes():
             self.status_label.setText("Są niezapisane zmiany")
         else:
             self.status_label.setText("")
 
+    def _all_forms(self):
+        """Return all editor forms tracked for dirty/valid state."""
+        return (self.instance_form, self.parts_form, self.accessories_form)
+
+    def _has_unsaved_changes(self) -> bool:
+        """Check if there are unsaved changes in any form or in template name."""
+        return (
+            any(form.is_dirty() for form in self._all_forms())
+            or self._is_name_changed()
+        )
+
     def _update_buttons(self):
         """Update button states based on current state."""
-        current_form = self._get_current_form()
-
         # We have data if we have either a cabinet type or a project instance
         has_data = self.cabinet_type is not None or self.project_instance is not None
-        is_dirty = current_form.is_dirty() if current_form else False
-        is_valid = current_form.is_valid() if current_form else True
+        dirty_forms = [form for form in self._all_forms() if form.is_dirty()]
+        has_dirty_changes = bool(dirty_forms)
+        dirty_forms_valid = all(form.is_valid() for form in dirty_forms)
 
         # Check if name was changed (in type mode)
         name_changed = self._is_name_changed()
         name_valid = len(self.name_edit.text().strip()) > 0
+        has_valid_name_change = name_changed and name_valid
 
-        # Enable save if: has data AND (form is dirty+valid OR name changed+valid)
-        can_save = has_data and (
-            (is_dirty and is_valid) or (name_changed and name_valid)
+        # Enable save if: we have data, all dirty forms are valid, and any valid change exists.
+        can_save = (
+            has_data
+            and dirty_forms_valid
+            and (has_dirty_changes or has_valid_name_change)
         )
 
         self.save_button.setEnabled(can_save)
@@ -415,11 +460,7 @@ class CabinetEditorDialog(QDialog):
     def _cancel(self):
         """Cancel editing with dirty check."""
         # Check for unsaved changes in all forms
-        has_unsaved = (
-            self.instance_form.is_dirty()
-            or self.parts_form.is_dirty()
-            or self.accessories_form.is_dirty()
-        )
+        has_unsaved = self._has_unsaved_changes()
 
         if has_unsaved:
             msg_box = QMessageBox(self)
@@ -460,34 +501,41 @@ class CabinetEditorDialog(QDialog):
     def _save_project_instance_forms(self) -> bool:
         """Save all dirty forms for project instance."""
         try:
-            # Save instance form
-            if self.instance_form.is_dirty():
-                values = self.instance_form.values()
-                updated = self.project_service.update_cabinet(
-                    self.project_instance.id, **values
-                )
-                if not updated:
-                    self._show_save_error("instancji")
-                    return False
-                self.project_instance = updated
+            instance_values = (
+                self.instance_form.values() if self.instance_form.is_dirty() else None
+            )
+            parts_changes = (
+                self.parts_form.values() if self.parts_form.is_dirty() else None
+            )
+            accessories_changes = (
+                self.accessories_form.values()
+                if self.accessories_form.is_dirty()
+                else None
+            )
+
+            if (
+                instance_values is None
+                and parts_changes is None
+                and accessories_changes is None
+            ):
+                return True
+
+            success = self.project_service.save_cabinet_editor_changes(
+                self.project_instance.id,
+                instance_values=instance_values,
+                parts_changes=parts_changes,
+                accessories_changes=accessories_changes,
+            )
+            if not success:
+                self._show_save_error("zmian")
+                return False
+
+            self._refresh_cabinet_data()
+            if instance_values is not None:
                 self.instance_form.reset_dirty()
-
-            # Save parts form
-            if self.parts_form.is_dirty():
-                parts_changes = self.parts_form.values()
-                if not self._apply_parts_changes(parts_changes):
-                    self._show_save_error("części")
-                    return False
-                self._refresh_cabinet_data()
+            if parts_changes is not None:
                 self.parts_form.reset_dirty()
-
-            # Save accessories form
-            if self.accessories_form.is_dirty():
-                accessories_changes = self.accessories_form.values()
-                if not self._apply_accessories_changes(accessories_changes):
-                    self._show_save_error("akcesoriów")
-                    return False
-                self._refresh_cabinet_data()
+            if accessories_changes is not None:
                 self.accessories_form.reset_dirty()
 
             return True
@@ -501,27 +549,45 @@ class CabinetEditorDialog(QDialog):
     def _save_catalog_template_forms(self) -> bool:
         """Save all dirty forms for catalog template."""
         try:
-            # Save name if changed
             new_name = self.name_edit.text().strip()
-            if new_name and self.cabinet_type and new_name != self.cabinet_type.name:
-                self.catalog_service.cabinet_type_service.update_template_name(
-                    self.cabinet_type.id, new_name
+            name_changed = (
+                bool(new_name)
+                and self.cabinet_type is not None
+                and new_name != self.cabinet_type.name
+            )
+            parts_changes = (
+                self.parts_form.values() if self.parts_form.is_dirty() else None
+            )
+            accessories_changes = (
+                self.accessories_form.values()
+                if self.accessories_form.is_dirty()
+                else None
+            )
+
+            if (
+                not name_changed
+                and parts_changes is None
+                and accessories_changes is None
+            ):
+                return True
+
+            success = (
+                self.catalog_service.cabinet_type_service.save_template_editor_changes(
+                    self.cabinet_type.id,
+                    new_name=new_name if name_changed else None,
+                    parts_changes=parts_changes,
+                    accessories_changes=accessories_changes,
                 )
+            )
+            if not success:
+                self._show_save_error("zmian")
+                return False
 
-            # Parts - apply pending changes
-            if self.parts_form.is_dirty():
-                parts_changes = self.parts_form.values()
-                if not self._apply_template_parts_changes(parts_changes):
-                    self._show_save_error("części")
-                    return False
+            if name_changed:
+                self.cabinet_type.name = new_name
+            if parts_changes is not None:
                 self.parts_form.reset_dirty()
-
-            # Save accessories
-            if self.accessories_form.is_dirty():
-                accessories_changes = self.accessories_form.values()
-                if not self._apply_template_accessories_changes(accessories_changes):
-                    self._show_save_error("akcesoriów")
-                    return False
+            if accessories_changes is not None:
                 self.accessories_form.reset_dirty()
 
             return True
@@ -555,6 +621,11 @@ class CabinetEditorDialog(QDialog):
         )
         self.accessories_form.load(project_instance, cabinet_type)
 
+        # Ensure all tabs are available in project-instance mode.
+        self.tab_widget.setTabEnabled(0, True)
+        self.tab_widget.setTabEnabled(1, True)
+        self.tab_widget.setTabEnabled(2, True)
+
         # Switch to instance tab
         self.tab_widget.setCurrentWidget(self.instance_form)
 
@@ -582,7 +653,9 @@ class CabinetEditorDialog(QDialog):
 
         # Disable instance tab when editing type only
         self.tab_widget.setTabEnabled(0, False)  # Instance tab
-        # Keep accessories tab enabled for catalog-level accessory management
+        # Keep other tabs enabled in type-editing mode.
+        self.tab_widget.setTabEnabled(1, True)
+        self.tab_widget.setTabEnabled(2, True)
 
         # Switch to parts tab (first available tab for catalog)
         self.tab_widget.setCurrentWidget(self.parts_form)
@@ -639,8 +712,10 @@ class CabinetEditorDialog(QDialog):
         # Load accessories (custom cabinets can still have accessories)
         self.accessories_form.load(project_instance, None)  # No cabinet type
 
-        # Disable type tab for custom cabinets (no catalog type to edit)
-        self.tab_widget.setTabEnabled(1, False)  # Type tab
+        # Ensure parts remain editable for custom cabinets.
+        self.tab_widget.setTabEnabled(0, True)
+        self.tab_widget.setTabEnabled(1, True)
+        self.tab_widget.setTabEnabled(2, True)
 
         # Switch to instance tab
         self.tab_widget.setCurrentWidget(self.instance_form)

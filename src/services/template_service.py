@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
@@ -166,6 +166,170 @@ class TemplateService:
                 )
             else:
                 raise ValueError(f"Błąd bazy danych: {str(e)}")
+
+    def save_template_editor_changes(
+        self,
+        template_id: int,
+        *,
+        new_name: Optional[str] = None,
+        parts_changes: Optional[Dict[str, Any]] = None,
+        accessories_changes: Optional[Dict[str, Any]] = None,
+    ) -> bool:
+        """
+        Persist template editor changes atomically in a single transaction.
+
+        This method is used by CabinetEditorDialog to avoid partial saves when
+        one section succeeds and another fails.
+        """
+        template = self.get_template(template_id)
+        if not template:
+            return False
+
+        def _require_positive(value: Any) -> int:
+            count = int(value)
+            if count <= 0:
+                raise ValueError("Count must be positive")
+            return count
+
+        try:
+            if new_name is not None:
+                cleaned_name = new_name.strip()
+                if not cleaned_name:
+                    raise ValueError("Nazwa szafki jest wymagana.")
+                template.name = cleaned_name
+
+            if parts_changes is not None:
+                for part_id in parts_changes.get("parts_to_remove", []):
+                    part = self.db.get(CabinetPart, int(part_id))
+                    if not part or part.cabinet_type_id != template_id:
+                        raise ValueError("Invalid part removal request")
+                    self.db.delete(part)
+
+                for part_id, part_data in parts_changes.get(
+                    "parts_changes", {}
+                ).items():
+                    part = self.db.get(CabinetPart, int(part_id))
+                    if not part or part.cabinet_type_id != template_id:
+                        raise ValueError("Invalid part update request")
+                    for key, value in part_data.items():
+                        if hasattr(part, key):
+                            setattr(part, key, value)
+
+                for part_data in parts_changes.get("parts_to_add", []):
+                    self.db.add(
+                        CabinetPart(
+                            cabinet_type_id=template_id,
+                            part_name=part_data.get("part_name", ""),
+                            height_mm=part_data.get("height_mm", 0),
+                            width_mm=part_data.get("width_mm", 0),
+                            pieces=part_data.get("pieces", 1),
+                            material=part_data.get("material"),
+                            wrapping=part_data.get("wrapping"),
+                            comments=part_data.get("comments"),
+                            processing_json=part_data.get("processing_json"),
+                        )
+                    )
+
+            if accessories_changes is not None:
+                for acc_data in accessories_changes.get("accessories_to_add", []):
+                    cleaned_name = (acc_data.get("name", "") or "").strip()
+                    if not cleaned_name:
+                        raise ValueError("Nazwa akcesorium jest wymagana.")
+                    target_count = _require_positive(acc_data.get("count", 1))
+
+                    accessory = self.db.scalar(
+                        select(Accessory).where(Accessory.name == cleaned_name)
+                    )
+                    if not accessory:
+                        accessory = Accessory(name=cleaned_name)
+                        self.db.add(accessory)
+                        self.db.flush()
+
+                    existing_link = self.db.get(
+                        CabinetTemplateAccessory, (template_id, accessory.id)
+                    )
+                    if existing_link:
+                        existing_link.count = target_count
+                    else:
+                        self.db.add(
+                            CabinetTemplateAccessory(
+                                cabinet_type_id=template_id,
+                                accessory_id=accessory.id,
+                                count=target_count,
+                            )
+                        )
+
+                for acc_id in accessories_changes.get("accessories_to_remove", []):
+                    link = self.db.get(
+                        CabinetTemplateAccessory, (template_id, int(acc_id))
+                    )
+                    if not link:
+                        raise ValueError("Invalid accessory removal request")
+                    self.db.delete(link)
+
+                for acc_id, update_data in accessories_changes.get(
+                    "accessories_changes", {}
+                ).items():
+                    current_accessory_id = int(acc_id)
+                    link = self.db.get(
+                        CabinetTemplateAccessory, (template_id, current_accessory_id)
+                    )
+                    if not link:
+                        raise ValueError("Invalid accessory update request")
+
+                    target_accessory_id = current_accessory_id
+                    target_count = _require_positive(
+                        update_data.get("count", link.count)
+                    )
+
+                    if "name" in update_data and update_data.get("name") is not None:
+                        cleaned_name = update_data.get("name", "").strip()
+                        if not cleaned_name:
+                            raise ValueError("Nazwa akcesorium jest wymagana.")
+
+                        accessory = self.db.scalar(
+                            select(Accessory).where(Accessory.name == cleaned_name)
+                        )
+                        if not accessory:
+                            accessory = Accessory(name=cleaned_name)
+                            self.db.add(accessory)
+                            self.db.flush()
+                        target_accessory_id = accessory.id
+
+                    if target_accessory_id == current_accessory_id:
+                        link.count = target_count
+                    else:
+                        existing_target = self.db.get(
+                            CabinetTemplateAccessory, (template_id, target_accessory_id)
+                        )
+                        if existing_target:
+                            existing_target.count = target_count
+                        else:
+                            self.db.add(
+                                CabinetTemplateAccessory(
+                                    cabinet_type_id=template_id,
+                                    accessory_id=target_accessory_id,
+                                    count=target_count,
+                                )
+                            )
+                        self.db.delete(link)
+
+            self.db.commit()
+            self.db.refresh(template)
+            return True
+        except IntegrityError as e:
+            self.db.rollback()
+            if "UNIQUE constraint failed" in str(e):
+                raise ValueError(
+                    f"Typ szafki o nazwie '{new_name or template.name}' już istnieje. Wybierz inną nazwę."
+                )
+            raise ValueError(f"Błąd bazy danych: {str(e)}")
+        except ValueError:
+            self.db.rollback()
+            return False
+        except Exception:
+            self.db.rollback()
+            return False
 
     # Parts
     def add_part(

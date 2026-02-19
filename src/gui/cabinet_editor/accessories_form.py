@@ -120,10 +120,17 @@ class AccessoriesForm(QWidget):
     QUANTITY_COLUMN_INDEX = 1
     QUANTITY_COLUMN_WIDTH = 100
 
-    def __init__(self, catalog_service=None, project_service=None, parent=None):
+    def __init__(
+        self,
+        catalog_service=None,
+        project_service=None,
+        parent=None,
+        is_dark_mode: bool = False,
+    ):
         super().__init__(parent)
         self.catalog_service = catalog_service
         self.project_service = project_service
+        self.is_dark_mode = is_dark_mode
         self.project_cabinet = None
         self.cabinet_type = None
         self._is_dirty = False
@@ -200,7 +207,8 @@ class AccessoriesForm(QWidget):
 
         # Info label
         self.info_label = QLabel("Wybierz szafkę, aby wyświetlić jej akcesoria")
-        self.info_label.setStyleSheet("color: #666; font-style: italic;")
+        info_color = "#B0B0B0" if self.is_dark_mode else "#666666"
+        self.info_label.setStyleSheet(f"color: {info_color}; font-style: italic;")
         self.info_label.setAlignment(Qt.AlignCenter)
         layout.addWidget(self.info_label)
 
@@ -239,13 +247,21 @@ class AccessoriesForm(QWidget):
 
     def _apply_styles(self):
         """Apply visual styling."""
-        get_theme()
+        panel_border = "#4A4A4A" if self.is_dark_mode else "#E0E0E0"
+        panel_bg = "#333333" if self.is_dark_mode else "#FFFFFF"
+        input_bg = "#333333" if self.is_dark_mode else "#FFFFFF"
+        input_border = "#5A5A5A" if self.is_dark_mode else "#DDDDDD"
+        text_color = "#E0E0E0" if self.is_dark_mode else "#333333"
+        disabled_bg = "#555555" if self.is_dark_mode else "#CCCCCC"
+        disabled_text = "#9A9A9A" if self.is_dark_mode else "#666666"
 
-        self.setStyleSheet(f"""
+        self.setStyleSheet(
+            get_theme(self.is_dark_mode)
+            + f"""
             QGroupBox {{
                 font-weight: bold;
                 font-size: 10pt;
-                border: 2px solid #e0e0e0;
+                border: 2px solid {panel_border};
                 border-radius: 8px;
                 margin-top: 8px;
                 padding-top: 8px;
@@ -254,14 +270,16 @@ class AccessoriesForm(QWidget):
                 subcontrol-origin: margin;
                 left: 12px;
                 padding: 0 6px 0 6px;
-                background-color: white;
+                background-color: {panel_bg};
+                color: {text_color};
             }}
             QLineEdit, QSpinBox, QComboBox {{
                 padding: 8px;
                 min-height: 20px;
-                border: 1px solid #ddd;
+                border: 1px solid {input_border};
                 border-radius: 4px;
-                background-color: white;
+                background-color: {input_bg};
+                color: {text_color};
             }}
             QLineEdit:focus, QSpinBox:focus, QComboBox:focus {{
                 border-color: {PRIMARY};
@@ -279,10 +297,11 @@ class AccessoriesForm(QWidget):
                 opacity: 0.9;
             }}
             QPushButton:disabled {{
-                background-color: #cccccc;
-                color: #666666;
+                background-color: {disabled_bg};
+                color: {disabled_text};
             }}
-        """)
+        """
+        )
 
     def _on_selection_changed(self):
         """Handle table selection changes."""

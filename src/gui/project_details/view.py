@@ -778,6 +778,7 @@ class ProjectDetailsView(QDialog):
                 if self.controller
                 else None,
                 color_service=self.color_service,
+                is_dark_mode=self.is_dark_mode,
                 parent=self,
             )
             editor.load_instance(cabinet_type, cabinet)
@@ -812,6 +813,7 @@ class ProjectDetailsView(QDialog):
                 if self.controller
                 else None,
                 color_service=self.color_service,
+                is_dark_mode=self.is_dark_mode,
                 parent=self,
             )
 

@@ -196,25 +196,25 @@ class CustomCabinetDialog(QDialog):
 
         # Width
         self.width_spinbox = QSpinBox()
-        self.width_spinbox.setRange(100, 2000)
+        self.width_spinbox.setRange(0, 2000)
         self.width_spinbox.setSuffix(" mm")
-        self.width_spinbox.setValue(600)
+        self.width_spinbox.setValue(0)
         self.width_spinbox.setSpecialValueText("Auto")
         dimensions_layout.addRow("Szerokość:", self.width_spinbox)
 
         # Height
         self.height_spinbox = QSpinBox()
-        self.height_spinbox.setRange(100, 3000)
+        self.height_spinbox.setRange(0, 3000)
         self.height_spinbox.setSuffix(" mm")
-        self.height_spinbox.setValue(720)
+        self.height_spinbox.setValue(0)
         self.height_spinbox.setSpecialValueText("Auto")
         dimensions_layout.addRow("Wysokość:", self.height_spinbox)
 
         # Depth
         self.depth_spinbox = QSpinBox()
-        self.depth_spinbox.setRange(100, 1000)
+        self.depth_spinbox.setRange(0, 1000)
         self.depth_spinbox.setSuffix(" mm")
-        self.depth_spinbox.setValue(560)
+        self.depth_spinbox.setValue(0)
         self.depth_spinbox.setSpecialValueText("Auto")
         dimensions_layout.addRow("Głębokość:", self.depth_spinbox)
 
