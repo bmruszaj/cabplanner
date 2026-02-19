@@ -889,12 +889,8 @@ class ProjectDetailsView(QDialog):
                     # Use the most common height or max
                     height = max(heights)
 
-                # For depth: use the fact that different widths can indicate front/back parts
-                # If there are different widths, the smaller one is likely the depth
-                if widths and len(set(widths)) > 1:
-                    sorted_widths = sorted(set(widths))
-                    # The smallest width among parts is likely the cabinet depth
-                    depth = sorted_widths[0]
+                # Depth is intentionally not inferred from mixed part widths because
+                # that heuristic is often misleading for users.
 
             # Try to get name from calculation context (for custom cabinets)
             if not cabinet.cabinet_type and cabinet.parts:

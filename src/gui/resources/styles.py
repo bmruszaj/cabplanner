@@ -319,6 +319,48 @@ QFrame#cabinetCard:hover {{
     border-width: 2px;
     background-color: {CARD_HOVER};
 }}
+QFrame#cabinetCard[selected="true"] {{
+    border: 2px solid {PRIMARY};
+    background-color: {CARD_HOVER};
+}}
+QLabel[class="card-dimensions"] {{
+    color: palette(mid);
+    font-size: 11px;
+}}
+
+/* Sequence input widgets */
+QLabel[class="sequence-display"] {{
+    padding: 4px 6px;
+    border: 1px solid {BORDER_LIGHT};
+    border-radius: 4px;
+    background-color: {BG_LIGHT};
+    color: palette(mid);
+    font-size: 12px;
+    font-weight: 600;
+}}
+QLabel[class="sequence-display"]:hover {{
+    border-color: {PRIMARY};
+    color: {PRIMARY};
+}}
+QLineEdit[class="sequence-input"] {{
+    padding: 4px 6px;
+    border: 1px solid {BORDER_MEDIUM};
+    border-radius: 4px;
+    background-color: {BG_LIGHT_ALT};
+    font-size: 12px;
+    font-weight: 600;
+}}
+QLineEdit[class="sequence-input"]:focus {{
+    border: 2px solid {PRIMARY};
+}}
+QLineEdit[class="sequence-input"][invalid="true"] {{
+    border: 2px solid #b3261e;
+    background-color: #fff4f4;
+}}
+QLineEdit[class="sequence-input"][duplicate="true"] {{
+    border: 2px solid #6d6d6d;
+    background-color: #f4f4f4;
+}}
 
 /* Dashboard widget */
 #dashboardWidget {{
@@ -611,6 +653,49 @@ QFrame#cabinetCard:hover {{
     border-color: {PRIMARY};
     border-width: 2px;
     background-color: #333333;
+}}
+QFrame#cabinetCard[selected="true"] {{
+    border: 2px solid {PRIMARY};
+    background-color: #333333;
+}}
+QLabel[class="card-dimensions"] {{
+    color: #b0b0b0;
+    font-size: 11px;
+}}
+
+/* Sequence input widgets */
+QLabel[class="sequence-display"] {{
+    padding: 4px 6px;
+    border: 1px solid #4a4a4a;
+    border-radius: 4px;
+    background-color: #2a2a2a;
+    color: #bdbdbd;
+    font-size: 12px;
+    font-weight: 600;
+}}
+QLabel[class="sequence-display"]:hover {{
+    border-color: {PRIMARY};
+    color: {PRIMARY_LIGHT};
+}}
+QLineEdit[class="sequence-input"] {{
+    padding: 4px 6px;
+    border: 1px solid #4a4a4a;
+    border-radius: 4px;
+    background-color: #2a2a2a;
+    color: {TEXT_DARK};
+    font-size: 12px;
+    font-weight: 600;
+}}
+QLineEdit[class="sequence-input"]:focus {{
+    border: 2px solid {PRIMARY};
+}}
+QLineEdit[class="sequence-input"][invalid="true"] {{
+    border: 2px solid #ff6b6b;
+    background-color: #3a2222;
+}}
+QLineEdit[class="sequence-input"][duplicate="true"] {{
+    border: 2px solid #8a8a8a;
+    background-color: #353535;
 }}
 
 #dashboardWidget {{

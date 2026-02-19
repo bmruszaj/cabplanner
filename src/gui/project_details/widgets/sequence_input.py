@@ -33,22 +33,6 @@ class SequenceNumberInput(QWidget):
         self.display_label.setAlignment(Qt.AlignCenter)
         self.display_label.setMinimumWidth(40)
         self.display_label.setMaximumWidth(60)
-        self.display_label.setStyleSheet("""
-            QLabel[class="sequence-display"] {
-                padding: 4px 6px;
-                border: 1px solid #e0e0e0;
-                border-radius: 4px;
-                background-color: #f8f9fa;
-                color: #666;
-                font-size: 12px;
-                font-weight: bold;
-            }
-            QLabel[class="sequence-display"]:hover {
-                border-color: #2196F3;
-                background-color: #ffffff;
-                color: #2196F3;
-            }
-        """)
         self.display_label.mousePressEvent = self._start_editing
         layout.addWidget(self.display_label)
 
@@ -60,16 +44,8 @@ class SequenceNumberInput(QWidget):
         self.input_field.setMaximumWidth(60)
         self.input_field.setMaxLength(3)  # Limit to 3 digits max
         self.input_field.setPlaceholderText("#")
-        self.input_field.setStyleSheet("""
-            QLineEdit[class="sequence-input"] {
-                padding: 4px 6px;
-                border: 2px solid #2196F3;
-                border-radius: 4px;
-                background-color: #ffffff;
-                font-size: 12px;
-                font-weight: bold;
-            }
-        """)
+        self.input_field.setProperty("invalid", False)
+        self.input_field.setProperty("duplicate", False)
         self.input_field.hide()
         self.input_field.editingFinished.connect(self._finish_editing)
         self.input_field.textChanged.connect(self._validate_input_realtime)
@@ -128,14 +104,17 @@ class SequenceNumberInput(QWidget):
             self.input_field.setToolTip("Wprowadź poprawny numer")
 
     def _set_input_style(self, state: str):
-        """Set input field style based on validation state."""
-        styles = {
-            "normal": "",
-            "valid": "border: 2px solid #9e9e9e;",  # Grey for valid
-            "warning": "border: 2px solid #757575; background-color: #f5f5f5;",  # Darker grey for warning
-            "error": "border: 2px solid #616161; background-color: #eeeeee;",  # Dark grey for error
-        }
-        self.input_field.setStyleSheet(styles.get(state, ""))
+        """Set input field dynamic properties for theme-driven validation styling."""
+        invalid = state == "error"
+        duplicate = state == "warning"
+        self.input_field.setProperty("invalid", invalid)
+        self.input_field.setProperty("duplicate", duplicate)
+        self._refresh_input_style()
+
+    def _refresh_input_style(self):
+        self.input_field.style().unpolish(self.input_field)
+        self.input_field.style().polish(self.input_field)
+        self.input_field.update()
 
     def _start_editing(self, event):
         if not self._editing:
@@ -208,7 +187,7 @@ class SequenceNumberInput(QWidget):
             try:
                 self.input_field.hide()
                 self.display_label.show()
-                self.input_field.setStyleSheet("")  # Reset style
+                self._set_input_style("normal")
                 self.input_field.setToolTip("")
             except RuntimeError:
                 # Widgets were deleted, just reset state
@@ -221,7 +200,7 @@ class SequenceNumberInput(QWidget):
             self.display_label.setText(f"#{self._value}")
             self.input_field.hide()
             self.display_label.show()
-            self.input_field.setStyleSheet("")  # Reset style
+            self._set_input_style("normal")
             self.input_field.setToolTip("")
         except RuntimeError:
             # Widgets were deleted, just reset state

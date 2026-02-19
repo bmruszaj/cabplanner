@@ -18,11 +18,15 @@ from PySide6.QtWidgets import (
     QLineEdit,
     QSpinBox,
 )
-from PySide6.QtCore import Signal, Qt, QSize, QTimer
-from PySide6.QtGui import QFont, QAction
+from PySide6.QtCore import Signal, Qt, QSize
+from PySide6.QtGui import QFont, QAction, QTextLayout
 
-from src.gui.resources.styles import PRIMARY, CARD_HOVER
-from ..constants import CARD_MIN_WIDTH, CARD_MIN_HEIGHT, CARD_WIDTH, CARD_PADDING
+from ..constants import (
+    CARD_MIN_WIDTH,
+    CARD_MIN_HEIGHT,
+    CARD_WIDTH,
+    CARD_PADDING,
+)
 from . import ColorChip, QuantityStepper, SequenceNumberInput
 
 
@@ -41,14 +45,11 @@ class CabinetCard(QFrame):
         self.card_data = card_data
         self.cabinet_id = card_data.get("id", 0)
         self._selected = False
+        self._full_name = ""
+        self._dims_full_text = ""
         # Prevent any chance of flashing as a separate window during construction
         self.setAttribute(Qt.WA_DontShowOnScreen, True)
         self._card_dbg = lambda _msg: None
-
-        # Timer for delayed single-click handling to prevent conflict with double-click
-        self._click_timer = QTimer()
-        self._click_timer.setSingleShot(True)
-        self._click_timer.timeout.connect(self._handle_single_click)
 
         self._setup_ui()
         self._connect_signals()
@@ -63,6 +64,7 @@ class CabinetCard(QFrame):
         self.setMinimumHeight(CARD_MIN_HEIGHT)
         self.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Minimum)
         self.setObjectName("cabinetCard")
+        self.setFocusPolicy(Qt.StrongFocus)
         main_layout = QVBoxLayout(self)
         main_layout.setContentsMargins(
             CARD_PADDING, CARD_PADDING, CARD_PADDING, CARD_PADDING
@@ -91,10 +93,16 @@ class CabinetCard(QFrame):
 
         # Cabinet name
         self._card_dbg("setting name label")
-        name = self.card_data.get("name", "Niestandardowy")
-        self.name_label = QLabel(name, parent=self)
+        self._full_name = self.card_data.get("name", "Niestandardowy")
+        self.name_label = QLabel(parent=self)
         self.name_label.setFont(QFont("", 12, QFont.Weight.Bold))
         self.name_label.setWordWrap(True)
+        self.name_label.setAlignment(Qt.AlignLeft | Qt.AlignTop)
+        self.name_label.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        self.name_label.setMaximumHeight(
+            self.name_label.fontMetrics().lineSpacing() * 2 + 2
+        )
+        self._update_name_display()
         main_layout.addWidget(self.name_label)
 
         # Colors section
@@ -129,6 +137,10 @@ class CabinetCard(QFrame):
         qty = int(self.card_data.get("quantity", 1))
         self._qty_placeholder = QLabel(str(qty))
         self._qty_placeholder.setObjectName("quantityPlaceholder")
+        self._qty_placeholder.setAlignment(Qt.AlignCenter)
+        # Reserve exact width to prevent layout jump when replacing with QuantityStepper.
+        self._reserved_qty_width = QuantityStepper.expected_width()
+        self._qty_placeholder.setFixedWidth(self._reserved_qty_width)
         qty_layout.addWidget(self._qty_placeholder)
         qty_layout.addStretch()
 
@@ -150,7 +162,9 @@ class CabinetCard(QFrame):
 
         # Create dimensions label
         self.dims_label = QLabel(parent=self)
-        self.dims_label.setStyleSheet("color: #666666; font-size: 11px;")
+        self.dims_label.setProperty("class", "card-dimensions")
+        self.dims_label.setWordWrap(False)
+        self.dims_label.setTextInteractionFlags(Qt.TextSelectableByMouse)
         self.dims_layout.addWidget(self.dims_label)
         self.dims_layout.addStretch()
 
@@ -164,32 +178,23 @@ class CabinetCard(QFrame):
         width_mm = self.card_data.get("width_mm")
         height_mm = self.card_data.get("height_mm")
         depth_mm = self.card_data.get("depth_mm")
-        kitchen_type = self.card_data.get("kitchen_type")
 
-        display_text = ""
-        label_text = "Wymiary:"
+        has_width = isinstance(width_mm, (int, float)) and width_mm > 0
+        has_height = isinstance(height_mm, (int, float)) and height_mm > 0
+        has_depth = isinstance(depth_mm, (int, float)) and depth_mm > 0
 
-        if width_mm and height_mm:
-            # Format dimensions in a compact way
-            display_text = f"{int(width_mm)}×{int(height_mm)}"
-            if depth_mm:
-                display_text += f"×{int(depth_mm)}"
+        display_text = "brak wymiarów"
+        if has_width and has_height:
+            display_text = f"{int(width_mm)}x{int(height_mm)}"
+            if has_depth:
+                display_text += f"x{int(depth_mm)}"
             display_text += " mm"
-            label_text = "Wymiary:"
-        elif kitchen_type:
-            # Show kitchen type if no dimensions available
-            display_text = kitchen_type
-            label_text = "Typ:"
 
-        if display_text:
-            self.dims_label_title.setText(label_text)
-            self.dims_label.setText(display_text)
-            self.dims_label_title.setVisible(True)
-            self.dims_label.setVisible(True)
-        else:
-            # Hide both labels if no info available
-            self.dims_label_title.setVisible(False)
-            self.dims_label.setVisible(False)
+        self.dims_label_title.setText("Wymiary:")
+        self._dims_full_text = display_text
+        self._update_dimensions_elide()
+        self.dims_label_title.setVisible(True)
+        self.dims_label.setVisible(True)
 
     def _setup_menu(self):
         self.context_menu = QMenu(self)
@@ -235,6 +240,8 @@ class CabinetCard(QFrame):
         try:
             self.quantity_stepper = QuantityStepper(qty_val, parent=self)
             self.quantity_stepper.value_changed.connect(self._on_quantity_changed)
+            if hasattr(self, "_reserved_qty_width"):
+                self.quantity_stepper.setFixedWidth(self._reserved_qty_width)
         except Exception:
             # Fallback: keep placeholder if creation fails
             self._card_dbg("failed to create QuantityStepper, keeping placeholder")
@@ -242,18 +249,20 @@ class CabinetCard(QFrame):
 
         # Replace placeholder widget in layout
         if hasattr(self, "_qty_placeholder") and hasattr(self, "_qty_layout"):
-            # find index of placeholder in layout
+            placeholder_index = -1
             for i in range(self._qty_layout.count()):
                 item = self._qty_layout.itemAt(i)
                 if item and item.widget() == self._qty_placeholder:
-                    # remove placeholder
+                    placeholder_index = i
                     widget = item.widget()
                     self._qty_layout.removeWidget(widget)
                     widget.setParent(None)
                     break
 
-            # insert the real stepper at the same position (append before stretch)
-            self._qty_layout.insertWidget(i, self.quantity_stepper)
+            # Insert before stretch even if placeholder is missing.
+            if placeholder_index < 0:
+                placeholder_index = max(0, self._qty_layout.count() - 1)
+            self._qty_layout.insertWidget(placeholder_index, self.quantity_stepper)
             # update placeholder reference
             delattr(self, "_qty_placeholder")
 
@@ -275,7 +284,8 @@ class CabinetCard(QFrame):
         # Update cabinet name
         new_name = new_card_data.get("name", "Niestandardowy")
         if hasattr(self, "name_label"):
-            self.name_label.setText(new_name)
+            self._full_name = new_name
+            self._update_name_display()
 
         # Update colors
         if hasattr(self, "body_color_chip"):
@@ -306,29 +316,46 @@ class CabinetCard(QFrame):
         self.card_data["sequence"] = new_sequence
         self.sig_sequence_changed.emit(self.cabinet_id, new_sequence)
 
+    def update_sequence_display(self, sequence: int):
+        """Compatibility method for legacy grid API."""
+        self.card_data["sequence"] = sequence
+        if hasattr(self, "sequence_input"):
+            self.sequence_input.set_value(sequence)
+
     def mousePressEvent(self, event):
         super().mousePressEvent(event)
         if event.button() == Qt.LeftButton:
+            click_pos = event.position().toPoint()
             # Check if click is on an interactive child widget
-            if self._is_click_on_interactive_widget(event.pos()):
+            if self._is_click_on_interactive_widget(click_pos):
                 return  # Let the child widget handle it
 
-            # Start timer for delayed single-click handling
-            # Will be cancelled if double-click occurs within system double-click time
-            self._click_timer.start(200)  # 200ms is more responsive
+            self.setFocus(Qt.MouseFocusReason)
+            # Select immediately to avoid click-delay and keep UX responsive.
+            self.sig_selected.emit(self.cabinet_id)
 
     def mouseDoubleClickEvent(self, event):
         super().mouseDoubleClickEvent(event)
         if event.button() == Qt.LeftButton:
+            click_pos = event.position().toPoint()
             # Check if double-click is on an interactive child widget
-            if self._is_click_on_interactive_widget(event.pos()):
+            if self._is_click_on_interactive_widget(click_pos):
                 return  # Let the child widget handle it
-
-            # Cancel pending single-click action
-            self._click_timer.stop()
 
             # Emit edit signal for double-click
             self.sig_edit.emit(self.cabinet_id)
+
+    def keyPressEvent(self, event):
+        """Keyboard accessibility for card selection and edit actions."""
+        if event.key() in (Qt.Key_Space,):
+            self.sig_selected.emit(self.cabinet_id)
+            event.accept()
+            return
+        if event.key() in (Qt.Key_Return, Qt.Key_Enter, Qt.Key_F2):
+            self.sig_edit.emit(self.cabinet_id)
+            event.accept()
+            return
+        super().keyPressEvent(event)
 
     def _is_click_on_interactive_widget(self, pos):
         """Check if the click position is on an interactive child widget."""
@@ -357,10 +384,64 @@ class CabinetCard(QFrame):
 
         return False
 
-    def _handle_single_click(self):
-        """Handle delayed single-click for selection toggle."""
-        # Always emit signal, let parent handle single selection logic
-        self.sig_selected.emit(self.cabinet_id)
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self._update_name_display()
+        self._update_dimensions_elide()
+
+    def _update_name_display(self):
+        """Clamp cabinet name to two lines and keep full text in tooltip."""
+        text = self._full_name or "Niestandardowy"
+        display_text, was_elided = self._elide_to_lines(text, self.name_label, 2)
+        self.name_label.setText(display_text)
+        self.name_label.setToolTip(text if was_elided else "")
+
+    def _elide_to_lines(
+        self, text: str, label: QLabel, max_lines: int
+    ) -> tuple[str, bool]:
+        """Elide text to a fixed number of wrapped lines for stable card height."""
+        available_width = max(40, label.width() or (self.width() - 2 * CARD_PADDING))
+        layout = QTextLayout(text, label.font())
+        layout.beginLayout()
+        lines = []
+        ranges = []
+        while len(lines) < max_lines:
+            line = layout.createLine()
+            if not line.isValid():
+                break
+            line.setLineWidth(available_width)
+            start = line.textStart()
+            length = line.textLength()
+            ranges.append((start, length))
+            lines.append(text[start : start + length].rstrip())
+        layout.endLayout()
+
+        if not ranges:
+            return text, False
+
+        consumed = ranges[-1][0] + ranges[-1][1]
+        truncated = consumed < len(text)
+        if truncated:
+            last_start = ranges[-1][0]
+            lines[-1] = label.fontMetrics().elidedText(
+                text[last_start:], Qt.ElideRight, available_width
+            )
+        return "\n".join(lines), truncated
+
+    def _update_dimensions_elide(self):
+        if not hasattr(self, "dims_label"):
+            return
+        full_text = self._dims_full_text or ""
+        if not full_text:
+            self.dims_label.clear()
+            self.dims_label.setToolTip("")
+            return
+        width = max(40, self.dims_label.width() or (self.width() // 2))
+        elided = self.dims_label.fontMetrics().elidedText(
+            full_text, Qt.ElideRight, width
+        )
+        self.dims_label.setText(elided)
+        self.dims_label.setToolTip(full_text if elided != full_text else "")
 
     def sizeHint(self):
         """Provide target size hint for consistent appearance while allowing flexibility."""
@@ -381,26 +462,8 @@ class CabinetCard(QFrame):
             self._update_selection_style()
 
     def _update_selection_style(self):
-        """Update visual style based on selection state."""
-        if self._selected:
-            self.setStyleSheet(f"""
-                QFrame#cabinetCard {{
-                    border: 2px solid {PRIMARY};
-                    background-color: {CARD_HOVER};
-                    border-radius: 8px;
-                }}
-            """)
-        else:
-            # Restore default card style explicitly to avoid visual glitches
-            self.setStyleSheet(f"""
-                QFrame#cabinetCard {{
-                    background-color: white;
-                    border: 1px solid #E0E0E0;
-                    border-radius: 8px;
-                }}
-                QFrame#cabinetCard:hover {{
-                    border-color: {PRIMARY};
-                    border-width: 2px;
-                    background-color: {CARD_HOVER};
-                }}
-            """)
+        """Update selected dynamic property for theme-driven styling."""
+        self.setProperty("selected", self._selected)
+        self.style().unpolish(self)
+        self.style().polish(self)
+        self.update()

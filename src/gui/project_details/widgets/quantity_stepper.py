@@ -18,6 +18,7 @@ class QuantityStepper(QWidget):
     """Inline quantity stepper widget."""
 
     value_changed = Signal(int)
+    BUTTON_SPACING = 2
 
     def __init__(self, initial_value: int = 1, parent=None):
         super().__init__(parent)
@@ -29,7 +30,7 @@ class QuantityStepper(QWidget):
     def _setup_ui(self):
         layout = QHBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(2)
+        layout.setSpacing(self.BUTTON_SPACING)
 
         btn_size = QUANTITY_STEPPER_BUTTON_SIZE
         stepper_button_style = f"""
@@ -72,6 +73,18 @@ QPushButton {{
         self.increase_btn.setFixedSize(btn_size, btn_size)
         self.increase_btn.clicked.connect(self._increase_value)
         layout.addWidget(self.increase_btn)
+
+        self.setFixedWidth(self.expected_width())
+        self.setFixedHeight(btn_size)
+
+    @classmethod
+    def expected_width(cls) -> int:
+        """Return the exact widget width used by the stepper layout."""
+        return (
+            2 * QUANTITY_STEPPER_BUTTON_SIZE
+            + QUANTITY_INPUT_WIDTH
+            + 2 * cls.BUTTON_SPACING
+        )
 
     def _decrease_value(self):
         new_value = max(MIN_CABINET_QUANTITY, self._value - 1)
