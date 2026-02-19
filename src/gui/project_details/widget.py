@@ -160,16 +160,16 @@ class ProjectDetailsWidget(QWidget):
     def showEvent(self, event):
         """Trigger data loading when widget is shown."""
         super().showEvent(event)
+        QTimer.singleShot(0, self._load_details_if_needed)
 
-        # Only trigger embedded view's showEvent if details_view exists and data hasn't been pre-loaded
-        if (
-            self.details_view
-            and hasattr(self.details_view, "showEvent")
-            and hasattr(self.details_view, "_data_loaded")
-            and not self.details_view._data_loaded
-        ):
-            # Create a mock QShowEvent and trigger it
-            from PySide6.QtGui import QShowEvent
+    def _load_details_if_needed(self):
+        """Load details data once the embedded heavy view is ready."""
+        if not self.isVisible():
+            return
 
-            mock_event = QShowEvent()
-            self.details_view.showEvent(mock_event)
+        if not self.details_view:
+            QTimer.singleShot(20, self._load_details_if_needed)
+            return
+
+        if hasattr(self.details_view, "load_if_needed"):
+            self.details_view.load_if_needed()

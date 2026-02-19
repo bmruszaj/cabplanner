@@ -30,6 +30,7 @@ from src.gui.cabinet_catalog.window import CatalogWindow
 from src.services.catalog_service import CatalogService
 from src.services.color_palette_service import ColorPaletteService
 from src.services.settings_service import SettingsService
+from src.domain.sorting import sort_cabinets
 from .constants import (
     CARD_WIDTH,
     VIEW_MODE_CARDS,
@@ -37,6 +38,7 @@ from .constants import (
     CONTENT_MARGINS,
 )
 from src.gui.layouts.flow_layout import FlowLayout
+from .models import CabinetTableModel
 from .widgets import HeaderBar, Toolbar, BannerManager, CabinetCard
 
 logger = logging.getLogger(__name__)
@@ -311,9 +313,6 @@ class ProjectDetailsView(QDialog):
         self.button_box.button(QDialogButtonBox.Close).setText("Zamknij")
         main_layout.addWidget(self.button_box)
 
-        # Initialize viewport tracking for responsive behavior after widgets are set up
-        QTimer.singleShot(0, self._initialize_viewport_tracking)
-
     def _create_central_area(self) -> None:
         """Create the central stacked widget area with responsive card layout."""
         self._dbg("_create_central_area: starting...")
@@ -526,9 +525,12 @@ class ProjectDetailsView(QDialog):
         finally:
             self.card_container.setUpdatesEnabled(True)
 
+        self._update_view_state()
+
     def _rebuild_all_cards(self, ordered_cabinets: List[ProjectCabinet]) -> None:
         """Rebuild all cards from scratch."""
         if not ordered_cabinets:
+            self._update_view_state()
             return
         import time as _time
 
@@ -721,6 +723,8 @@ class ProjectDetailsView(QDialog):
             card = self._cards_by_id[updated_cabinet.id]
             card_data = self._cabinet_to_card_data(updated_cabinet)
             card.update_data(card_data)
+        if self._current_view_mode == VIEW_MODE_TABLE:
+            self._populate_table_view()
 
     def _show_error(self, message: str) -> None:
         """Show error message in banner."""
@@ -838,18 +842,6 @@ class ProjectDetailsView(QDialog):
         else:
             logger.info(f"Success (no banner manager): {message}")
 
-    def _initialize_viewport_tracking(self) -> None:
-        """Initialize viewport tracking for responsive layout updates."""
-        if hasattr(self, "card_scroll"):
-            self.card_scroll.viewport().installEventFilter(self)
-
-    def _clear_card_layout(self) -> None:
-        """Clear all widgets from the card layout."""
-        while self.card_layout.count():
-            child = self.card_layout.takeAt(0)
-            if child.widget():
-                child.widget().setParent(None)
-
     def _cabinet_to_card_data(self, cabinet: ProjectCabinet) -> Dict[str, Any]:
         """Convert ProjectCabinet to card data dict using snapshot data."""
         # Get dimensions from parts snapshot (works for both standard and custom cabinets)
@@ -954,6 +946,14 @@ class ProjectDetailsView(QDialog):
 
     def _update_view_state(self) -> None:
         """Update view state based on data availability."""
+        if self._current_view_mode == VIEW_MODE_TABLE:
+            if self.cabinets:
+                self._populate_table_view()
+                self.stacked_widget.setCurrentWidget(self.table_view)
+            else:
+                self.stacked_widget.setCurrentWidget(self.empty_state)
+            return
+
         if self.cabinets:
             self.stacked_widget.setCurrentWidget(self.card_view_widget)
         else:
@@ -1055,18 +1055,12 @@ class ProjectDetailsView(QDialog):
 
     def _on_view_mode_changed(self, mode: str):
         """Handle view mode change."""
-        self._current_view_mode = mode
+        if mode not in (VIEW_MODE_CARDS, VIEW_MODE_TABLE):
+            logger.warning("Unknown view mode '%s', falling back to cards", mode)
+            mode = VIEW_MODE_CARDS
 
-        # Actually switch the stacked widget to show the correct view
-        if mode == VIEW_MODE_TABLE:
-            self._populate_table_view()
-            self.stacked_widget.setCurrentWidget(self.table_view)
-        elif mode == VIEW_MODE_CARDS:
-            # Only switch to cards if we have cabinets, otherwise show empty state
-            if self.cabinets:
-                self.stacked_widget.setCurrentWidget(self.card_view_widget)
-            else:
-                self.stacked_widget.setCurrentWidget(self.empty_state)
+        self._current_view_mode = mode
+        self._update_view_state()
 
         # Persist the view mode choice
         self.ui_state.set_view_mode(mode)
@@ -1075,68 +1069,12 @@ class ProjectDetailsView(QDialog):
 
     def _populate_table_view(self):
         """Populate the table view with cabinet data."""
-        if not self.cabinets:
-            # Clear the table if no cabinets
-            self.table_view.setModel(None)
-            return
-
         try:
-            from PySide6.QtCore import Qt
-            from PySide6.QtGui import QStandardItemModel, QStandardItem
-
-            # Create a simple table model
-            model = QStandardItemModel()
-            headers = [
-                "Sekwencja",
-                "Nazwa",
-                "Wymiary",
-                "Kolor przód",
-                "Kolor korpus",
-                "Ilość",
-            ]
-            model.setHorizontalHeaderLabels(headers)
-
-            # Add cabinet data to the model
-            for cabinet in self.cabinets:
-                row = []
-
-                # Sequence
-                seq_item = QStandardItem(str(cabinet.sequence_number or ""))
-                seq_item.setData(
-                    cabinet.id, Qt.ItemDataRole.UserRole
-                )  # Store cabinet ID
-                row.append(seq_item)
-
-                # Name (from cabinet type)
-                name = ""
-                if hasattr(cabinet, "cabinet_type") and cabinet.cabinet_type:
-                    name = getattr(cabinet.cabinet_type, "name", "") or str(
-                        cabinet.cabinet_type.id
-                    )
-                name_item = QStandardItem(name)
-                row.append(name_item)
-
-                # Dimensions (calculated from cabinet template parts)
-                dimensions = "Auto"  # Calculated from template parts
-                dim_item = QStandardItem(dimensions)
-                row.append(dim_item)
-
-                # Front color
-                front_color_item = QStandardItem(cabinet.front_color or "")
-                row.append(front_color_item)
-
-                # Body color
-                body_color_item = QStandardItem(cabinet.body_color or "")
-                row.append(body_color_item)
-
-                # Quantity
-                qty_item = QStandardItem(str(cabinet.quantity))
-                row.append(qty_item)
-
-                model.appendRow(row)
-
-            # Set the model to the table view
-            self.table_view.setModel(model)
+            if not hasattr(self, "_table_model") or self._table_model is None:
+                self._table_model = CabinetTableModel(self.cabinets, parent=self)
+                self.table_view.setModel(self._table_model)
+            else:
+                self._table_model.set_rows(self.cabinets)
 
             # Resize columns to content
             self.table_view.resizeColumnsToContents()
@@ -1168,26 +1106,22 @@ class ProjectDetailsView(QDialog):
         else:
             self.show()
 
-    def _update_card_view(self) -> None:
-        """Update the card view with current cabinet data."""
-        # This method is now handled by apply_card_order from controller
-        pass
+    def load_if_needed(self) -> None:
+        """Load data exactly once unless already preloaded."""
+        if self._data_loaded or not self.controller:
+            return
+
+        preloaded_cabinets = getattr(self.controller, "cabinets", None)
+        if preloaded_cabinets:
+            ordered_cabinets = sort_cabinets(preloaded_cabinets)
+            self.apply_card_order(ordered_cabinets)
+            self._data_loaded = True
+            return
+
+        self._data_loaded = True
+        self.controller.load_data()
 
     def showEvent(self, event):
         """Load data when dialog is actually shown to prevent flash."""
         super().showEvent(event)
-
-        # Mark that first show is done to enable geometry operations
-        if not getattr(self, "_first_show_done", False):
-            self._first_show_done = True
-
-        # Load data only once and only when we have a controller
-        # Check if controller already has data to avoid duplicate loading
-        if (
-            not self._data_loaded
-            and self.controller
-            and not hasattr(self.controller, "cabinets")
-            or not self.controller.cabinets
-        ):
-            self._data_loaded = True
-            self.controller.load_data()
+        self.load_if_needed()
