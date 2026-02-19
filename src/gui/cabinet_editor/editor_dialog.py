@@ -723,15 +723,27 @@ class CabinetEditorDialog(QDialog):
                 if not success:
                     return False
 
-            # Apply quantity changes
-            for acc_id, new_quantity in accessories_changes.get(
-                "quantity_changes", {}
-            ).items():
-                success = self.project_service.update_accessory_quantity(
-                    acc_id, new_quantity
+            # Apply accessory updates (name and/or quantity)
+            updates = accessories_changes.get("accessories_changes", {})
+            for acc_id, update_data in updates.items():
+                success = self.project_service.update_accessory_snapshot(
+                    accessory_snapshot_id=acc_id,
+                    name=update_data.get("name"),
+                    count=update_data.get("count"),
                 )
                 if not success:
                     return False
+
+            # Backward compatibility: legacy payload with quantity_changes only
+            if not updates:
+                for acc_id, new_quantity in accessories_changes.get(
+                    "quantity_changes", {}
+                ).items():
+                    success = self.project_service.update_accessory_quantity(
+                        acc_id, new_quantity
+                    )
+                    if not success:
+                        return False
 
             return True
 
@@ -798,8 +810,18 @@ class CabinetEditorDialog(QDialog):
             for acc_id in accessories_changes.get("accessories_to_remove", []):
                 template_service.delete_accessory(self.cabinet_type.id, acc_id)
 
-            # Note: Quantity changes for template accessories would need
-            # additional implementation in template_service if needed
+            # Apply accessory updates (name and/or quantity)
+            for acc_id, update_data in accessories_changes.get(
+                "accessories_changes", {}
+            ).items():
+                success = template_service.update_accessory(
+                    cabinet_type_id=self.cabinet_type.id,
+                    accessory_id=acc_id,
+                    name=update_data.get("name"),
+                    count=update_data.get("count"),
+                )
+                if not success:
+                    return False
 
             return True
 

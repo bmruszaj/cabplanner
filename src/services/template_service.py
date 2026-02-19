@@ -296,3 +296,62 @@ class TemplateService:
         self.db.delete(link)
         self.db.commit()
         return True
+
+    def update_accessory(
+        self,
+        *,
+        cabinet_type_id: int,
+        accessory_id: int,
+        name: Optional[str] = None,
+        count: Optional[int] = None,
+    ) -> bool:
+        """Update accessory link in a cabinet template (name and/or count)."""
+        link = self.db.get(CabinetTemplateAccessory, (cabinet_type_id, accessory_id))
+        if not link:
+            return False
+
+        target_accessory_id = link.accessory_id
+        target_count = count if count is not None else link.count
+
+        if target_count <= 0:
+            return False
+
+        if name is not None:
+            cleaned_name = name.strip()
+            if not cleaned_name:
+                return False
+
+            accessory = self.db.scalar(
+                select(Accessory).where(Accessory.name == cleaned_name)
+            )
+            if not accessory:
+                accessory = Accessory(name=cleaned_name)
+                self.db.add(accessory)
+                self.db.flush()
+
+            target_accessory_id = accessory.id
+
+        try:
+            if target_accessory_id == link.accessory_id:
+                link.count = target_count
+            else:
+                existing_target = self.db.get(
+                    CabinetTemplateAccessory, (cabinet_type_id, target_accessory_id)
+                )
+                if existing_target:
+                    existing_target.count = target_count
+                else:
+                    new_link = CabinetTemplateAccessory(
+                        cabinet_type_id=cabinet_type_id,
+                        accessory_id=target_accessory_id,
+                        count=target_count,
+                    )
+                    self.db.add(new_link)
+
+                self.db.delete(link)
+
+            self.db.commit()
+            return True
+        except Exception:
+            self.db.rollback()
+            return False

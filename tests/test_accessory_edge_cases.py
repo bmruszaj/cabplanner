@@ -163,6 +163,52 @@ class TestAccessoryEdgeCases:
         # THEN: Should fail gracefully
         assert result is False
 
+    def test_update_accessory_snapshot_name(
+        self, session, project_service, custom_cabinet
+    ):
+        """Test updating accessory snapshot name."""
+        # GIVEN: An existing accessory
+        project_service.add_accessory_to_cabinet(
+            cabinet_id=custom_cabinet.id, name="Old Name", count=2
+        )
+        session.refresh(custom_cabinet)
+        accessory = custom_cabinet.accessory_snapshots[0]
+
+        # WHEN: Updating name
+        result = project_service.update_accessory_snapshot(
+            accessory_snapshot_id=accessory.id,
+            name="New Name",
+        )
+
+        # THEN: Name should be updated
+        assert result is True
+        session.refresh(accessory)
+        assert accessory.name == "New Name"
+
+    def test_update_accessory_snapshot_name_and_count(
+        self, session, project_service, custom_cabinet
+    ):
+        """Test updating accessory snapshot name and count together."""
+        # GIVEN: An existing accessory
+        project_service.add_accessory_to_cabinet(
+            cabinet_id=custom_cabinet.id, name="Original", count=1
+        )
+        session.refresh(custom_cabinet)
+        accessory = custom_cabinet.accessory_snapshots[0]
+
+        # WHEN: Updating both fields
+        result = project_service.update_accessory_snapshot(
+            accessory_snapshot_id=accessory.id,
+            name="Updated",
+            count=7,
+        )
+
+        # THEN: Both fields should be updated
+        assert result is True
+        session.refresh(accessory)
+        assert accessory.name == "Updated"
+        assert accessory.count == 7
+
     def test_update_accessory_quantity_negative(
         self, session, project_service, custom_cabinet
     ):

@@ -10,6 +10,7 @@ import logging
 from PySide6.QtWidgets import (
     QDialog,
     QVBoxLayout,
+    QHBoxLayout,
     QWidget,
     QStackedWidget,
     QScrollArea,
@@ -325,7 +326,13 @@ class ProjectDetailsView(QDialog):
         # Stacked widget for different view modes
         self.stacked_widget = QStackedWidget()
 
-        # Card view with responsive layout (like main window)
+        # Card view with responsive layout and sticky add button
+        self.card_view_widget = QWidget()
+        card_view_layout = QVBoxLayout(self.card_view_widget)
+        card_view_layout.setContentsMargins(0, 0, 0, 0)
+        card_view_layout.setSpacing(12)
+
+        # Card scroll area
         self.card_scroll = QScrollArea()
         self.card_scroll.setWidgetResizable(True)
         self.card_scroll.setHorizontalScrollBarPolicy(
@@ -335,7 +342,7 @@ class ProjectDetailsView(QDialog):
             Qt.ScrollBarPolicy.ScrollBarAsNeeded
         )
 
-        # Wrapper widget for scroll area content (cards + add button)
+        # Wrapper widget for scroll area content (cards only)
         self.scroll_content = QWidget()
         scroll_content_layout = QVBoxLayout(self.scroll_content)
         scroll_content_layout.setContentsMargins(0, 0, 0, 0)
@@ -346,17 +353,22 @@ class ProjectDetailsView(QDialog):
         self.card_layout = FlowLayout(self.card_container, margin=8, spacing=12)
         self.card_container.setLayout(self.card_layout)
         scroll_content_layout.addWidget(self.card_container)
-
-        # Add from catalog button - below cards, scrolls with them
-        self.add_catalog_btn = QPushButton("+ Dodaj z katalogu")
-        self.add_catalog_btn.clicked.connect(self._handle_add_from_catalog)
-        scroll_content_layout.addWidget(
-            self.add_catalog_btn, 0, Qt.AlignmentFlag.AlignCenter
-        )
         scroll_content_layout.addStretch()
 
         self.card_scroll.setWidget(self.scroll_content)
-        self.stacked_widget.addWidget(self.card_scroll)
+        card_view_layout.addWidget(self.card_scroll, 1)
+
+        # Add from catalog button - pinned below scroll area (always visible)
+        footer_layout = QHBoxLayout()
+        footer_layout.setContentsMargins(0, 0, 0, 0)
+        footer_layout.addStretch()
+        self.add_catalog_btn = QPushButton("+ Dodaj z katalogu")
+        self.add_catalog_btn.clicked.connect(self._handle_add_from_catalog)
+        footer_layout.addWidget(self.add_catalog_btn)
+        footer_layout.addStretch()
+        card_view_layout.addLayout(footer_layout)
+
+        self.stacked_widget.addWidget(self.card_view_widget)
 
         # Empty state widget for when no cabinets exist
         self.empty_state = EmptyStateWidget(parent=self)
@@ -954,7 +966,7 @@ class ProjectDetailsView(QDialog):
     def _update_view_state(self) -> None:
         """Update view state based on data availability."""
         if self.cabinets:
-            self.stacked_widget.setCurrentWidget(self.card_scroll)
+            self.stacked_widget.setCurrentWidget(self.card_view_widget)
         else:
             self.stacked_widget.setCurrentWidget(self.empty_state)
 
@@ -1063,7 +1075,7 @@ class ProjectDetailsView(QDialog):
         elif mode == VIEW_MODE_CARDS:
             # Only switch to cards if we have cabinets, otherwise show empty state
             if self.cabinets:
-                self.stacked_widget.setCurrentWidget(self.card_scroll)
+                self.stacked_widget.setCurrentWidget(self.card_view_widget)
             else:
                 self.stacked_widget.setCurrentWidget(self.empty_state)
 

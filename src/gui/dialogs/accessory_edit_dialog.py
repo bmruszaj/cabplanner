@@ -21,6 +21,7 @@ from PySide6.QtWidgets import (
     QGroupBox,
     QLabel,
     QMessageBox,
+    QSizePolicy,
     QSpinBox,
     QVBoxLayout,
 )
@@ -30,6 +31,9 @@ from src.gui.resources.styles import PRIMARY
 
 class AccessoryEditDialog(QDialog):
     """Dialog for editing an accessory with catalog support."""
+
+    DIALOG_WIDTH = 450
+    DIALOG_HEIGHT = 280
 
     def __init__(
         self,
@@ -55,7 +59,8 @@ class AccessoryEditDialog(QDialog):
         self.setWindowTitle(
             "Edytuj akcesorium" if self.is_edit_mode else "Nowe akcesorium"
         )
-        self.resize(450, 280)
+        self.setFixedWidth(self.DIALOG_WIDTH)
+        self.setMinimumHeight(self.DIALOG_HEIGHT)
 
         self._setup_ui()
         self._apply_styles()
@@ -86,6 +91,11 @@ class AccessoryEditDialog(QDialog):
         self.name_combo = QComboBox()
         self.name_combo.setEditable(True)
         self.name_combo.setInsertPolicy(QComboBox.NoInsert)
+        self.name_combo.setSizeAdjustPolicy(
+            QComboBox.AdjustToMinimumContentsLengthWithIcon
+        )
+        self.name_combo.setMinimumContentsLength(24)
+        self.name_combo.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.name_combo.lineEdit().setPlaceholderText(
             "Wybierz z listy lub wpisz nową nazwę..."
         )

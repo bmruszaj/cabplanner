@@ -6,6 +6,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session, joinedload
 
 from src.db_schema.orm_models import (
+    Accessory,
     Project,
     ProjectCabinet,
     ProjectCabinetPart,
@@ -575,12 +576,59 @@ class ProjectService:
         self.db.commit()
         return True
 
+    def update_accessory_snapshot(
+        self,
+        accessory_snapshot_id: int,
+        name: Optional[str] = None,
+        count: Optional[int] = None,
+    ) -> bool:
+        """Update accessory snapshot fields (name and/or quantity)."""
+        accessory_snapshot = (
+            self.db.query(ProjectCabinetAccessorySnapshot)
+            .filter_by(id=accessory_snapshot_id)
+            .first()
+        )
+        if not accessory_snapshot:
+            return False
+
+        if name is not None:
+            cleaned_name = name.strip()
+            if not cleaned_name:
+                return False
+
+            previous_name = accessory_snapshot.name
+            accessory_snapshot.name = cleaned_name
+
+            # Keep source traceability aligned with the selected name.
+            if cleaned_name != previous_name:
+                source_accessory = self.db.scalar(
+                    select(Accessory).where(Accessory.name == cleaned_name)
+                )
+                accessory_snapshot.source_accessory_id = (
+                    source_accessory.id if source_accessory else None
+                )
+
+        if count is not None:
+            if count <= 0:
+                return False
+            accessory_snapshot.count = count
+
+        accessory_snapshot.project_cabinet.updated_at = datetime.now(timezone.utc)
+
+        try:
+            self.db.commit()
+            return True
+        except Exception:
+            self.db.rollback()
+            return False
+
     def get_aggregated_project_elements(
         self, project_id: int
     ) -> Dict[str, List[Dict[str, Any]]]:
         """
         Get all elements in a project from snapshot data.
-        Returns a dictionary with lists for formatki, fronty, witryny, hdf, and akcesoria.
+        Returns a dictionary with lists for formatki, fronty, witryny,
+        polki_szklane, hdf, and akcesoria.
         """
         project = self.get_project(project_id)
         if not project:
@@ -588,6 +636,7 @@ class ProjectService:
                 "formatki": [],
                 "fronty": [],
                 "witryny": [],
+                "polki_szklane": [],
                 "hdf": [],
                 "akcesoria": [],
             }
@@ -595,6 +644,7 @@ class ProjectService:
         formatki = []
         fronty = []
         witryny = []
+        polki_szklane = []
         hdf = []
         akcesoria = []
 
@@ -605,7 +655,15 @@ class ProjectService:
 
             # Process all parts from snapshot (works for both standard and custom)
             self._process_cabinet_parts_snapshot(
-                cab, qty, seq, seq_symbol, formatki, fronty, hdf, witryny
+                cab,
+                qty,
+                seq,
+                seq_symbol,
+                formatki,
+                fronty,
+                hdf,
+                witryny,
+                polki_szklane,
             )
 
             # Process accessories from snapshot
@@ -615,12 +673,22 @@ class ProjectService:
             "formatki": formatki,
             "fronty": fronty,
             "witryny": witryny,
+            "polki_szklane": polki_szklane,
             "hdf": hdf,
             "akcesoria": akcesoria,
         }
 
     def _process_cabinet_parts_snapshot(
-        self, cab, qty, seq, seq_symbol, formatki, fronty, hdf, witryny
+        self,
+        cab,
+        qty,
+        seq,
+        seq_symbol,
+        formatki,
+        fronty,
+        hdf,
+        witryny,
+        polki_szklane,
     ):
         """Process elements from cabinet parts snapshot (works for both standard and custom)"""
         # Process all parts from the snapshot
@@ -631,7 +699,9 @@ class ProjectService:
             material = part.material
             if not material:
                 part_name_lc = part.part_name.lower()
-                if "witryn" in part_name_lc:
+                if "półka szkl" in part_name_lc or "polka szkl" in part_name_lc:
+                    material = "PÓŁKA SZKLANA"
+                elif "witryn" in part_name_lc:
                     material = "WITRYNA"
                 elif "front" in part_name_lc:
                     material = "FRONT"
@@ -641,7 +711,24 @@ class ProjectService:
                     material = "PLYTA 18"  # Default for panels
 
             # Determine category based on material
-            if material and material.upper().startswith("WITRYNA"):
+            material_upper = material.upper() if material else ""
+            if material_upper.startswith("PÓŁKA SZKLANA") or material_upper.startswith(
+                "POLKA SZKLANA"
+            ):
+                polki_szklane.append(
+                    {
+                        "seq": seq_symbol,
+                        "sequence": seq,
+                        "name": part.part_name,
+                        "quantity": part_qty,
+                        "width": part.width_mm,
+                        "height": part.height_mm,
+                        "color": cab.body_color,
+                        "wrapping": part.wrapping or "",
+                        "notes": part.comments or "",
+                    }
+                )
+            elif material_upper.startswith("WITRYNA"):
                 witryny.append(
                     {
                         "seq": seq_symbol,
@@ -655,7 +742,7 @@ class ProjectService:
                         "notes": f"Handle: {cab.handle_type}",
                     }
                 )
-            elif material and material.upper().startswith("FRONT"):
+            elif material_upper.startswith("FRONT"):
                 fronty.append(
                     {
                         "seq": seq_symbol,
@@ -669,7 +756,7 @@ class ProjectService:
                         "notes": f"Handle: {cab.handle_type}",
                     }
                 )
-            elif material and material.upper().startswith("HDF"):
+            elif material_upper.startswith("HDF"):
                 hdf.append(
                     {
                         "seq": seq_symbol,

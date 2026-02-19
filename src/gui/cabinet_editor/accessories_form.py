@@ -85,6 +85,8 @@ class AccessoriesForm(QWidget):
     """Form for editing cabinet accessories."""
 
     sig_dirty_changed = Signal(bool)
+    QUANTITY_COLUMN_INDEX = 1
+    QUANTITY_COLUMN_WIDTH = 100
 
     def __init__(self, catalog_service=None, project_service=None, parent=None):
         super().__init__(parent)
@@ -185,6 +187,20 @@ class AccessoriesForm(QWidget):
             selection_model.selectionChanged.connect(self._on_selection_changed)
         # Connect double-click to edit
         self.accessories_table.doubleClicked.connect(self._on_double_click)
+
+    def _apply_column_layout(self):
+        """Keep name column stretched and quantity column fixed to the right."""
+        model = self.accessories_table.model()
+        if model is None or model.columnCount() <= self.QUANTITY_COLUMN_INDEX:
+            return
+
+        header = self.accessories_table.horizontalHeader()
+        header.setStretchLastSection(False)
+        header.setSectionResizeMode(0, QHeaderView.Stretch)
+        header.setSectionResizeMode(self.QUANTITY_COLUMN_INDEX, QHeaderView.Fixed)
+        self.accessories_table.setColumnWidth(
+            self.QUANTITY_COLUMN_INDEX, self.QUANTITY_COLUMN_WIDTH
+        )
 
     def _apply_styles(self):
         """Apply visual styling."""
@@ -390,6 +406,8 @@ class AccessoriesForm(QWidget):
         else:
             self.accessories_model.update_accessories(accessories)
 
+        self._apply_column_layout()
+
     def _refresh_accessories_display(self):
         """Refresh accessories display including pending changes."""
         display_accessories = self._get_display_accessories()
@@ -413,17 +431,18 @@ class AccessoriesForm(QWidget):
         for acc in existing_accessories:
             acc_id = getattr(acc, "id", None) or getattr(acc, "accessory_id", None)
             if acc_id not in self.pending.to_remove:
-                # Apply quantity changes if any
+                current_name = getattr(acc, "name", None) or (
+                    acc.accessory.name
+                    if hasattr(acc, "accessory") and acc.accessory
+                    else ""
+                )
+
+                # Apply pending changes (name and quantity) if any
                 if acc_id in self.pending.changes:
                     updated_data = self.pending.changes[acc_id]
                     acc_copy = SimpleNamespace(
                         id=acc_id,
-                        name=getattr(acc, "name", None)
-                        or (
-                            acc.accessory.name
-                            if hasattr(acc, "accessory") and acc.accessory
-                            else ""
-                        ),
+                        name=updated_data.get("name", current_name),
                         count=updated_data.get("count", acc.count),
                     )
                     result_accessories.append(acc_copy)
@@ -459,6 +478,8 @@ class AccessoriesForm(QWidget):
             self.accessories_table.setModel(self.accessories_model)
         else:
             self.accessories_model.update_accessories(accessories)
+
+        self._apply_column_layout()
 
     def _mark_dirty(self):
         """Mark form as dirty and emit signal."""
@@ -517,17 +538,21 @@ class AccessoriesForm(QWidget):
         Returns a dict with consistent structure:
         - accessories_to_add: list of accessory data dicts
         - accessories_to_remove: list of accessory IDs
+        - accessories_changes: dict of {acc_id: updated_data}
         - quantity_changes: dict of {acc_id: new_count}
         """
+        accessories_changes = self.pending.get_updates()
+
         # Extract quantity changes from changes dict
         quantity_changes = {
             acc_id: data.get("count")
-            for acc_id, data in self.pending.changes.items()
+            for acc_id, data in accessories_changes.items()
             if "count" in data
         }
 
         return {
             "accessories_to_add": self.pending.get_additions(),
             "accessories_to_remove": self.pending.get_removals(),
+            "accessories_changes": accessories_changes,
             "quantity_changes": quantity_changes,
         }

@@ -255,6 +255,75 @@ def test_accessories_section(tmp_path, sample_project_orm):
     assert cells[3].text == ""
 
 
+def test_report_contains_glass_shelves_section(tmp_path):
+    """
+    Given: a cabinet that contains a glass shelf part
+    When: generating the report
+    Then: the report has a dedicated "PÓŁKI SZKLANE" section and row
+    """
+    project = Project(
+        name="Glass Shelf Project",
+        kitchen_type="LOFT",
+        order_number="GLASS-001",
+        client_name="Glass Client",
+        client_address="Glass Street 1",
+        client_phone="555-GLASS",
+        client_email="glass@example.com",
+    )
+
+    ct = CabinetTemplate(kitchen_type="LOFT", name="Glass Template")
+    ct.parts = [
+        CabinetPart(
+            part_name="półka szklana",
+            height_mm=480,
+            width_mm=300,
+            pieces=1,
+            material="PÓŁKA SZKLANA",
+        ),
+        CabinetPart(
+            part_name="front",
+            height_mm=700,
+            width_mm=596,
+            pieces=1,
+            material="FRONT 16",
+        ),
+    ]
+
+    cab = ProjectCabinet(
+        sequence_number=1,
+        body_color="Oak",
+        front_color="Maple",
+        handle_type="KROMA",
+        quantity=2,
+    )
+    cab.project = project
+    cab.cabinet_type = ct
+    project.cabinets = [cab]
+
+    rg = ReportGenerator()
+    output = rg.generate(project, output_dir=str(tmp_path), auto_open=False)
+    doc = Document(output)
+
+    headings = [p.text for p in doc.paragraphs if p.style.name == "Heading 2"]
+    assert "PÓŁKI SZKLANE" in headings
+
+    header_tables = doc.sections[0].header.tables
+    footer_tables = doc.sections[0].footer.tables
+    body_tables = [t for t in doc.tables if t not in header_tables + footer_tables]
+
+    glass_table = None
+    for idx, heading in enumerate(headings):
+        if heading == "PÓŁKI SZKLANE":
+            glass_table = body_tables[idx]
+            break
+
+    assert glass_table is not None
+    assert len(glass_table.rows) == 2
+    row = glass_table.rows[1].cells
+    assert row[1].text == "półka szklana"
+    assert row[3].text == "2"
+
+
 def test_accessories_are_aggregated_without_sequence(tmp_path):
     """
     Given: two cabinets with the same accessory name
