@@ -228,6 +228,12 @@ class SettingsDialog(QDialog):
 
         self.report_page_break_strictness.setToolTip(strictness_help_text)
         report_layout.addRow("Tryb podziału sekcji:", strictness_row)
+        self.report_program_logo_variant = QComboBox()
+        self.report_program_logo_variant.addItems(["Czarno-białe", "Kolorowe"])
+        self.report_program_logo_variant.setToolTip(
+            "Wybierz wariant logo Cabplanner widoczny w nagłówku raportu."
+        )
+        report_layout.addRow("Logo Cabplanner:", self.report_program_logo_variant)
 
         layout.addWidget(report_group)
 
@@ -406,6 +412,30 @@ class SettingsDialog(QDialog):
             if index >= 0:
                 self.report_page_break_strictness.setCurrentIndex(index)
 
+            report_logo_variant = self.settings_service.get_setting_value(
+                "report_program_logo_variant", "Czarno-białe"
+            )
+            logo_variant_text = str(report_logo_variant).strip()
+            logo_variant_aliases = {
+                "czarnobiale": "Czarno-białe",
+                "czarno-biale": "Czarno-białe",
+                "czarno-białe": "Czarno-białe",
+                "bw": "Czarno-białe",
+                "mono": "Czarno-białe",
+                "kolorowe": "Kolorowe",
+                "kolor": "Kolorowe",
+                "color": "Kolorowe",
+                "colour": "Kolorowe",
+            }
+            logo_variant_text = logo_variant_aliases.get(
+                logo_variant_text.lower(), logo_variant_text
+            )
+            index = self.report_program_logo_variant.findText(logo_variant_text)
+            if index >= 0:
+                self.report_program_logo_variant.setCurrentIndex(index)
+            else:
+                self.report_program_logo_variant.setCurrentIndex(0)
+
             # Appearance settings
             self.dark_mode_check.setChecked(
                 self.settings_service.get_setting_value("dark_mode", False)
@@ -491,6 +521,10 @@ class SettingsDialog(QDialog):
             self.settings_service.set_setting(
                 "report_page_break_strictness",
                 self.report_page_break_strictness.currentText(),
+            )
+            self.settings_service.set_setting(
+                "report_program_logo_variant",
+                self.report_program_logo_variant.currentText(),
             )
 
             # Appearance settings
@@ -679,6 +713,7 @@ class SettingsDialog(QDialog):
                     os.path.expanduser("~"), "Documents", "CabPlanner"
                 ),
                 "report_page_break_strictness": "Standardowa",
+                "report_program_logo_variant": "Czarno-białe",
                 "dark_mode": False,
                 "company_logo_path": "",
             }

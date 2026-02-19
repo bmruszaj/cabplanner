@@ -16,6 +16,7 @@ from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.oxml import OxmlElement
 from docx.oxml.shared import qn
 
+from src.app.paths import get_base_path
 from src.db_schema.orm_models import Project
 from src.services.project_service import ProjectService
 from src.services.settings_service import SettingsService
@@ -51,12 +52,12 @@ class ReportGenerator:
 
         # Make sure paths are either None or proper Path objects
         self.program_logo_path = (
-            program_logo_path
+            Path(program_logo_path)
             if program_logo_path and not isinstance(program_logo_path, Session)
             else None
         )
         self.company_logo_path = (
-            company_logo_path
+            Path(company_logo_path)
             if company_logo_path and not isinstance(company_logo_path, Session)
             else None
         )
@@ -464,6 +465,100 @@ class ReportGenerator:
                 )
             )
 
+    def _get_report_logo_variant(self) -> str:
+        """
+        Get report logo variant from settings.
+
+        Returns one of: "bw", "color".
+        """
+        if not self.settings_service:
+            return "bw"
+
+        try:
+            raw_value = (
+                self.settings_service.get_setting_value(
+                    "report_program_logo_variant", "Czarno-białe"
+                )
+                or "Czarno-białe"
+            )
+            normalized = (
+                str(raw_value)
+                .strip()
+                .lower()
+                .replace(" ", "")
+                .replace("-", "")
+                .replace("_", "")
+            )
+        except Exception as exc:
+            logger.warning("Failed to read report logo variant setting: %s", exc)
+            return "bw"
+
+        if normalized in ("kolorowe", "kolor", "color", "colour"):
+            return "color"
+        if normalized in (
+            "czarnobiale",
+            "czarnobiałe",
+            "blackwhite",
+            "bw",
+            "mono",
+            "monochrome",
+            "grayscale",
+            "greyscale",
+        ):
+            return "bw"
+        return "bw"
+
+    def _resolve_bundled_logo_path(self, filename: str) -> Optional[Path]:
+        """Resolve bundled logo path in dev and frozen app layouts."""
+        base = get_base_path()
+        local_icons_dir = (
+            Path(__file__).resolve().parents[1] / "gui" / "resources" / "icons"
+        )
+        candidates = [
+            base / "src" / "gui" / "resources" / "icons" / filename,
+            base / "_internal" / "src" / "gui" / "resources" / "icons" / filename,
+            local_icons_dir / filename,
+        ]
+        for candidate in candidates:
+            if candidate.exists():
+                return candidate
+        return None
+
+    def _get_program_logo_path(self) -> Optional[Path]:
+        """Get program logo path (explicit path first, bundled fallback)."""
+        if self.program_logo_path and self.program_logo_path.exists():
+            return self.program_logo_path
+
+        preferred_name = (
+            "logo.png"
+            if self._get_report_logo_variant() == "color"
+            else "logo_bw.png"
+        )
+        fallback_name = "logo_bw.png" if preferred_name == "logo.png" else "logo.png"
+
+        resolved = self._resolve_bundled_logo_path(preferred_name)
+        if resolved:
+            return resolved
+        return self._resolve_bundled_logo_path(fallback_name)
+
+    def _get_company_logo_path(self) -> Optional[Path]:
+        """Get company logo path (explicit path first, then settings)."""
+        if self.company_logo_path and self.company_logo_path.exists():
+            return self.company_logo_path
+
+        if not self.settings_service:
+            return None
+
+        try:
+            raw_path = self.settings_service.get_setting_value("company_logo_path", "")
+            if not raw_path:
+                return None
+            candidate = Path(str(raw_path))
+            return candidate if candidate.exists() else None
+        except Exception as exc:
+            logger.warning("Failed to read company logo path from settings: %s", exc)
+            return None
+
     def _add_header(self, section: Section, project: Project) -> None:
         header = section.header
         usable_width = section.page_width - section.left_margin - section.right_margin
@@ -489,18 +584,24 @@ class ReportGenerator:
         run = p.add_run(info_text)
         run.font.size = Pt(10)
 
-        # Right: company logo
+        # Right: logos (company + Cabplanner)
         cell_logo = table.rows[0].cells[1]
-        if self.company_logo_path and os.path.exists(self.company_logo_path):
-            run_logo = cell_logo.paragraphs[0].add_run()
-            run_logo.add_picture(self.company_logo_path, width=Inches(1))
+        paragraph_logo = cell_logo.paragraphs[0]
+        paragraph_logo.alignment = WD_ALIGN_PARAGRAPH.RIGHT
 
-        # Program logo below
-        if self.program_logo_path and os.path.exists(self.program_logo_path):
-            p_logo = header.add_paragraph()
-            p_logo.alignment = WD_ALIGN_PARAGRAPH.RIGHT
-            run_p = p_logo.add_run()
-            run_p.add_picture(self.program_logo_path, width=Inches(0.75))
+        company_logo_path = self._get_company_logo_path()
+        if company_logo_path:
+            run_logo = paragraph_logo.add_run()
+            run_logo.add_picture(str(company_logo_path), width=Inches(1))
+
+        program_logo_path = self._get_program_logo_path()
+        if program_logo_path:
+            # Keep program logo below company logo if both are present.
+            if company_logo_path:
+                paragraph_logo = cell_logo.add_paragraph()
+                paragraph_logo.alignment = WD_ALIGN_PARAGRAPH.RIGHT
+            run_program_logo = paragraph_logo.add_run()
+            run_program_logo.add_picture(str(program_logo_path), width=Inches(0.52))
 
     def _add_footer(self, section: Section) -> None:
         footer = section.footer
