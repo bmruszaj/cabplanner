@@ -65,6 +65,12 @@ class ColorEditDialog(QDialog):
         layout.addLayout(form)
 
         buttons = QDialogButtonBox(QDialogButtonBox.Save | QDialogButtonBox.Cancel)
+        save_button = buttons.button(QDialogButtonBox.Save)
+        if save_button is not None:
+            save_button.setText("Zapisz")
+        cancel_button = buttons.button(QDialogButtonBox.Cancel)
+        if cancel_button is not None:
+            cancel_button.setText("Anuluj")
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
         layout.addWidget(buttons)

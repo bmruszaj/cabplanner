@@ -728,6 +728,9 @@ class CabinetTypeDialog(QDialog):
         self.save_button = self.button_box.button(QDialogButtonBox.StandardButton.Save)
         self.save_button.setText("Zapi&sz")  # Alt+S mnemonic
         self.save_button.setDefault(True)
+        cancel_button = self.button_box.button(QDialogButtonBox.StandardButton.Cancel)
+        if cancel_button is not None:
+            cancel_button.setText("Anuluj")
         self.button_box.accepted.connect(self._try_accept)
         self.button_box.rejected.connect(self._try_reject)
         footer_layout.addWidget(self.button_box)

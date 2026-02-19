@@ -125,6 +125,12 @@ class PartEditDialog(QDialog):
         self.button_box = QDialogButtonBox(
             QDialogButtonBox.Save | QDialogButtonBox.Cancel
         )
+        save_button = self.button_box.button(QDialogButtonBox.Save)
+        if save_button is not None:
+            save_button.setText("Zapisz")
+        cancel_button = self.button_box.button(QDialogButtonBox.Cancel)
+        if cancel_button is not None:
+            cancel_button.setText("Anuluj")
         self.button_box.accepted.connect(self.accept)
         self.button_box.rejected.connect(self.reject)
         layout.addWidget(self.button_box)
