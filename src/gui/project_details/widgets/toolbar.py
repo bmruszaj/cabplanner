@@ -25,7 +25,6 @@ class Toolbar(QWidget):
     sig_add_from_catalog = Signal()
     sig_add_custom = Signal()
     sig_view_mode_changed = Signal(str)
-    sig_sort_by_sequence = Signal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -47,9 +46,6 @@ class Toolbar(QWidget):
         # Left section: Add buttons
         self._create_add_buttons(layout)
 
-        # Middle section: Sort button
-        self._create_sort_button(layout)
-
         # Add stretch before view toggle to push it to the right
         layout.addStretch()
 
@@ -60,7 +56,7 @@ class Toolbar(QWidget):
         """Create the add buttons section."""
         # Add from catalog button - uses default primary style from global theme
         self.add_catalog_btn = QPushButton("Katalog")
-        self.add_catalog_btn.setIcon(get_icon("catalog"))
+        self.add_catalog_btn.setIcon(get_icon("catalog_white"))
         self.add_catalog_btn.setIconSize(ICON_SIZE)
         self.add_catalog_btn.setToolTip("Dodaj z katalogu")
         self.add_catalog_btn.clicked.connect(self.sig_add_from_catalog.emit)
@@ -68,20 +64,18 @@ class Toolbar(QWidget):
 
         # Add custom button
         self.add_custom_btn = QPushButton("Niestandardowa")
-        self.add_custom_btn.setIcon(get_icon("add"))
+        self.add_custom_btn.setIcon(get_icon("cabinet_white"))
         self.add_custom_btn.setIconSize(ICON_SIZE)
-        self.add_custom_btn.setProperty("class", "secondary")
         self.add_custom_btn.setToolTip("Dodaj niestandardową szafkę")
         self.add_custom_btn.clicked.connect(self.sig_add_custom.emit)
         parent_layout.addWidget(self.add_custom_btn)
-
-    def _create_sort_button(self, parent_layout: QHBoxLayout):
-        """Create the sort button."""
-        self.sort_btn = QPushButton("Sortuj")
-        self.sort_btn.setProperty("class", "secondary")
-        self.sort_btn.setToolTip("Sortuj według sekwencji")
-        self.sort_btn.clicked.connect(self.sig_sort_by_sequence.emit)
-        parent_layout.addWidget(self.sort_btn)
+        # Keep both action buttons equal width and prevent text clipping.
+        shared_min_width = max(
+            self.add_catalog_btn.sizeHint().width(),
+            self.add_custom_btn.sizeHint().width(),
+        )
+        self.add_catalog_btn.setMinimumWidth(shared_min_width)
+        self.add_custom_btn.setMinimumWidth(shared_min_width)
 
     def _create_view_toggle(self, parent_layout: QHBoxLayout):
         """Create the view mode toggle buttons."""

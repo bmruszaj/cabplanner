@@ -139,7 +139,7 @@ class HeaderBar(QWidget):
 
         # Export button - uses default primary style from global theme
         self.export_btn = QPushButton("Eksport")
-        self.export_btn.setIcon(get_icon("export"))
+        self.export_btn.setIcon(get_icon("export_white"))
         self.export_btn.setIconSize(ICON_SIZE)
         self.export_btn.setToolTip("Eksportuj projekt do Word")
         self.export_btn.clicked.connect(self.sig_export.emit)

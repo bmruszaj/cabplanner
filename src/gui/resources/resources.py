@@ -26,7 +26,9 @@ ICON_PATHS = {
     "print": ICON_DIR / "print.png",
     "settings": ICON_DIR / "settings.png",
     "cabinet": ICON_DIR / "cabinet.png",
+    "cabinet_white": ICON_DIR / "cabinet_white.png",
     "catalog": ICON_DIR / "catalog.png",
+    "catalog_white": ICON_DIR / "catalog_white.png",
     "dashboard": ICON_DIR / "dashboard.png",
     # Action icons
     "add": ICON_DIR / "add.png",

@@ -409,8 +409,6 @@ class ProjectDetailsView(QDialog):
         self.toolbar.sig_add_from_catalog.connect(self._handle_add_from_catalog)
         self.toolbar.sig_add_custom.connect(self._handle_add_custom)
         self.toolbar.sig_view_mode_changed.connect(self._on_view_mode_changed)
-        # Delegate sort to controller instead of handling directly
-        self.toolbar.sig_sort_by_sequence.connect(self._on_sort_requested)
 
         # Table view signals
         self.table_view.doubleClicked.connect(self._on_table_double_click)
@@ -625,11 +623,6 @@ class ProjectDetailsView(QDialog):
             card.sequence_input.set_duplicate_check_callback(
                 lambda seq: self._is_sequence_duplicate(seq, card.cabinet_id)
             )
-
-    def _on_sort_requested(self) -> None:
-        """Handle sort request from toolbar - delegate to controller."""
-        if self.controller:
-            self.controller.on_sort_requested()
 
     def _on_card_selected(self, cabinet_id: int):
         """Handle card selection - implement single selection behavior."""
