@@ -153,10 +153,17 @@ class AddCabinetDialog(QDialog):
 
     sig_cabinet_created = Signal(object)  # Emitted when cabinet is created
 
-    def __init__(self, catalog_service, accessory_service, parent=None):
+    def __init__(
+        self,
+        catalog_service,
+        accessory_service,
+        parent=None,
+        is_dark_mode: bool = False,
+    ):
         super().__init__(parent)
         self.catalog_service = catalog_service
         self.accessory_service = accessory_service
+        self.is_dark_mode = is_dark_mode
 
         self.parts = []
         self.accessories = []
@@ -314,7 +321,8 @@ class AddCabinetDialog(QDialog):
 
         # Info label
         self.parts_info_label = QLabel("Dodaj części do szafki")
-        self.parts_info_label.setStyleSheet("color: #666; font-style: italic;")
+        info_color = "#B0B0B0" if self.is_dark_mode else "#666666"
+        self.parts_info_label.setStyleSheet(f"color: {info_color}; font-style: italic;")
         self.parts_info_label.setAlignment(Qt.AlignCenter)
         layout.addWidget(self.parts_info_label)
 
@@ -382,7 +390,10 @@ class AddCabinetDialog(QDialog):
 
         # Info label
         self.accessories_info_label = QLabel("Dodaj akcesoria do szafki")
-        self.accessories_info_label.setStyleSheet("color: #666; font-style: italic;")
+        info_color = "#B0B0B0" if self.is_dark_mode else "#666666"
+        self.accessories_info_label.setStyleSheet(
+            f"color: {info_color}; font-style: italic;"
+        )
         self.accessories_info_label.setAlignment(Qt.AlignCenter)
         layout.addWidget(self.accessories_info_label)
 
@@ -404,16 +415,27 @@ class AddCabinetDialog(QDialog):
 
     def _apply_styles(self):
         """Apply visual styling."""
-        get_theme()
+        dialog_bg = "#2A2A2A" if self.is_dark_mode else "#F8F9FA"
+        panel_bg = "#333333" if self.is_dark_mode else "#FFFFFF"
+        panel_border = "#4A4A4A" if self.is_dark_mode else "#E0E0E0"
+        input_bg = "#333333" if self.is_dark_mode else "#FFFFFF"
+        input_border = "#5A5A5A" if self.is_dark_mode else "#DDDDDD"
+        text_color = "#E0E0E0" if self.is_dark_mode else "#333333"
+        disabled_bg = "#555555" if self.is_dark_mode else "#CCCCCC"
+        disabled_text = "#9A9A9A" if self.is_dark_mode else "#666666"
+        tab_bg = "#2F2F2F" if self.is_dark_mode else "#F5F5F5"
+        tab_hover = "#3A3A3A" if self.is_dark_mode else "#E8E8E8"
 
-        self.setStyleSheet(f"""
+        self.setStyleSheet(
+            get_theme(self.is_dark_mode)
+            + f"""
             QDialog {{
-                background-color: #f8f9fa;
+                background-color: {dialog_bg};
             }}
             QGroupBox {{
                 font-weight: bold;
                 font-size: 10pt;
-                border: 2px solid #e0e0e0;
+                border: 2px solid {panel_border};
                 border-radius: 8px;
                 margin-top: 8px;
                 padding-top: 8px;
@@ -422,13 +444,15 @@ class AddCabinetDialog(QDialog):
                 subcontrol-origin: margin;
                 left: 12px;
                 padding: 0 6px 0 6px;
-                background-color: white;
+                background-color: {panel_bg};
+                color: {text_color};
             }}
             QLineEdit, QSpinBox, QComboBox, QTextEdit {{
                 padding: 6px;
-                border: 1px solid #ddd;
+                border: 1px solid {input_border};
                 border-radius: 4px;
-                background-color: white;
+                background-color: {input_bg};
+                color: {text_color};
             }}
             QLineEdit:focus, QSpinBox:focus, QComboBox:focus, QTextEdit:focus {{
                 border-color: {PRIMARY};
@@ -446,19 +470,19 @@ class AddCabinetDialog(QDialog):
                 opacity: 0.9;
             }}
             QPushButton:disabled {{
-                background-color: #cccccc;
-                color: #666666;
+                background-color: {disabled_bg};
+                color: {disabled_text};
             }}
             QTabWidget::pane {{
-                border: 1px solid #e0e0e0;
+                border: 1px solid {panel_border};
                 border-radius: 8px;
-                background-color: white;
+                background-color: {panel_bg};
                 margin-top: -1px;
             }}
             QTabWidget QTabBar::tab {{
-                background-color: #f5f5f5;
-                color: #333333;
-                border: 1px solid #ddd;
+                background-color: {tab_bg};
+                color: {text_color};
+                border: 1px solid {input_border};
                 border-bottom: none;
                 border-top-left-radius: 6px;
                 border-top-right-radius: 6px;
@@ -467,15 +491,16 @@ class AddCabinetDialog(QDialog):
                 font-size: 9pt;
             }}
             QTabWidget QTabBar::tab:selected {{
-                background-color: white;
-                color: #333333;
-                border-bottom: 1px solid white;
+                background-color: {panel_bg};
+                color: {text_color};
+                border-bottom: 1px solid {panel_bg};
             }}
             QTabWidget QTabBar::tab:hover:!selected {{
-                background-color: #e8e8e8;
-                color: #333333;
+                background-color: {tab_hover};
+                color: {text_color};
             }}
-        """)
+        """
+        )
 
     def _on_parts_selection_changed(self):
         """Handle parts table selection changes."""

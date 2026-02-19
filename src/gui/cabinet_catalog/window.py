@@ -15,7 +15,7 @@ from PySide6.QtWidgets import (
     QFrame,
     QMessageBox,
 )
-from PySide6.QtCore import Signal
+from PySide6.QtCore import Signal, QTimer
 
 from src.gui.resources.styles import get_theme, PRIMARY
 from src.gui.cabinet_editor import CabinetEditorDialog
@@ -39,6 +39,7 @@ class CatalogWindow(QDialog):
         int, int, int, dict
     )  # cabinet_type_id, project_id, quantity, options
     sig_catalog_changed = Signal()  # emitted after create/update/delete
+    SEARCH_DEBOUNCE_MS = 300
 
     def __init__(
         self,
@@ -56,6 +57,9 @@ class CatalogWindow(QDialog):
         self.current_mode = initial_mode
         self.color_service = None
         self.is_dark_mode = False
+        self._search_debounce_timer = QTimer(self)
+        self._search_debounce_timer.setSingleShot(True)
+        self._search_debounce_timer.setInterval(self.SEARCH_DEBOUNCE_MS)
 
         if getattr(self.catalog_service, "session", None) is not None:
             self.color_service = ColorPaletteService(self.catalog_service.session)
@@ -109,7 +113,7 @@ class CatalogWindow(QDialog):
         layout.addWidget(header_frame)
 
         # Manage toolbar
-        self.manage_toolbar = ManageToolbar()
+        self.manage_toolbar = ManageToolbar(is_dark_mode=self.is_dark_mode)
         layout.addWidget(self.manage_toolbar)
 
         # Browser area
@@ -119,13 +123,18 @@ class CatalogWindow(QDialog):
         layout.addWidget(self.browser_widget)
 
         # Add footer
-        self.add_footer = AddFooter(color_service=self.color_service)
+        self.add_footer = AddFooter(
+            color_service=self.color_service,
+            is_dark_mode=self.is_dark_mode,
+        )
         layout.addWidget(self.add_footer)
 
     def _setup_connections(self):
         """Setup signal connections."""
         # Search
         self.search_edit.textChanged.connect(self._on_search_changed)
+        self.search_edit.returnPressed.connect(self._apply_search_now)
+        self._search_debounce_timer.timeout.connect(self._apply_search_now)
 
         # Browser
         self.browser_widget.sig_item_activated.connect(self._on_item_activated)
@@ -142,6 +151,7 @@ class CatalogWindow(QDialog):
 
     def _apply_styles(self):
         """Apply styling to the window."""
+        label_color = "#E0E0E0" if self.is_dark_mode else "#333333"
         self.setStyleSheet(
             get_theme(self.is_dark_mode)
             + f"""
@@ -180,7 +190,7 @@ class CatalogWindow(QDialog):
             }}
             QLabel {{
                 font-size: 10pt;
-                color: #333333;
+                color: {label_color};
             }}
         """
         )
@@ -200,9 +210,14 @@ class CatalogWindow(QDialog):
         # Manage toolbar is always available but depends on selection for some actions
         self.manage_toolbar.set_enabled_for_selection(has_selection)
 
-    def _on_search_changed(self, text: str):
+    def _on_search_changed(self, _text: str):
         """Handle search text change."""
-        self.browser_widget.set_query(text)
+        self._search_debounce_timer.start()
+
+    def _apply_search_now(self):
+        """Apply current search text immediately."""
+        self._search_debounce_timer.stop()
+        self.browser_widget.set_query(self.search_edit.text())
 
     def _on_item_activated(self, cabinet_type_id: int):
         """Handle item activation (double-click)."""
@@ -236,11 +251,9 @@ class CatalogWindow(QDialog):
             dialog = AddCabinetDialog(
                 catalog_service=self.catalog_service,
                 accessory_service=accessory_service,
+                is_dark_mode=self.is_dark_mode,
                 parent=self,
             )
-
-            # Connect the signal to refresh the catalog when a cabinet is created
-            dialog.sig_cabinet_created.connect(self._on_cabinet_created)
 
             # Show the dialog
             if dialog.exec() == QDialog.DialogCode.Accepted:
@@ -350,6 +363,7 @@ class CatalogWindow(QDialog):
                 catalog_service=self.catalog_service,
                 project_service=None,  # Not needed for type editing
                 color_service=self.color_service,
+                is_dark_mode=self.is_dark_mode,
                 parent=self,
             )
             editor.load_type(cabinet_type)
@@ -411,17 +425,5 @@ class CatalogWindow(QDialog):
             data = self._pending_add_data
             self._pending_add_data = None
             # Use QTimer to defer signal emission to after dialog is fully closed
-            from PySide6.QtCore import QTimer
-
             QTimer.singleShot(0, lambda: self.sig_added_to_project.emit(*data))
         super().done(result)
-
-    def _on_cabinet_created(self, cabinet_type):
-        """Handle cabinet creation signal."""
-        self.browser_widget.refresh()
-        self.sig_catalog_changed.emit()
-        QMessageBox.information(
-            self,
-            "Sukces",
-            f"Nowa szafka '{cabinet_type.name}' została dodana do katalogu",
-        )

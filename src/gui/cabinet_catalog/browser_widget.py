@@ -9,8 +9,6 @@ import logging
 from PySide6.QtWidgets import (
     QWidget,
     QVBoxLayout,
-    QHBoxLayout,
-    QLineEdit,
     QTableView,
     QHeaderView,
     QAbstractItemView,
@@ -121,20 +119,6 @@ class CatalogBrowserWidget(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(8)
 
-        # Search header
-        search_layout = QHBoxLayout()
-        search_layout.setContentsMargins(8, 8, 8, 0)
-
-        search_label = QLabel("Szukaj:")
-        search_label.setMinimumWidth(50)
-        search_layout.addWidget(search_label)
-
-        self.search_edit = QLineEdit()
-        self.search_edit.setPlaceholderText("Szukaj według nazwy lub typu kuchni...")
-        search_layout.addWidget(self.search_edit)
-
-        layout.addLayout(search_layout)
-
         # Results info
         self.results_label = QLabel("0 elementów")
         self.results_label.setObjectName("resultsLabel")
@@ -187,7 +171,6 @@ class CatalogBrowserWidget(QWidget):
 
     def _setup_connections(self):
         """Setup signal connections."""
-        self.search_edit.textChanged.connect(self._on_search_changed)
         self.table_view.doubleClicked.connect(self._on_item_activated)
         self.table_view.selectionModel().selectionChanged.connect(
             self._on_selection_changed
@@ -246,8 +229,10 @@ class CatalogBrowserWidget(QWidget):
 
     def set_query(self, text: str):
         """Set search query."""
-        self._current_query = text
-        self.search_edit.setText(text)
+        normalized_text = text or ""
+        if normalized_text == self._current_query:
+            return
+        self._current_query = normalized_text
         self.refresh()
 
     def set_filters(self, filters: dict):
@@ -293,11 +278,6 @@ class CatalogBrowserWidget(QWidget):
 
         source_index = self.proxy_model.mapToSource(selection)
         return self.model.get_item(source_index)
-
-    def _on_search_changed(self, text: str):
-        """Handle search text change."""
-        self._current_query = text
-        self.refresh()
 
     def _on_item_activated(self, index: QModelIndex):
         """Handle item activation (double-click)."""

@@ -32,9 +32,15 @@ class AddFooter(QWidget):
     # Signals
     sig_add_to_project = Signal()
 
-    def __init__(self, parent=None, color_service: ColorPaletteService | None = None):
+    def __init__(
+        self,
+        parent=None,
+        color_service: ColorPaletteService | None = None,
+        is_dark_mode: bool = False,
+    ):
         super().__init__(parent)
         self.color_service = color_service
+        self.is_dark_mode = is_dark_mode
         self._setup_ui()
         self._setup_connections()
         self._apply_styles()
@@ -130,28 +136,42 @@ class AddFooter(QWidget):
 
     def _apply_styles(self):
         """Apply styling to the footer."""
+        panel_border = "#4A4A4A" if self.is_dark_mode else "#D0D0D0"
+        panel_bg = "#2F2F2F" if self.is_dark_mode else "#FAFAFA"
+        input_bg = "#333333" if self.is_dark_mode else "white"
+        input_border = "#5A5A5A" if self.is_dark_mode else "#D0D0D0"
+        text_color = "#E0E0E0" if self.is_dark_mode else "#333333"
+        disabled_bg = "#555555" if self.is_dark_mode else "#CCCCCC"
+        disabled_text = "#9A9A9A" if self.is_dark_mode else "#666666"
+        down_arrow_color = "#D0D0D0" if self.is_dark_mode else "#999999"
+        add_color_bg = "#333333" if self.is_dark_mode else "white"
+        add_color_border = "#5A5A5A" if self.is_dark_mode else "#D0D0D0"
+        add_color_hover = "#3A3A3A" if self.is_dark_mode else "#F8F8F8"
+
         self.setStyleSheet(
-            get_theme()
+            get_theme(self.is_dark_mode)
             + f"""
             QGroupBox {{
                 font-weight: bold;
-                border: 1px solid #D0D0D0;
+                border: 1px solid {panel_border};
                 border-radius: 6px;
                 margin-top: 6px;
                 padding-top: 4px;
-                background-color: #FAFAFA;
+                background-color: {panel_bg};
             }}
             QGroupBox::title {{
                 subcontrol-origin: margin;
                 left: 8px;
                 padding: 0 4px 0 4px;
-                background-color: #FAFAFA;
+                background-color: {panel_bg};
+                color: {text_color};
             }}
             QSpinBox {{
                 padding: 4px;
-                border: 1px solid #D0D0D0;
+                border: 1px solid {input_border};
                 border-radius: 4px;
-                background-color: white;
+                background-color: {input_bg};
+                color: {text_color};
                 font-size: 10pt;
             }}
             QSpinBox:focus {{
@@ -159,9 +179,10 @@ class AddFooter(QWidget):
             }}
             QComboBox {{
                 padding: 4px;
-                border: 1px solid #D0D0D0;
+                border: 1px solid {input_border};
                 border-radius: 4px;
-                background-color: white;
+                background-color: {input_bg};
+                color: {text_color};
                 font-size: 10pt;
                 min-width: 80px;
             }}
@@ -174,7 +195,7 @@ class AddFooter(QWidget):
             }}
             QComboBox::down-arrow {{
                 image: none;
-                border: 1px solid #999999;
+                border: 1px solid {down_arrow_color};
                 width: 8px;
                 height: 8px;
                 border-style: solid;
@@ -198,13 +219,13 @@ class AddFooter(QWidget):
                 background-color: {PRIMARY.replace("#0A766C", "#085D56")};
             }}
             QPushButton:disabled {{
-                background-color: #CCCCCC;
-                color: #666666;
+                background-color: {disabled_bg};
+                color: {disabled_text};
             }}
             QPushButton#addColorBtn {{
-                background-color: white;
-                color: #333333;
-                border: 1px solid #D0D0D0;
+                background-color: {add_color_bg};
+                color: {text_color};
+                border: 1px solid {add_color_border};
                 border-radius: 4px;
                 padding: 4px 8px;
                 font-size: 9pt;
@@ -213,12 +234,13 @@ class AddFooter(QWidget):
             }}
             QPushButton#addColorBtn:hover {{
                 border-color: {PRIMARY};
-                background-color: #f8f8f8;
+                background-color: {add_color_hover};
             }}
             QLabel {{
                 font-size: 9pt;
                 font-weight: normal;
                 min-width: 40px;
+                color: {text_color};
             }}
         """
         )

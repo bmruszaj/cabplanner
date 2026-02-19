@@ -21,8 +21,9 @@ class ManageToolbar(QWidget):
     sig_duplicate = Signal()
     sig_delete = Signal()
 
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, is_dark_mode: bool = False):
         super().__init__(parent)
+        self.is_dark_mode = is_dark_mode
         self._setup_ui()
         self._setup_connections()
         self._apply_styles()
@@ -104,8 +105,15 @@ class ManageToolbar(QWidget):
 
     def _apply_styles(self):
         """Apply styling to the toolbar."""
+        text_color = "#E0E0E0" if self.is_dark_mode else "#333333"
+        hover_bg = "#3A3A3A" if self.is_dark_mode else "#F0F0F0"
+        hover_border = "#5A5A5A" if self.is_dark_mode else "#D0D0D0"
+        pressed_bg = "#2F2F2F" if self.is_dark_mode else "#E0E0E0"
+        disabled_text = "#8A8A8A" if self.is_dark_mode else "#999999"
+        separator_color = "#4A4A4A" if self.is_dark_mode else "#D0D0D0"
+
         self.setStyleSheet(
-            get_theme()
+            get_theme(self.is_dark_mode)
             + f"""
             QToolButton {{
                 background-color: transparent;
@@ -114,22 +122,22 @@ class ManageToolbar(QWidget):
                 padding: 6px 12px;
                 margin: 2px;
                 font-size: 10pt;
-                color: #333333;
+                color: {text_color};
             }}
             QToolButton:hover {{
-                background-color: #F0F0F0;
-                border-color: #D0D0D0;
+                background-color: {hover_bg};
+                border-color: {hover_border};
             }}
             QToolButton:pressed {{
-                background-color: #E0E0E0;
+                background-color: {pressed_bg};
                 border-color: {PRIMARY};
             }}
             QToolButton:disabled {{
-                color: #999999;
+                color: {disabled_text};
                 background-color: transparent;
             }}
             QFrame {{
-                color: #D0D0D0;
+                color: {separator_color};
                 margin: 4px 8px;
             }}
         """
