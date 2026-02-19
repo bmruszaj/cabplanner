@@ -239,7 +239,7 @@ class ProjectDetailsView(QDialog):
         if session and project:
             from src.services.report_generator import ReportGenerator
 
-            self.report_generator = ReportGenerator(self.session)
+            self.report_generator = ReportGenerator(db_session=self.session)
         else:
             self.report_generator = None
 
