@@ -24,9 +24,9 @@ class AccessoryService:
         stmt = select(Accessory).filter_by(name=name)
         return self.db.scalars(stmt).first()
 
-    def create_accessory(self, name: str, unit: str = "szt") -> Accessory:
-        """Create a new accessory with name and unit (szt or kpl)."""
-        accessory = Accessory(name=name, unit=unit)
+    def create_accessory(self, name: str) -> Accessory:
+        """Create a new accessory with name."""
+        accessory = Accessory(name=name)
         self.db.add(accessory)
         self.db.commit()
         self.db.refresh(accessory)
@@ -51,7 +51,7 @@ class AccessoryService:
         self.db.commit()
         return True
 
-    def get_or_create(self, name: str, unit: str = "szt") -> Accessory:
+    def get_or_create(self, name: str) -> Accessory:
         """
         Find an existing Accessory by name, or create a new one if not found.
         Useful for inline add/find within project workflows.
@@ -59,4 +59,4 @@ class AccessoryService:
         accessory = self.find_by_name(name)
         if accessory:
             return accessory
-        return self.create_accessory(name=name, unit=unit)
+        return self.create_accessory(name=name)

@@ -212,7 +212,6 @@ class ProjectService:
             new_acc = ProjectCabinetAccessorySnapshot(
                 project_cabinet_id=new_cabinet.id,
                 name=acc.name,
-                unit=acc.unit,
                 count=acc.count,
                 source_accessory_id=acc.source_accessory_id,
             )
@@ -333,7 +332,6 @@ class ProjectService:
                 snapshot_accessory = ProjectCabinetAccessorySnapshot(
                     project_cabinet_id=cabinet.id,
                     name=accessory.name,
-                    unit=accessory.unit,
                     count=template_accessory.count,
                     source_accessory_id=accessory.id,
                 )
@@ -378,7 +376,6 @@ class ProjectService:
             snapshot_accessory = ProjectCabinetAccessorySnapshot(
                 project_cabinet_id=cabinet.id,
                 name=acc_data.get("name", ""),
-                unit=acc_data.get("unit", "szt"),
                 count=acc_data.get("count", 1),
                 source_accessory_id=acc_data.get("source_accessory_id"),  # Can be None
             )
@@ -504,7 +501,6 @@ class ProjectService:
         self,
         cabinet_id: int,
         name: str,
-        unit: str = "szt",
         count: int = 1,
         source_accessory_id: int = None,
     ) -> bool:
@@ -524,7 +520,6 @@ class ProjectService:
         snapshot_accessory = ProjectCabinetAccessorySnapshot(
             project_cabinet_id=cabinet.id,
             name=name,
-            unit=unit,
             count=count,
             source_accessory_id=source_accessory_id,
         )
@@ -714,7 +709,6 @@ class ProjectService:
                 {
                     "name": acc_snapshot.name,
                     "source_accessory_id": acc_snapshot.source_accessory_id,
-                    "unit": acc_snapshot.unit,
                     "quantity": total,
                     "notes": "",
                 }
@@ -728,7 +722,6 @@ class ProjectService:
                 {
                     "name": acc.name,
                     "source_accessory_id": getattr(acc, "id", None),
-                    "unit": acc.unit,
                     "quantity": total,
                     "notes": "",
                 }

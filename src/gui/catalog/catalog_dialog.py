@@ -325,7 +325,6 @@ class CatalogDialog(QDialog):
         self.quantity_spin = QSpinBox()
         self.quantity_spin.setRange(1, 999)
         self.quantity_spin.setValue(1)
-        self.quantity_spin.setSuffix(" szt.")
 
         # Add form rows
         form_layout.addRow("Wariant:", self.variant_combo)

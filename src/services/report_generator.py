@@ -180,27 +180,25 @@ class ReportGenerator:
     ) -> List[SimpleNamespace]:
         """
         Aggregate accessories across cabinets.
-        Group by source_accessory_id when available, otherwise by normalized name + unit.
+        Group by source_accessory_id when available, otherwise by normalized name.
         """
         aggregated: Dict[tuple, SimpleNamespace] = {}
 
         for accessory in accessories:
             source_accessory_id = getattr(accessory, "source_accessory_id", None)
             name = (getattr(accessory, "name", "") or "").strip()
-            unit = (getattr(accessory, "unit", "szt") or "szt").strip()
             notes = (getattr(accessory, "notes", "") or "").strip()
             quantity = int(getattr(accessory, "quantity", 0) or 0)
 
             if source_accessory_id is not None:
-                key = ("id", source_accessory_id, unit)
+                key = ("id", source_accessory_id)
             else:
-                key = ("name", name.lower(), unit)
+                key = ("name", name.lower())
 
             if key not in aggregated:
                 aggregated[key] = SimpleNamespace(
                     source_accessory_id=source_accessory_id,
                     name=name,
-                    unit=unit,
                     quantity=0,
                     notes=notes,
                 )
@@ -212,7 +210,7 @@ class ReportGenerator:
 
         return sorted(
             aggregated.values(),
-            key=lambda accessory: ((accessory.name or "").lower(), accessory.unit),
+            key=lambda accessory: (accessory.name or "").lower(),
         )
 
     def _extract_elements_directly(
@@ -376,7 +374,6 @@ class ReportGenerator:
                 SimpleNamespace(
                     name=acc.name,
                     source_accessory_id=getattr(acc, "id", None),
-                    unit=acc.unit,
                     quantity=total,
                     notes="",
                 )
@@ -454,7 +451,7 @@ class ReportGenerator:
             return
 
         cols = (
-            ["Poz.", "Nazwa akcesorium", "Ilość", "Jedn.", "Uwagi"]
+            ["Poz.", "Nazwa akcesorium", "Ilość", "Uwagi"]
             if accessory
             else [
                 "Lp.",
@@ -482,8 +479,7 @@ class ReportGenerator:
                 cells[1].text = part.name
                 cells[2].text = str(part.quantity)
                 cells[2].paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
-                cells[3].text = getattr(part, "unit", "szt") or "szt"
-                cells[4].text = getattr(part, "notes", "") or ""
+                cells[3].text = getattr(part, "notes", "") or ""
             else:
                 # Parts keep cabinet sequence marker.
                 cells[0].text = getattr(part, "seq", "")

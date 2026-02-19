@@ -143,8 +143,7 @@ def test_add_accessory_by_name_creates_accessory(service):
     # WHEN adding an accessory by name that doesn't exist yet
     link = service.add_accessory_by_name(
         cabinet_type_id=ct.id,
-        name="Uchwyt Złoty",
-        unit="szt",
+        name="Uchwyt ZĹ‚oty",
         count=2,
     )
 
@@ -154,8 +153,7 @@ def test_add_accessory_by_name_creates_accessory(service):
     assert link.count == 2
 
     # AND the accessory should have been created
-    assert link.accessory.name == "Uchwyt Złoty"
-    assert link.accessory.unit == "szt"
+    assert link.accessory.name == "Uchwyt ZĹ‚oty"
 
 
 def test_add_accessory_by_name_uses_existing_accessory(service):
@@ -166,7 +164,6 @@ def test_add_accessory_by_name_uses_existing_accessory(service):
     first_link = service.add_accessory_by_name(
         cabinet_type_id=ct.id,
         name="Handle A",
-        unit="kpl",
         count=1,
     )
     first_accessory_id = first_link.accessory.id
@@ -178,7 +175,6 @@ def test_add_accessory_by_name_uses_existing_accessory(service):
     second_link = service.add_accessory_by_name(
         cabinet_type_id=ct2.id,
         name="Handle A",  # Same name
-        unit="kpl",
         count=3,
     )
 
@@ -191,12 +187,8 @@ def test_list_accessories_for_cabinet_template(service):
     # GIVEN a cabinet template with some accessories
     ct = service.create_template(kitchen_type="WINO", name="AccTestCabinet4")
 
-    service.add_accessory_by_name(
-        cabinet_type_id=ct.id, name="Prowadnica", unit="szt", count=4
-    )
-    service.add_accessory_by_name(
-        cabinet_type_id=ct.id, name="Zawias", unit="kpl", count=2
-    )
+    service.add_accessory_by_name(cabinet_type_id=ct.id, name="Prowadnica", count=4)
+    service.add_accessory_by_name(cabinet_type_id=ct.id, name="Zawias", count=2)
 
     # WHEN listing accessories
     accessories = service.list_accessories(ct.id)
@@ -210,9 +202,7 @@ def test_list_accessories_for_cabinet_template(service):
 def test_delete_accessory_from_cabinet_template(service):
     # GIVEN a cabinet template with an accessory
     ct = service.create_template(kitchen_type="PARIS", name="AccTestCabinet5")
-    link = service.add_accessory_by_name(
-        cabinet_type_id=ct.id, name="Uchwyt", unit="szt", count=1
-    )
+    link = service.add_accessory_by_name(cabinet_type_id=ct.id, name="Uchwyt", count=1)
     accessory_id = link.accessory.id
 
     # WHEN deleting the accessory link
@@ -229,13 +219,11 @@ def test_delete_accessory_from_cabinet_template(service):
 def test_update_accessory_count(service):
     # GIVEN a cabinet template with an accessory
     ct = service.create_template(kitchen_type="LOFT", name="AccTestCabinet6")
-    service.add_accessory_by_name(
-        cabinet_type_id=ct.id, name="Rączka", unit="szt", count=1
-    )
+    service.add_accessory_by_name(cabinet_type_id=ct.id, name="RÄ…czka", count=1)
 
     # WHEN adding the same accessory again with a different count
     updated_link = service.add_accessory_by_name(
-        cabinet_type_id=ct.id, name="Rączka", unit="szt", count=5
+        cabinet_type_id=ct.id, name="RÄ…czka", count=5
     )
 
     # THEN the count should be updated

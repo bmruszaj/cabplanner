@@ -245,7 +245,6 @@ class TemplateService:
         *,
         cabinet_type_id: int,
         name: str,
-        unit: str = "szt",
         count: int = 1,
     ) -> CabinetTemplateAccessory:
         """
@@ -256,7 +255,7 @@ class TemplateService:
         stmt = select(Accessory).filter_by(name=name)
         accessory = self.db.scalars(stmt).first()
         if not accessory:
-            accessory = Accessory(name=name, unit=unit)
+            accessory = Accessory(name=name)
             self.db.add(accessory)
             self.db.flush()
 

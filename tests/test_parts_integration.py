@@ -44,7 +44,7 @@ class TestPartsIntegration:
         parts_data = [
             {"part_name": "Bok prawy", "width_mm": 560, "height_mm": 702},
             {"part_name": "Bok lewy", "width_mm": 560, "height_mm": 702},
-            {"part_name": "Wieniec górny", "width_mm": 564, "height_mm": 560},
+            {"part_name": "Wieniec gĂłrny", "width_mm": 564, "height_mm": 560},
             {"part_name": "Wieniec dolny", "width_mm": 564, "height_mm": 560},
         ]
 
@@ -103,7 +103,7 @@ class TestPartsIntegration:
             ),
             ProjectCabinetPart(
                 project_cabinet_id=cabinet.id,
-                part_name="Półka",
+                part_name="PĂłĹ‚ka",
                 width_mm=564,
                 height_mm=540,
                 pieces=2,
@@ -141,7 +141,7 @@ class TestPartsIntegration:
                 "comments": "",
             },
             {
-                "part_name": "Wieniec górny",
+                "part_name": "Wieniec gĂłrny",
                 "width_mm": 564,
                 "height_mm": 560,
                 "pieces": 1,
@@ -182,7 +182,7 @@ class TestPartsIntegration:
         part_names = [p.part_name for p in cabinet.parts]
         assert "Bok prawy" in part_names
         assert "Bok lewy" in part_names
-        assert "Wieniec górny" in part_names
+        assert "Wieniec gĂłrny" in part_names
 
     def test_parts_persist_through_accessory_changes(
         self, session, project_service, custom_cabinet_with_parts
@@ -196,13 +196,11 @@ class TestPartsIntegration:
         project_service.add_accessory_to_cabinet(
             cabinet_id=custom_cabinet_with_parts.id,
             name="Hinge",
-            unit="szt",
             count=4,
         )
         project_service.add_accessory_to_cabinet(
             cabinet_id=custom_cabinet_with_parts.id,
             name="Handle",
-            unit="kpl",
             count=1,
         )
 
@@ -359,7 +357,6 @@ class TestPartsIntegration:
             project_service.add_accessory_to_cabinet(
                 cabinet_id=cabinet.id,
                 name=f"Accessory {i + 1}",
-                unit="szt",
                 count=i + 1,
             )
 
@@ -469,7 +466,7 @@ class TestPartsWithCatalogTemplates:
         parts = [
             ("Bok prawy", 560, 702),
             ("Bok lewy", 560, 702),
-            ("Wieniec górny", 564, 560),
+            ("Wieniec gĂłrny", 564, 560),
             ("Wieniec dolny", 564, 560),
             ("Plecy HDF", 596, 716),
         ]
@@ -501,7 +498,7 @@ class TestPartsWithCatalogTemplates:
         # WHEN: Adding a new part
         result = template_service.add_part(
             cabinet_type_id=template_with_parts.id,
-            part_name="Półka stała",
+            part_name="PĂłĹ‚ka staĹ‚a",
             width_mm=564,
             height_mm=540,
             pieces=1,

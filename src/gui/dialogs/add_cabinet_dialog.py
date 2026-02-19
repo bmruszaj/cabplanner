@@ -103,7 +103,7 @@ class AccessoriesTableModel(QAbstractTableModel):
     def __init__(self, accessories, parent=None):
         super().__init__(parent)
         self.accessories = accessories
-        self.headers = ["Nazwa", "Ilość", "Jedn."]
+        self.headers = ["Nazwa", "Ilość"]
 
     def rowCount(self, parent=QModelIndex()):
         return len(self.accessories)
@@ -123,13 +123,10 @@ class AccessoriesTableModel(QAbstractTableModel):
                 return accessory.get("name", "")
             elif col == 1:
                 return accessory.get("count", 1)
-            elif col == 2:
-                unit = accessory.get("unit", "szt")
-                return "szt." if unit == "szt" else "kpl."
 
         elif role == Qt.TextAlignmentRole:
             col = index.column()
-            if col in (1, 2):  # Quantity and Unit
+            if col == 1:  # Quantity
                 return Qt.AlignCenter
             return Qt.AlignLeft | Qt.AlignVCenter
 
@@ -696,7 +693,6 @@ class AddCabinetDialog(QDialog):
                 self.catalog_service.cabinet_type_service.add_accessory_by_name(
                     cabinet_type_id=cabinet_type.id,
                     name=accessory_data["name"],
-                    unit=accessory_data.get("unit", "szt"),
                     count=accessory_data.get("count", 1),
                 )
 

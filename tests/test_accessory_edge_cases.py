@@ -27,7 +27,6 @@ class TestAccessoryEdgeCases:
         result = project_service.add_accessory_to_cabinet(
             cabinet_id=invalid_cabinet_id,
             name="Test Accessory",
-            unit="szt",
             count=1,
         )
 
@@ -38,7 +37,7 @@ class TestAccessoryEdgeCases:
         """Test adding accessory with empty name"""
         # WHEN: Adding accessory with empty name
         result = project_service.add_accessory_to_cabinet(
-            cabinet_id=custom_cabinet.id, name="", unit="szt", count=1
+            cabinet_id=custom_cabinet.id, name="", count=1
         )
 
         # THEN: Operation should fail or handle gracefully
@@ -57,7 +56,7 @@ class TestAccessoryEdgeCases:
         """Test adding accessory with None name"""
         # WHEN: Adding accessory with None name
         result = project_service.add_accessory_to_cabinet(
-            cabinet_id=custom_cabinet.id, name=None, unit="szt", count=1
+            cabinet_id=custom_cabinet.id, name=None, count=1
         )
 
         # THEN: Should fail gracefully
@@ -65,24 +64,24 @@ class TestAccessoryEdgeCases:
         session.refresh(custom_cabinet)
         assert len(custom_cabinet.accessory_snapshots) == 0
 
-    def test_add_accessory_invalid_unit(self, session, project_service, custom_cabinet):
-        """Test adding accessory with invalid unit (unit must be 'szt' or 'kpl')"""
-        # WHEN: Adding accessory with invalid unit - using default 'szt' instead
+    def test_add_accessory_basic_persistence(
+        self, session, project_service, custom_cabinet
+    ):
+        """Test adding accessory persists expected fields."""
         result = project_service.add_accessory_to_cabinet(
-            cabinet_id=custom_cabinet.id, name="Test Accessory", unit="szt", count=1
+            cabinet_id=custom_cabinet.id, name="Test Accessory", count=1
         )
 
-        # THEN: Should succeed with valid unit
+        # THEN: Should succeed with valid data
         if result:
             session.refresh(custom_cabinet)
             assert len(custom_cabinet.accessory_snapshots) == 1
-            assert custom_cabinet.accessory_snapshots[0].unit == "szt"
 
     def test_add_accessory_zero_count(self, session, project_service, custom_cabinet):
         """Test adding accessory with zero count"""
         # WHEN: Adding accessory with zero count
         result = project_service.add_accessory_to_cabinet(
-            cabinet_id=custom_cabinet.id, name="Test Accessory", unit="szt", count=0
+            cabinet_id=custom_cabinet.id, name="Test Accessory", count=0
         )
 
         # THEN: Should handle based on business rules
@@ -99,7 +98,6 @@ class TestAccessoryEdgeCases:
         result = project_service.add_accessory_to_cabinet(
             cabinet_id=custom_cabinet.id,
             name="Test Accessory",
-            unit="szt",
             count=-1,
         )
 
@@ -117,7 +115,6 @@ class TestAccessoryEdgeCases:
         result = project_service.add_accessory_to_cabinet(
             cabinet_id=custom_cabinet.id,
             name="Test Accessory",
-            unit="szt",
             count=large_count,
         )
 
@@ -135,7 +132,6 @@ class TestAccessoryEdgeCases:
         project_service.add_accessory_to_cabinet(
             cabinet_id=custom_cabinet.id,
             name="Duplicate Accessory",
-            unit="szt",
             count=1,
         )
 
@@ -143,7 +139,6 @@ class TestAccessoryEdgeCases:
         result = project_service.add_accessory_to_cabinet(
             cabinet_id=custom_cabinet.id,
             name="Duplicate Accessory",
-            unit="kpl",
             count=2,
         )
 
@@ -174,7 +169,7 @@ class TestAccessoryEdgeCases:
         """Test updating accessory quantity to negative value"""
         # GIVEN: An existing accessory
         project_service.add_accessory_to_cabinet(
-            cabinet_id=custom_cabinet.id, name="Test Accessory", unit="szt", count=5
+            cabinet_id=custom_cabinet.id, name="Test Accessory", count=5
         )
         session.refresh(custom_cabinet)
         accessory = custom_cabinet.accessory_snapshots[0]
@@ -195,7 +190,7 @@ class TestAccessoryEdgeCases:
         """Test updating accessory quantity to zero"""
         # GIVEN: An existing accessory
         project_service.add_accessory_to_cabinet(
-            cabinet_id=custom_cabinet.id, name="Test Accessory", unit="szt", count=5
+            cabinet_id=custom_cabinet.id, name="Test Accessory", count=5
         )
         session.refresh(custom_cabinet)
         accessory = custom_cabinet.accessory_snapshots[0]
@@ -226,7 +221,7 @@ class TestAccessoryEdgeCases:
         """Test removing accessory that was already removed"""
         # GIVEN: An accessory that exists
         project_service.add_accessory_to_cabinet(
-            cabinet_id=custom_cabinet.id, name="Test Accessory", unit="szt", count=1
+            cabinet_id=custom_cabinet.id, name="Test Accessory", count=1
         )
         session.refresh(custom_cabinet)
         accessory_id = custom_cabinet.accessory_snapshots[0].id
@@ -245,7 +240,7 @@ class TestAccessoryEdgeCases:
         """Test concurrent operations on same accessory"""
         # GIVEN: An accessory
         project_service.add_accessory_to_cabinet(
-            cabinet_id=custom_cabinet.id, name="Test Accessory", unit="szt", count=5
+            cabinet_id=custom_cabinet.id, name="Test Accessory", count=5
         )
         session.refresh(custom_cabinet)
         accessory_id = custom_cabinet.accessory_snapshots[0].id
@@ -269,8 +264,7 @@ class TestAccessoryEdgeCases:
         # WHEN: Adding accessory with Unicode characters
         result = project_service.add_accessory_to_cabinet(
             cabinet_id=custom_cabinet.id,
-            name="Uchwyt® żółwik™ ñiño 中文",
-            unit="szt",
+            name="UchwytÂ® ĹĽĂłĹ‚wikâ„˘ Ă±iĂ±o ä¸­ć–‡",
             count=1,
         )
 
@@ -279,8 +273,7 @@ class TestAccessoryEdgeCases:
         session.refresh(custom_cabinet)
         assert len(custom_cabinet.accessory_snapshots) == 1
         accessory = custom_cabinet.accessory_snapshots[0]
-        assert "żółwik" in accessory.name
-        assert accessory.unit == "szt"
+        assert "ĹĽĂłĹ‚wik" in accessory.name
 
     def test_accessory_with_very_long_strings(
         self, session, project_service, custom_cabinet
@@ -290,7 +283,7 @@ class TestAccessoryEdgeCases:
         long_name = "A" * 1000  # Very long name
 
         result = project_service.add_accessory_to_cabinet(
-            cabinet_id=custom_cabinet.id, name=long_name, unit="szt", count=1
+            cabinet_id=custom_cabinet.id, name=long_name, count=1
         )
 
         # THEN: Should handle or truncate appropriately
@@ -310,7 +303,6 @@ class TestAccessoryEdgeCases:
             result = project_service.add_accessory_to_cabinet(
                 cabinet_id=custom_cabinet.id,
                 name="Test Accessory",
-                unit="szt",
                 count=1,
             )
 
@@ -323,7 +315,7 @@ class TestAccessoryEdgeCases:
         """Test accessory operations on deleted cabinet"""
         # GIVEN: A cabinet with accessories
         project_service.add_accessory_to_cabinet(
-            cabinet_id=custom_cabinet.id, name="Test Accessory", unit="szt", count=1
+            cabinet_id=custom_cabinet.id, name="Test Accessory", count=1
         )
 
         # WHEN: Cabinet is deleted and we try to add more accessories
@@ -333,7 +325,6 @@ class TestAccessoryEdgeCases:
         result = project_service.add_accessory_to_cabinet(
             cabinet_id=custom_cabinet.id,
             name="Another Accessory",
-            unit="kpl",
             count=1,
         )
 
@@ -349,7 +340,6 @@ class TestAccessoryEdgeCases:
         result = project_service.add_accessory_to_cabinet(
             cabinet_id=custom_cabinet.id,
             name="Timestamped Accessory",
-            unit="szt",
             count=1,
         )
         after_time = datetime.now(timezone.utc)
@@ -388,13 +378,11 @@ class TestAccessoryEdgeCases:
         project_service.add_accessory_to_cabinet(
             cabinet_id=custom_cabinet.id,
             name="Test Accessory 1",
-            unit="szt",
             count=1,
         )
         project_service.add_accessory_to_cabinet(
             cabinet_id=custom_cabinet.id,
             name="Test Accessory 2",
-            unit="kpl",
             count=2,
         )
         session.refresh(custom_cabinet)

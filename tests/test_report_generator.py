@@ -100,7 +100,7 @@ def sample_project_orm():
     project.cabinets = [cab]
 
     # Accessory and link
-    acc = Accessory(name="Hinge X", unit="szt")
+    acc = Accessory(name="Hinge X")
     link = ProjectCabinetAccessory(count=4)
     # assign relationships
     link.project_cabinet = cab
@@ -205,7 +205,7 @@ def test_body_tables_count_and_headers(tmp_path, sample_project_orm):
         ["Lp.", "Nazwa", "Wymiary (mm)", "Ilość", "Okleina", "Kolor", "Uwagi"],
         ["Lp.", "Nazwa", "Wymiary (mm)", "Ilość", "Okleina", "Kolor", "Uwagi"],
         ["Lp.", "Nazwa", "Wymiary (mm)", "Ilość", "Okleina", "Kolor", "Uwagi"],
-        ["Poz.", "Nazwa akcesorium", "Ilość", "Jedn.", "Uwagi"],
+        ["Poz.", "Nazwa akcesorium", "Ilość", "Uwagi"],
     ]
     for table, hdr in zip(body_tables, expected_hdr):
         assert [cell.text for cell in table.rows[0].cells] == hdr
@@ -238,7 +238,7 @@ def test_accessories_section(tmp_path, sample_project_orm):
     """
     Given: derived AKCESORIA table
     When: reading its single row
-    Then: it matches accessory name, count, and unit
+    Then: it matches accessory name and count
     """
     rg = ReportGenerator()
     output = rg.generate(sample_project_orm, output_dir=str(tmp_path), auto_open=False)
@@ -249,10 +249,10 @@ def test_accessories_section(tmp_path, sample_project_orm):
     acc_table = body_tables[3]
     assert len(acc_table.rows) == 2
     cells = acc_table.rows[1].cells
-    # Name at index 1, quantity at 2, unit at 3
+    # Name at index 1, quantity at 2, notes at 3
     assert cells[1].text == "Hinge X"
     assert cells[2].text == str(4 * sample_project_orm.cabinets[0].quantity)
-    assert cells[3].text == "szt"
+    assert cells[3].text == ""
 
 
 def test_accessories_are_aggregated_without_sequence(tmp_path):
@@ -289,8 +289,8 @@ def test_accessories_are_aggregated_without_sequence(tmp_path):
     cabinet_2.project = project
     project.cabinets = [cabinet_1, cabinet_2]
 
-    accessory_1 = Accessory(name="Hinge X", unit="szt")
-    accessory_2 = Accessory(name="Hinge X", unit="szt")
+    accessory_1 = Accessory(name="Hinge X")
+    accessory_2 = Accessory(name="Hinge X")
 
     link_1 = ProjectCabinetAccessory(count=4)
     link_1.project_cabinet = cabinet_1
@@ -316,7 +316,7 @@ def test_accessories_are_aggregated_without_sequence(tmp_path):
     assert cells[0].text == "1"
     assert cells[1].text == "Hinge X"
     assert cells[2].text == str((4 * 2) + (5 * 1))
-    assert cells[3].text == "szt"
+    assert cells[3].text == ""
 
 
 def test_notes_and_footer(tmp_path, sample_project_orm):

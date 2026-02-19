@@ -47,11 +47,10 @@ def test_list_accessories_empty(service):
 def test_create_and_get_accessory(service):
     # GIVEN a fresh AccessoryService
     # WHEN creating a new accessory
-    acc = service.create_accessory(name="Handle", unit="szt")
+    acc = service.create_accessory(name="Handle")
     # THEN the created accessory should have correct fields
     assert acc.id is not None
     assert acc.name == "Handle"
-    assert acc.unit == "szt"
     assert isinstance(acc.created_at, datetime)
     assert isinstance(acc.updated_at, datetime)
 
@@ -65,7 +64,7 @@ def test_create_and_get_accessory(service):
 
 def test_find_by_name(service):
     # GIVEN an accessory exists
-    acc = service.create_accessory(name="Knob", unit="kpl")
+    acc = service.create_accessory(name="Knob")
 
     # WHEN finding by existing name
     found = service.find_by_name("Knob")
@@ -81,16 +80,15 @@ def test_find_by_name(service):
 
 def test_update_accessory(service):
     # GIVEN an existing accessory
-    acc = service.create_accessory(name="Panel", unit="szt")
+    acc = service.create_accessory(name="Panel")
     acc_id = acc.id
 
-    # WHEN updating name and unit
-    updated = service.update_accessory(acc_id, name="PanelX", unit="kpl")
+    # WHEN updating name
+    updated = service.update_accessory(acc_id, name="PanelX")
     # THEN it should reflect the new values
     assert updated is not None
     assert updated.id == acc_id
     assert updated.name == "PanelX"
-    assert updated.unit == "kpl"
 
 
 def test_update_nonexistent_accessory(service):
@@ -103,7 +101,7 @@ def test_update_nonexistent_accessory(service):
 
 def test_delete_accessory(service):
     # GIVEN an accessory to delete
-    acc = service.create_accessory(name="Trim", unit="szt")
+    acc = service.create_accessory(name="Trim")
     acc_id = acc.id
 
     # WHEN deleting first time
@@ -120,10 +118,10 @@ def test_delete_accessory(service):
 
 def test_get_or_create_existing(service):
     # GIVEN existing accessory
-    acc = service.create_accessory(name="Seal", unit="kpl")
+    acc = service.create_accessory(name="Seal")
 
     # WHEN calling get_or_create with same name
-    got = service.get_or_create(name="Seal", unit="szt")
+    got = service.get_or_create(name="Seal")
     # THEN returns the existing accessory
     assert got.id == acc.id
     assert got.name == acc.name
@@ -132,8 +130,7 @@ def test_get_or_create_existing(service):
 def test_get_or_create_new(service):
     # GIVEN no accessory with name NewAcc
     # WHEN calling get_or_create
-    new = service.get_or_create(name="NewAcc", unit="kpl")
+    new = service.get_or_create(name="NewAcc")
     # THEN creates and returns new accessory
     assert new.id is not None
     assert new.name == "NewAcc"
-    assert new.unit == "kpl"

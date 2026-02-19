@@ -6,39 +6,30 @@ across different parts of the application.
 
 Features:
 - ComboBox with autocomplete for selecting from accessory catalog
-- Automatic unit selection when choosing from catalog
 - New accessories are automatically added to catalog on save
 """
 
 from typing import List
 
-from PySide6.QtWidgets import (
-    QDialog,
-    QVBoxLayout,
-    QHBoxLayout,
-    QFormLayout,
-    QComboBox,
-    QSpinBox,
-    QGroupBox,
-    QMessageBox,
-    QDialogButtonBox,
-    QButtonGroup,
-    QRadioButton,
-    QLabel,
-    QCompleter,
-)
 from PySide6.QtCore import Qt
+from PySide6.QtWidgets import (
+    QComboBox,
+    QCompleter,
+    QDialog,
+    QDialogButtonBox,
+    QFormLayout,
+    QGroupBox,
+    QLabel,
+    QMessageBox,
+    QSpinBox,
+    QVBoxLayout,
+)
 
 from src.gui.resources.styles import PRIMARY
 
 
 class AccessoryEditDialog(QDialog):
-    """Dialog for editing an accessory with catalog support.
-
-    Supports two modes:
-    - Selection from catalog: Shows ComboBox with existing accessories
-    - New accessory: User types a new name, which is added to catalog on save
-    """
+    """Dialog for editing an accessory with catalog support."""
 
     def __init__(
         self,
@@ -47,15 +38,7 @@ class AccessoryEditDialog(QDialog):
         accessory_service=None,
         parent=None,
     ):
-        """
-        Initialize the accessory edit dialog.
-
-        Args:
-            accessory: Dict with accessory data for edit mode (name, unit, count)
-            existing_names: List of names already in current cabinet (for validation)
-            accessory_service: Optional AccessoryService for catalog integration
-            parent: Parent widget
-        """
+        """Initialize the accessory edit dialog."""
         super().__init__(parent)
         self.accessory = accessory
         self.accessory_service = accessory_service
@@ -64,20 +47,17 @@ class AccessoryEditDialog(QDialog):
         # Store existing names for uniqueness validation (excluding current name in edit mode)
         self.existing_names = set(n.lower() for n in (existing_names or []))
         if self.is_edit_mode and accessory:
-            # Exclude current accessory name from uniqueness check
             current_name = accessory.get("name", "").lower()
             self.existing_names.discard(current_name)
 
-        # Load catalog accessories
         self.catalog_accessories = self._load_catalog_accessories()
 
         self.setWindowTitle(
             "Edytuj akcesorium" if self.is_edit_mode else "Nowe akcesorium"
         )
-        self.resize(450, 320)
+        self.resize(450, 280)
 
         self._setup_ui()
-        self._setup_connections()
         self._apply_styles()
 
         if self.is_edit_mode:
@@ -89,7 +69,7 @@ class AccessoryEditDialog(QDialog):
             return []
         try:
             accessories = self.accessory_service.list_accessories()
-            return [{"name": acc.name, "unit": acc.unit} for acc in accessories]
+            return [{"name": acc.name} for acc in accessories]
         except Exception:
             return []
 
@@ -99,12 +79,10 @@ class AccessoryEditDialog(QDialog):
         layout.setSpacing(16)
         layout.setContentsMargins(16, 16, 16, 16)
 
-        # Accessory information group
         accessory_group = QGroupBox("Informacje o akcesorium")
         accessory_layout = QFormLayout(accessory_group)
         accessory_layout.setSpacing(12)
 
-        # Accessory name - ComboBox with autocomplete
         self.name_combo = QComboBox()
         self.name_combo.setEditable(True)
         self.name_combo.setInsertPolicy(QComboBox.NoInsert)
@@ -112,12 +90,10 @@ class AccessoryEditDialog(QDialog):
             "Wybierz z listy lub wpisz nową nazwę..."
         )
 
-        # Add catalog items to combo
-        self.name_combo.addItem("")  # Empty option for new entry
+        self.name_combo.addItem("")
         for acc in self.catalog_accessories:
             self.name_combo.addItem(acc["name"])
 
-        # Setup completer for autocomplete
         completer = QCompleter([acc["name"] for acc in self.catalog_accessories], self)
         completer.setCaseSensitivity(Qt.CaseInsensitive)
         completer.setFilterMode(Qt.MatchContains)
@@ -125,10 +101,9 @@ class AccessoryEditDialog(QDialog):
 
         accessory_layout.addRow("Nazwa akcesorium*:", self.name_combo)
 
-        # Hint label
         if self.catalog_accessories:
             hint_label = QLabel(
-                f"💡 {len(self.catalog_accessories)} akcesoriów w katalogu. "
+                f"W katalogu: {len(self.catalog_accessories)} akcesoriów. "
                 "Nowe nazwy zostaną dodane automatycznie."
             )
             hint_label.setStyleSheet(
@@ -137,20 +112,6 @@ class AccessoryEditDialog(QDialog):
             hint_label.setWordWrap(True)
             accessory_layout.addRow("", hint_label)
 
-        # Unit (radio buttons)
-        unit_layout = QHBoxLayout()
-        self.unit_group = QButtonGroup(self)
-        self.szt_radio = QRadioButton("szt.")
-        self.kpl_radio = QRadioButton("kpl.")
-        self.unit_group.addButton(self.szt_radio)
-        self.unit_group.addButton(self.kpl_radio)
-        self.szt_radio.setChecked(True)  # Default
-        unit_layout.addWidget(self.szt_radio)
-        unit_layout.addWidget(self.kpl_radio)
-        unit_layout.addStretch()
-        accessory_layout.addRow("Jednostka:", unit_layout)
-
-        # Quantity
         self.quantity_spinbox = QSpinBox()
         self.quantity_spinbox.setRange(1, 100)
         self.quantity_spinbox.setValue(1)
@@ -158,7 +119,6 @@ class AccessoryEditDialog(QDialog):
 
         layout.addWidget(accessory_group)
 
-        # Button box
         self.button_box = QDialogButtonBox(
             QDialogButtonBox.Save | QDialogButtonBox.Cancel
         )
@@ -166,40 +126,12 @@ class AccessoryEditDialog(QDialog):
         self.button_box.rejected.connect(self.reject)
         layout.addWidget(self.button_box)
 
-    def _setup_connections(self):
-        """Setup signal connections."""
-        # When user selects from catalog, set the default unit
-        self.name_combo.currentTextChanged.connect(self._on_name_changed)
-
-    def _on_name_changed(self, name: str):
-        """Handle name selection/change - set default unit from catalog."""
-        name = name.strip()
-        if not name:
-            return
-
-        # Find accessory in catalog
-        for acc in self.catalog_accessories:
-            if acc["name"].lower() == name.lower():
-                # Set unit from catalog
-                if acc["unit"] == "kpl":
-                    self.kpl_radio.setChecked(True)
-                else:
-                    self.szt_radio.setChecked(True)
-                break
-
     def _load_accessory_data(self):
         """Load accessory data into the form."""
         if not self.accessory:
             return
 
-        name = self.accessory.get("name", "")
-        self.name_combo.setCurrentText(name)
-
-        unit = self.accessory.get("unit", "szt")
-        if unit == "kpl":
-            self.kpl_radio.setChecked(True)
-        else:
-            self.szt_radio.setChecked(True)
+        self.name_combo.setCurrentText(self.accessory.get("name", ""))
         self.quantity_spinbox.setValue(self.accessory.get("count", 1))
 
     def _is_new_catalog_entry(self, name: str) -> bool:
@@ -218,7 +150,6 @@ class AccessoryEditDialog(QDialog):
             self.name_combo.setFocus()
             return
 
-        # Check for duplicate name in current cabinet
         if name.lower() in self.existing_names:
             QMessageBox.warning(
                 self,
@@ -230,20 +161,15 @@ class AccessoryEditDialog(QDialog):
             self.name_combo.lineEdit().selectAll()
             return
 
-        unit = "kpl" if self.kpl_radio.isChecked() else "szt"
-
-        # Add to catalog if new and service is available
         if self.accessory_service and self._is_new_catalog_entry(name):
             try:
-                self.accessory_service.get_or_create(name=name, unit=unit)
+                self.accessory_service.get_or_create(name=name)
             except Exception:
-                # Silently fail - catalog entry is optional
+                # Catalog entry creation is optional for the dialog flow.
                 pass
 
-        # Create accessory data
         self.accessory_data = {
             "name": name,
-            "unit": unit,
             "count": self.quantity_spinbox.value(),
         }
 
@@ -251,7 +177,8 @@ class AccessoryEditDialog(QDialog):
 
     def _apply_styles(self):
         """Apply visual styling to match other dialogs."""
-        self.setStyleSheet(f"""
+        self.setStyleSheet(
+            f"""
             QGroupBox {{
                 font-weight: bold;
                 font-size: 10pt;
@@ -292,24 +219,8 @@ class AccessoryEditDialog(QDialog):
                 background-color: #cccccc;
                 color: #666666;
             }}
-            QRadioButton {{
-                font-size: 10pt;
-                spacing: 8px;
-                padding: 4px 8px;
-                background-color: transparent;
-            }}
-            QRadioButton::indicator {{
-                width: 16px;
-                height: 16px;
-                border-radius: 8px;
-                border: 2px solid #D0D0D0;
-                background-color: white;
-            }}
-            QRadioButton::indicator:checked {{
-                background-color: {PRIMARY};
-                border: 2px solid {PRIMARY};
-            }}
             QLabel {{
                 background-color: transparent;
             }}
-        """)
+        """
+        )

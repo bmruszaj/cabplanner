@@ -43,7 +43,7 @@ class TestProjectCabinetDuplication:
         cabinet.project_id = 100
         cabinet.sequence_number = 3
         cabinet.type_id = 10
-        cabinet.body_color = "Biały"
+        cabinet.body_color = "BiaĹ‚y"
         cabinet.front_color = "Szary"
         cabinet.handle_type = "Uchwyt A"
         cabinet.quantity = 2
@@ -80,7 +80,6 @@ class TestProjectCabinetDuplication:
         # Create mock accessories
         acc1 = Mock(spec=ProjectCabinetAccessorySnapshot)
         acc1.name = "Zawias"
-        acc1.unit = "szt"
         acc1.count = 4
         acc1.source_accessory_id = 200
 
@@ -381,7 +380,7 @@ class TestCabinetDuplicationIntegration:
             project_id=1,
             sequence_number=5,
             type_id=10,
-            body_color="Biały",
+            body_color="BiaĹ‚y",
             front_color="Szary",
             handle_type="Uchwyt Premium",
             quantity=3,

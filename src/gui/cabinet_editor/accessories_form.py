@@ -1,7 +1,7 @@
 """
 Accessories form for editing cabinet accessories in the cabinet editor.
 
-Handles accessory-level fields like unit (szt/kpl), quantities, etc.
+Handles accessory-level fields like names and quantities.
 """
 
 from PySide6.QtWidgets import (
@@ -32,7 +32,7 @@ class AccessoriesTableModel(QAbstractTableModel):
     def __init__(self, accessories, parent=None):
         super().__init__(parent)
         self.accessories = accessories
-        self.headers = ["Nazwa", "Ilość", "Jedn."]
+        self.headers = ["Nazwa", "Ilość"]
 
     def rowCount(self, parent=QModelIndex()):
         return len(self.accessories)
@@ -56,16 +56,10 @@ class AccessoriesTableModel(QAbstractTableModel):
                     return accessory.name
             elif col == 1:
                 return accessory.count
-            elif col == 2:
-                # Handle both legacy (with .accessory) and snapshot (direct fields)
-                if hasattr(accessory, "accessory") and accessory.accessory:
-                    return getattr(accessory.accessory, "unit", "szt")
-                else:
-                    return getattr(accessory, "unit", "szt")
 
         elif role == Qt.TextAlignmentRole:
             col = index.column()
-            if col in (1, 2):  # Quantity, Unit
+            if col == 1:  # Quantity
                 return Qt.AlignCenter
             return Qt.AlignLeft | Qt.AlignVCenter
 
@@ -280,7 +274,6 @@ class AccessoriesForm(QWidget):
                 self.pending.add_item(
                     {
                         "name": accessory_data["name"],
-                        "unit": accessory_data["unit"],
                         "count": accessory_data["count"],
                     }
                 )
@@ -309,7 +302,6 @@ class AccessoriesForm(QWidget):
                         if hasattr(accessory, "accessory") and accessory.accessory
                         else ""
                     ),
-                    "unit": getattr(accessory, "unit", "szt"),
                     "count": getattr(accessory, "count", 1),
                 }
                 existing_names = self._get_existing_accessory_names()
@@ -331,7 +323,6 @@ class AccessoriesForm(QWidget):
                             acc_id,
                             {
                                 "name": accessory_data["name"],
-                                "unit": accessory_data["unit"],
                                 "count": accessory_data["count"],
                             },
                         )
@@ -433,12 +424,6 @@ class AccessoriesForm(QWidget):
                             if hasattr(acc, "accessory") and acc.accessory
                             else ""
                         ),
-                        unit=getattr(acc, "unit", "szt")
-                        or (
-                            getattr(acc.accessory, "unit", "szt")
-                            if hasattr(acc, "accessory") and acc.accessory
-                            else "szt"
-                        ),
                         count=updated_data.get("count", acc.count),
                     )
                     result_accessories.append(acc_copy)
@@ -451,7 +436,6 @@ class AccessoriesForm(QWidget):
                 id=None,
                 temp_id=pending_acc.get("temp_id"),
                 name=pending_acc.get("name", ""),
-                unit=pending_acc.get("unit", "szt"),
                 count=pending_acc.get("count", 1),
             )
             result_accessories.append(temp_acc)

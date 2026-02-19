@@ -712,7 +712,6 @@ class CabinetEditorDialog(QDialog):
                 success = self.project_service.add_accessory_to_cabinet(
                     cabinet_id=self.project_instance.id,
                     name=acc_data["name"],
-                    unit=acc_data.get("unit", "szt"),
                     count=acc_data["count"],
                 )
                 if not success:
@@ -792,7 +791,6 @@ class CabinetEditorDialog(QDialog):
                 template_service.add_accessory_by_name(
                     cabinet_type_id=self.cabinet_type.id,
                     name=acc_data["name"],
-                    unit=acc_data.get("unit", "szt"),
                     count=acc_data["count"],
                 )
 
