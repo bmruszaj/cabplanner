@@ -5,6 +5,8 @@ This file provides common fixtures that are automatically available to all test 
 in this directory and its subdirectories.
 """
 
+import os
+
 import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -16,6 +18,10 @@ from src.services.formula_constants_service import FormulaConstantsService
 from src.services.settings_service import SettingsService
 from src.services.accessory_service import AccessoryService
 from src.services.catalog_service import CatalogService
+
+# Ensure Qt tests run headless across local and CI environments.
+os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+os.environ.setdefault("QT_OPENGL", "software")
 
 
 @pytest.fixture(scope="function")
