@@ -21,6 +21,7 @@ from PySide6.QtWidgets import (
     QGroupBox,
     QDialogButtonBox,
     QMessageBox,
+    QToolButton,
 )
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QPixmap
@@ -173,14 +174,60 @@ class SettingsDialog(QDialog):
 
         layout.addWidget(defaults_group)
 
-        # Report settings group
-        report_group = QGroupBox("Ustawienia raportów")
+        # Report pagination settings group
+        report_group = QGroupBox("Zawijanie strony w raporcie")
         report_layout = QFormLayout(report_group)
 
-        # Report parts sorting
-        self.report_sort_by = QComboBox()
-        self.report_sort_by.addItems(["Kolor", "LP (numer szafki)"])
-        report_layout.addRow("Sortowanie elementów w raporcie:", self.report_sort_by)
+        # Report page break strictness
+        self.report_page_break_strictness = QComboBox()
+        self.report_page_break_strictness.addItems(["Łagodna", "Standardowa", "Ostra"])
+
+        strictness_help_text = (
+            "<div style='min-width: 330px;'>"
+            "<b>Tryb podziału sekcji</b><br/>"
+            "<span>Określa, kiedy sekcja raportu przechodzi na nową stronę.</span>"
+            "<ul style='margin-top:6px; margin-bottom:6px;'>"
+            "<li><b>Łagodna</b> – mniej podziałów, bardziej zwarty raport.</li>"
+            "<li><b>Standardowa</b> – kompromis między czytelnością a długością raportu.</li>"
+            "<li><b>Ostra</b> – każda kolejna sekcja zaczyna się od nowej strony.</li>"
+            "</ul>"
+            "</div>"
+        )
+
+        strictness_row = QWidget()
+        strictness_row_layout = QHBoxLayout(strictness_row)
+        strictness_row_layout.setContentsMargins(0, 0, 0, 0)
+        strictness_row_layout.setSpacing(6)
+        strictness_row_layout.addWidget(self.report_page_break_strictness, 1)
+        strictness_row_layout.addStretch(1)
+
+        self.report_page_break_info = QToolButton()
+        self.report_page_break_info.setText("i")
+        self.report_page_break_info.setCursor(Qt.PointingHandCursor)
+        self.report_page_break_info.setFixedSize(24, 24)
+        self.report_page_break_info.setToolTip(strictness_help_text)
+        self.report_page_break_info.setStyleSheet(
+            "QToolButton {"
+            " border: 1px solid #8f9aa3;"
+            " border-radius: 12px;"
+            " background-color: #f7f9fb;"
+            " color: #2d3a45;"
+            " font-weight: 700;"
+            "}"
+            "QToolButton:hover {"
+            " background-color: #eaf2f8;"
+            " border-color: #6c879b;"
+            "}"
+            "QToolButton:pressed {"
+            " background-color: #dce9f3;"
+            "}"
+        )
+        strictness_row_layout.addWidget(
+            self.report_page_break_info, 0, Qt.AlignRight | Qt.AlignVCenter
+        )
+
+        self.report_page_break_strictness.setToolTip(strictness_help_text)
+        report_layout.addRow("Tryb podziału sekcji:", strictness_row)
 
         layout.addWidget(report_group)
 
@@ -342,12 +389,22 @@ class SettingsDialog(QDialog):
             )
 
             # Report settings
-            report_sort = self.settings_service.get_setting_value(
-                "report_sort_by", "Kolor"
+            page_break_strictness = self.settings_service.get_setting_value(
+                "report_page_break_strictness", "Standardowa"
             )
-            index = self.report_sort_by.findText(report_sort)
+            strictness_text = str(page_break_strictness).strip()
+            strictness_aliases = {
+                "lagodna": "Łagodna",
+                "łagodna": "Łagodna",
+                "standardowa": "Standardowa",
+                "ostra": "Ostra",
+            }
+            strictness_text = strictness_aliases.get(
+                strictness_text.lower(), strictness_text
+            )
+            index = self.report_page_break_strictness.findText(strictness_text)
             if index >= 0:
-                self.report_sort_by.setCurrentIndex(index)
+                self.report_page_break_strictness.setCurrentIndex(index)
 
             # Appearance settings
             self.dark_mode_check.setChecked(
@@ -432,7 +489,8 @@ class SettingsDialog(QDialog):
 
             # Report settings
             self.settings_service.set_setting(
-                "report_sort_by", self.report_sort_by.currentText()
+                "report_page_break_strictness",
+                self.report_page_break_strictness.currentText(),
             )
 
             # Appearance settings
@@ -620,6 +678,7 @@ class SettingsDialog(QDialog):
                 "default_project_path": os.path.join(
                     os.path.expanduser("~"), "Documents", "CabPlanner"
                 ),
+                "report_page_break_strictness": "Standardowa",
                 "dark_mode": False,
                 "company_logo_path": "",
             }
