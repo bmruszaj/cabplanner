@@ -59,6 +59,7 @@ class _FakeLog:
 def test_main_checks_cached_kill_switch_before_db_mutations(monkeypatch):
     calls = []
     fake_log = _FakeLog()
+    fake_updater = object()
 
     class _FakeKillSwitchService:
         def __init__(self, base_path):
@@ -85,6 +86,7 @@ def test_main_checks_cached_kill_switch_before_db_mutations(monkeypatch):
         main_app, "set_app_icon", lambda *_args: calls.append("set_icon")
     )
     monkeypatch.setattr(main_app, "get_base_path", lambda: Path("BASE"))
+    monkeypatch.setattr(main_app, "UpdaterService", lambda: fake_updater)
     monkeypatch.setattr(main_app, "KillSwitchService", _FakeKillSwitchService)
     monkeypatch.setattr(
         main_app,
@@ -101,10 +103,13 @@ def test_main_checks_cached_kill_switch_before_db_mutations(monkeypatch):
     monkeypatch.setattr(
         main_app,
         "create_services",
-        lambda *_args, **_kwargs: {
+        lambda *_args, **kwargs: calls.append(
+            ("create_services_updater", kwargs["updater_service"])
+        )
+        or {
             "backup": _FakeBackupService(calls),
             "settings": "SETTINGS",
-            "updater": "UPDATER",
+            "updater": kwargs["updater_service"],
             "kill_switch": "KILL_SWITCH",
         },
     )
@@ -128,13 +133,15 @@ def test_main_checks_cached_kill_switch_before_db_mutations(monkeypatch):
     assert calls.index(
         ("evaluate_current_version", main_app.VERSION, False)
     ) < calls.index(("ensure_db_and_migrate", Path("BASE")))
+    assert ("create_services_updater", fake_updater) in calls
     assert "backup_start" in calls
     assert ("refresh_current_version_async", main_app.VERSION) in calls
 
 
 def test_main_aborts_before_db_when_cached_kill_switch_blocks(monkeypatch):
     fake_log = _FakeLog()
-    shown_dialogs = []
+    forced_update_calls = []
+    fake_updater = object()
 
     class _FakeKillSwitchService:
         def __init__(self, base_path):
@@ -153,11 +160,6 @@ def test_main_aborts_before_db_when_cached_kill_switch_blocks(monkeypatch):
         def refresh_current_version_async(self, version):
             raise AssertionError("refresh should not start after a blocking decision")
 
-    class _FakeMessageBox:
-        @staticmethod
-        def critical(_parent, title, message):
-            shown_dialogs.append((title, message))
-
     monkeypatch.setattr(
         main_app, "configure_logging", lambda *_args, **_kwargs: fake_log
     )
@@ -165,8 +167,15 @@ def test_main_aborts_before_db_when_cached_kill_switch_blocks(monkeypatch):
     monkeypatch.setattr(main_app, "create_qt_app", lambda: _FakeApp())
     monkeypatch.setattr(main_app, "set_app_icon", lambda *_args: None)
     monkeypatch.setattr(main_app, "get_base_path", lambda: Path("BASE"))
+    monkeypatch.setattr(main_app, "UpdaterService", lambda: fake_updater)
     monkeypatch.setattr(main_app, "KillSwitchService", _FakeKillSwitchService)
-    monkeypatch.setattr(main_app, "QMessageBox", _FakeMessageBox)
+    monkeypatch.setattr(
+        main_app,
+        "run_forced_update_dialog",
+        lambda parent, updater_service, title, message: forced_update_calls.append(
+            (parent, updater_service, title, message)
+        ),
+    )
     monkeypatch.setattr(
         main_app,
         "ensure_db_and_migrate",
@@ -178,28 +187,33 @@ def test_main_aborts_before_db_when_cached_kill_switch_blocks(monkeypatch):
     with pytest.raises(SystemExit, match="Stop now"):
         main_app.main()
 
-    assert shown_dialogs == [("Blocked", "Stop now")]
+    assert forced_update_calls == [(None, fake_updater, "Blocked", "Stop now")]
 
 
-def test_runtime_handler_shows_modal_and_quits(monkeypatch):
+def test_runtime_handler_runs_forced_update_and_quits(monkeypatch):
     fake_log = _FakeLog()
-    shown_dialogs = []
+    forced_update_calls = []
     quit_calls = []
-
-    class _FakeMessageBox:
-        @staticmethod
-        def critical(_parent, title, message):
-            shown_dialogs.append((title, message))
 
     class _FakeCoreApplication:
         @staticmethod
         def quit():
             quit_calls.append("quit")
 
-    monkeypatch.setattr(main_app, "QMessageBox", _FakeMessageBox)
     monkeypatch.setattr(main_app, "QCoreApplication", _FakeCoreApplication)
+    monkeypatch.setattr(
+        main_app,
+        "run_forced_update_dialog",
+        lambda parent, updater_service, title, message: forced_update_calls.append(
+            (parent, updater_service, title, message)
+        ),
+    )
 
-    handler = main_app._RuntimeKillSwitchHandler(fake_log)
+    handler = main_app._RuntimeKillSwitchHandler(
+        fake_log,
+        updater_service="UPDATER",
+        dialog_parent="WINDOW",
+    )
     handler.on_remote_block_detected(
         KillSwitchDecision(
             is_blocked=True,
@@ -210,7 +224,5 @@ def test_runtime_handler_shows_modal_and_quits(monkeypatch):
         )
     )
 
-    assert shown_dialogs == [
-        ("Blocked", "Stop now\n\nAplikacja zostanie teraz zamknieta.")
-    ]
+    assert forced_update_calls == [("WINDOW", "UPDATER", "Blocked", "Stop now")]
     assert quit_calls == ["quit"]

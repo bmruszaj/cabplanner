@@ -23,10 +23,11 @@ def create_services(
     db_path: Path,
     base_path: Path | None = None,
     kill_switch_service: KillSwitchService | None = None,
+    updater_service: UpdaterService | None = None,
 ) -> dict:
     """Create application services and return them in a dictionary."""
     settings_service = SettingsService(session)
-    updater_service = UpdaterService()
+    updater_service = updater_service or UpdaterService()
     kill_switch_service = kill_switch_service or KillSwitchService()
     backup_service = BackupService(db_path=db_path, base_path=base_path)
 

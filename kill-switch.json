@@ -1,7 +1,7 @@
 {
   "enabled": true,
   "block_all": true,
-  "blocked_versions": [0.0.1],
+  "blocked_versions": ["0.0.1"],
   "min_allowed_version": "",
   "title": "Wymagana aktualizacja",
   "message": "Ta wersja aplikacji zostala wylaczona. Zaktualizuj Cabplanner do nowszej wersji."

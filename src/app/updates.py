@@ -13,6 +13,38 @@ from src.version import VERSION
 logger = logging.getLogger(__name__)
 
 
+def configure_update_dialog(
+    dialog: UpdateDialog, updater_service: UpdaterService, close_on_cancel: bool = True
+) -> None:
+    """Connect update dialog signals to the updater service."""
+    dialog.check_for_updates.connect(updater_service.check_for_updates)
+    dialog.perform_update.connect(
+        lambda: _start_update_process(dialog, updater_service)
+    )
+    updater_service.update_progress.connect(dialog.on_update_progress)
+    updater_service.update_complete.connect(dialog.on_update_complete)
+    updater_service.update_failed.connect(dialog.on_update_failed)
+    updater_service.update_check_failed.connect(dialog.update_check_failed)
+    updater_service.request_quit.connect(dialog.accept)
+    dialog.cancel_update.connect(updater_service.cancel_update)
+    if close_on_cancel:
+        dialog.cancel_update.connect(dialog.reject)
+
+
+def run_forced_update_dialog(
+    parent,
+    updater_service: UpdaterService,
+    title: str,
+    message: str,
+    current_version: str = VERSION,
+) -> None:
+    """Show a modal dialog that lets a blocked user install the latest version."""
+    dialog = UpdateDialog(current_version, parent=parent)
+    configure_update_dialog(dialog, updater_service)
+    dialog.force_update_required(title, message)
+    dialog.exec()
+
+
 def wire_startup_update_check(
     window, settings_service: SettingsService, updater_service: UpdaterService
 ) -> None:
@@ -120,26 +152,7 @@ def _handle_startup_update_result(
 
             # Show update dialog
             dialog = UpdateDialog(VERSION, parent=window)
-
-            # Connect signals properly with new error enum system
-            dialog.check_for_updates.connect(updater_service.check_for_updates)
-
-            # Connect update button to start the update process
-            dialog.perform_update.connect(
-                lambda: _start_update_process(dialog, updater_service)
-            )
-
-            # Handle update progress and completion with new signatures
-            updater_service.update_progress.connect(dialog.on_update_progress)
-            updater_service.update_complete.connect(dialog.on_update_complete)
-            updater_service.update_failed.connect(dialog.on_update_failed)
-
-            # Handle update check failures with new error enum system
-            updater_service.update_check_failed.connect(dialog.update_check_failed)
-
-            # Handle cancellation
-            dialog.cancel_update.connect(updater_service.cancel_update)
-            dialog.cancel_update.connect(dialog.reject)
+            configure_update_dialog(dialog, updater_service)
 
             # Show that update is available
             dialog.update_available(current_version, latest_version)

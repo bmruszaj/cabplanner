@@ -60,6 +60,7 @@ class UpdateDialog(QDialog):
         self.setModal(True)
 
         self.current_version = current_version
+        self._forced_update_required = False
         self._setup_ui()
         self._setup_shortcuts()
 
@@ -132,22 +133,40 @@ class UpdateDialog(QDialog):
 
     def update_available(self, current_version, latest_version):
         """Show that an update is available."""
+        self._forced_update_required = False
         self.version_label.setText(self.tr(f"Aktualna wersja: v{current_version}"))
         self.status_label.setText(self.tr(f"Dostępna nowa wersja: v{latest_version}"))
         self.check_button.setVisible(False)
         self.check_button.setEnabled(False)
         self.update_button.setVisible(True)
         self.update_button.setEnabled(True)
+        self.cancel_button.setText(self.tr("Anuluj"))
         self.progress_bar.setVisible(False)
 
     def no_update_available(self):
         """Show that no update is available."""
+        self._forced_update_required = False
         self.status_label.setText(self.tr("Masz najnowszą wersję programu."))
         self.check_button.setVisible(True)
         self.check_button.setEnabled(True)
         self.update_button.setVisible(False)
         self.update_button.setEnabled(False)
+        self.cancel_button.setText(self.tr("Anuluj"))
         self.progress_bar.setVisible(False)
+
+    def force_update_required(self, title: str, message: str):
+        """Configure the dialog for a mandatory update flow."""
+        self._forced_update_required = True
+        self.setWindowTitle(self.tr(title))
+        self.version_label.setText(self.tr(f"Aktualna wersja: v{self.current_version}"))
+        self.status_label.setText(self.tr(message))
+        self.check_button.setVisible(False)
+        self.check_button.setEnabled(False)
+        self.update_button.setVisible(True)
+        self.update_button.setEnabled(True)
+        self.cancel_button.setText(self.tr("Zamknij"))
+        self.progress_bar.setVisible(False)
+        self.progress_bar.setValue(0)
 
     def update_check_failed(self, error: Exception):
         """Show that the update check failed with proper error translation."""
@@ -170,6 +189,7 @@ class UpdateDialog(QDialog):
         self.check_button.setEnabled(True)
         self.update_button.setVisible(False)
         self.update_button.setEnabled(False)
+        self.cancel_button.setText(self.tr("Anuluj"))
         self.progress_bar.setVisible(False)
 
     @Slot()
@@ -185,6 +205,7 @@ class UpdateDialog(QDialog):
         self.check_button.setEnabled(False)
         self.update_button.setVisible(False)
         self.update_button.setEnabled(False)
+        self.cancel_button.setText(self.tr("Anuluj"))
         self.cancel_button.setEnabled(True)
         self.progress_bar.setVisible(True)
         self.progress_bar.setValue(0)
@@ -235,10 +256,18 @@ class UpdateDialog(QDialog):
         )
 
         # Reset UI state
-        self.check_button.setVisible(True)
-        self.check_button.setEnabled(True)
-        self.update_button.setVisible(False)
-        self.update_button.setEnabled(False)
+        if self._forced_update_required:
+            self.check_button.setVisible(False)
+            self.check_button.setEnabled(False)
+            self.update_button.setVisible(True)
+            self.update_button.setEnabled(True)
+            self.cancel_button.setText(self.tr("Zamknij"))
+        else:
+            self.check_button.setVisible(True)
+            self.check_button.setEnabled(True)
+            self.update_button.setVisible(False)
+            self.update_button.setEnabled(False)
+            self.cancel_button.setText(self.tr("Anuluj"))
         self.cancel_button.setEnabled(True)
         self.progress_bar.setVisible(False)
         self.progress_bar.setValue(0)

@@ -1,7 +1,6 @@
 import sys
 
 from PySide6.QtCore import QCoreApplication, QObject, Slot
-from PySide6.QtWidgets import QMessageBox
 
 from src.app.logging_config import configure_logging
 from src.app.paths import get_base_path
@@ -13,23 +12,26 @@ from src.app.database import (
 )
 from src.app.theme import apply_theme
 from src.app.resources import set_app_icon
-from src.app.updates import wire_startup_update_check
+from src.app.updates import run_forced_update_dialog, wire_startup_update_check
 from src.app.instance_guard import enforce_single_instance
 from src.services.kill_switch_service import KillSwitchService
+from src.services.updater_service import UpdaterService
 from src.version import VERSION
 
 
 class _RuntimeKillSwitchHandler(QObject):
     """Handle runtime kill switch notifications on the Qt main thread."""
 
-    def __init__(self, log, parent=None):
+    def __init__(self, log, updater_service, dialog_parent=None, parent=None):
         super().__init__(parent)
         self._log = log
         self._handled = False
+        self._updater_service = updater_service
+        self._dialog_parent = dialog_parent
 
     @Slot(object)
     def on_remote_block_detected(self, decision) -> None:
-        """Show a blocking message and quit after the user confirms it."""
+        """Offer an update and quit once the forced-update dialog closes."""
         if self._handled:
             return
         self._handled = True
@@ -39,16 +41,19 @@ class _RuntimeKillSwitchHandler(QObject):
             getattr(decision, "source", "unknown"),
             getattr(decision, "reason", "unknown"),
         )
-        QMessageBox.critical(
-            None,
+        run_forced_update_dialog(
+            self._dialog_parent,
+            self._updater_service,
             decision.title,
-            f"{decision.message}\n\nAplikacja zostanie teraz zamknieta.",
+            decision.message,
         )
         QCoreApplication.quit()
 
 
-def _enforce_startup_kill_switch(log, kill_switch_service) -> None:
-    """Block application startup when the cached kill switch disables this version."""
+def _enforce_startup_kill_switch(
+    log, kill_switch_service, updater_service: UpdaterService
+) -> None:
+    """Block application startup and offer an update when kill switch is active."""
     decision = kill_switch_service.evaluate_current_version(
         VERSION, prefer_remote=False
     )
@@ -62,7 +67,7 @@ def _enforce_startup_kill_switch(log, kill_switch_service) -> None:
         decision.reason or "unknown",
     )
 
-    QMessageBox.critical(None, decision.title, decision.message)
+    run_forced_update_dialog(None, updater_service, decision.title, decision.message)
     raise SystemExit(decision.message)
 
 
@@ -75,8 +80,9 @@ def main():
     set_app_icon(app)
 
     base = get_base_path()
+    updater_service = UpdaterService()
     kill_switch_service = KillSwitchService(base_path=base)
-    _enforce_startup_kill_switch(log, kill_switch_service)
+    _enforce_startup_kill_switch(log, kill_switch_service, updater_service)
 
     db_path, is_first_run = ensure_db_and_migrate(base)
     session = create_session(db_path)
@@ -90,6 +96,7 @@ def main():
         db_path=db_path,
         base_path=base,
         kill_switch_service=kill_switch_service,
+        updater_service=updater_service,
     )
     apply_theme(app, session)
 
@@ -98,7 +105,11 @@ def main():
     wire_startup_update_check(window, services["settings"], services["updater"])
     services["backup"].start()
     app.aboutToQuit.connect(services["backup"].stop)
-    runtime_kill_switch_handler = _RuntimeKillSwitchHandler(log)
+    runtime_kill_switch_handler = _RuntimeKillSwitchHandler(
+        log,
+        services["updater"],
+        dialog_parent=window,
+    )
     kill_switch_service.remote_block_detected.connect(
         runtime_kill_switch_handler.on_remote_block_detected
     )
