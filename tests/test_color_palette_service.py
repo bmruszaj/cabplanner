@@ -69,3 +69,21 @@ def test_list_searchable_names_includes_added_user_color(session):
     names = service.list_searchable_names()
 
     assert any(name.casefold() == "kolor runtime" for name in names)
+
+
+def test_list_dropdown_names_keeps_recent_first_without_hiding_other_colors(session):
+    service = ColorPaletteService(session)
+    service.ensure_seeded()
+    service.add_user_color("Kolor recent", "#13579B")
+    service.add_user_color("Kolor ukryty", "#2468AC")
+
+    service.mark_used("Kolor recent")
+
+    names = service.list_dropdown_names(recent_limit=12)
+    normalized_names = [name.casefold() for name in names]
+
+    assert normalized_names.count("kolor recent") == 1
+    assert "kolor ukryty" in normalized_names
+    assert normalized_names.index("kolor recent") < normalized_names.index(
+        "kolor ukryty"
+    )

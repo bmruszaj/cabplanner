@@ -404,7 +404,7 @@ class InstanceForm(QWidget):
 
     def _load_color_controls(self) -> None:
         """Populate recent-first color controls and searchable completers."""
-        recent_names = self._recent_names()
+        dropdown_names = self._dropdown_names()
         searchable_names = self._searchable_names()
 
         current_body = self.body_color_combo.currentText() or "Biały"
@@ -413,7 +413,7 @@ class InstanceForm(QWidget):
         for combo in (self.body_color_combo, self.front_color_combo):
             combo.blockSignals(True)
             combo.clear()
-            combo.addItems(recent_names)
+            combo.addItems(dropdown_names)
             combo.blockSignals(False)
 
             completer = QCompleter(searchable_names, self)
@@ -424,11 +424,11 @@ class InstanceForm(QWidget):
         self.body_color_combo.setCurrentText(current_body)
         self.front_color_combo.setCurrentText(current_front)
 
-    def _recent_names(self) -> list[str]:
+    def _dropdown_names(self) -> list[str]:
         if self.color_service:
             try:
                 self.color_service.ensure_seeded()
-                names = self.color_service.list_recent(limit=12)
+                names = self.color_service.list_dropdown_names(recent_limit=12)
                 if names:
                     return names
             except Exception:

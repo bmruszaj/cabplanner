@@ -123,6 +123,24 @@ class ColorPaletteService:
         )
         return list(self.db.scalars(stmt).all())
 
+    def list_dropdown_names(self, recent_limit: int = 12) -> list[str]:
+        """Return recent colors first, followed by the remaining active colors."""
+        ordered_names: list[str] = []
+        seen_normalized: set[str] = set()
+
+        for name in [
+            *self.list_recent(limit=recent_limit),
+            *self.list_searchable_names(),
+        ]:
+            canonical = self._canonical_name(name)
+            normalized = self._normalize_name(canonical)
+            if not canonical or not normalized or normalized in seen_normalized:
+                continue
+            ordered_names.append(canonical)
+            seen_normalized.add(normalized)
+
+        return ordered_names
+
     def resolve_hex(self, color_name: str) -> Optional[str]:
         """
         Resolve a user-visible color name to HEX.
