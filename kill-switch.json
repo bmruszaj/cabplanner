@@ -1,6 +1,6 @@
 {
-  "enabled": true,
-  "block_all": true,
+  "enabled": false,
+  "block_all": false,
   "blocked_versions": ["0.0.1"],
   "min_allowed_version": "",
   "title": "Wymagana aktualizacja",
