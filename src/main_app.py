@@ -85,12 +85,19 @@ def main():
     # Ensure session is closed on app quit
     app.aboutToQuit.connect(session.close)
 
-    services = create_services(session, kill_switch_service=kill_switch_service)
+    services = create_services(
+        session,
+        db_path=db_path,
+        base_path=base,
+        kill_switch_service=kill_switch_service,
+    )
     apply_theme(app, session)
 
     window = create_main_window(session)
     window.showMaximized()
     wire_startup_update_check(window, services["settings"], services["updater"])
+    services["backup"].start()
+    app.aboutToQuit.connect(services["backup"].stop)
     runtime_kill_switch_handler = _RuntimeKillSwitchHandler(log)
     kill_switch_service.remote_block_detected.connect(
         runtime_kill_switch_handler.on_remote_block_detected

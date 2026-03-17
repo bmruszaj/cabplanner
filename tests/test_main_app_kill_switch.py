@@ -31,6 +31,17 @@ class _FakeSession:
         """Mimic SQLAlchemy session close."""
 
 
+class _FakeBackupService:
+    def __init__(self, calls):
+        self._calls = calls
+
+    def start(self):
+        self._calls.append("backup_start")
+
+    def stop(self):
+        self._calls.append("backup_stop")
+
+
 class _FakeLog:
     def info(self, *_args, **_kwargs):
         """Ignore info logs in tests."""
@@ -101,6 +112,7 @@ def test_main_checks_cached_kill_switch_before_db_mutations(monkeypatch):
         main_app,
         "create_services",
         lambda *_args, **_kwargs: {
+            "backup": _FakeBackupService(calls),
             "settings": "SETTINGS",
             "updater": "UPDATER",
             "kill_switch": "KILL_SWITCH",
@@ -126,6 +138,7 @@ def test_main_checks_cached_kill_switch_before_db_mutations(monkeypatch):
     assert calls.index(
         ("evaluate_current_version", main_app.VERSION, False)
     ) < calls.index(("ensure_db_and_migrate", Path("BASE")))
+    assert "backup_start" in calls
     assert _FakeTimer.calls
     assert _FakeTimer.calls[0][0] == 0
 
