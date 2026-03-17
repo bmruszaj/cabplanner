@@ -11,12 +11,28 @@ from types import SimpleNamespace
 from docx import Document
 from docx.document import Document as DocxDocument
 from docx.section import Section
-from docx.shared import Pt, Inches
+from docx.shared import Pt, Inches, Mm
+from docx.table import Table
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.oxml import OxmlElement
 from docx.oxml.shared import qn
 
 from src.app.paths import get_base_path
+from src.constants import (
+    REPORT_COLUMN_GAP_MM_DEFAULT,
+    REPORT_COLUMN_GAP_MM_MAX,
+    REPORT_COLUMN_GAP_MM_MIN,
+    REPORT_LEFT_MARGIN_MM_DEFAULT,
+    REPORT_MARGIN_MM_MAX,
+    REPORT_MARGIN_MM_MIN,
+    REPORT_NOTES_COLUMN_WIDTH_PERCENT_DEFAULT,
+    REPORT_NOTES_COLUMN_WIDTH_PERCENT_MAX,
+    REPORT_NOTES_COLUMN_WIDTH_PERCENT_MIN,
+    REPORT_ROW_SPACING_PT_DEFAULT,
+    REPORT_ROW_SPACING_PT_MAX,
+    REPORT_ROW_SPACING_PT_MIN,
+    REPORT_RIGHT_MARGIN_MM_DEFAULT,
+)
 from src.db_schema.orm_models import Project
 from src.services.project_service import ProjectService
 from src.services.settings_service import SettingsService
@@ -87,6 +103,7 @@ class ReportGenerator:
             doc = Document()
             section = doc.sections[0]
             section.different_first_page_header_footer = False
+            self._apply_page_layout(section)
 
             # Header and footer on every page
             self._add_header(section, project)
@@ -124,47 +141,23 @@ class ReportGenerator:
             hdf = self._sort_by_cabinet_and_color(hdf)
             akcesoria = self._aggregate_accessories(akcesoria)
 
-            # Split formatki by material type
-            formatki_plyta_12 = [
-                p for p in formatki if getattr(p, "material", "") == "PLYTA 12"
-            ]
-            formatki_plyta_16 = [
-                p for p in formatki if getattr(p, "material", "") == "PLYTA 16"
-            ]
-            formatki_plyta_18 = [
-                p for p in formatki if getattr(p, "material", "") == "PLYTA 18"
-            ]
-            # Other formatki (legacy or without specific material)
-            formatki_other = [
-                p
-                for p in formatki
-                if getattr(p, "material", "")
-                not in ("PLYTA 12", "PLYTA 16", "PLYTA 18")
-            ]
-
-            # Add sections - split FORMATKI by material type
-            if formatki_plyta_18:
-                self._add_parts_sections_grouped_by_color(
-                    doc, "FORMATKI (PLYTA 18)", formatki_plyta_18
-                )
-            if formatki_plyta_16:
+            self._add_grouped_primary_sections(doc, formatki, fronty)
+            if witryny:
                 self._add_parts_section(
                     doc,
-                    "FORMATKI (PLYTA 16)",
-                    formatki_plyta_16,
-                    hide_color_values=True,
+                    "WITRYNY",
+                    witryny,
+                    show_color_column=False,
+                    show_notes_column=False,
                 )
-            if formatki_plyta_12:
-                self._add_parts_sections_grouped_by_color(
-                    doc, "FORMATKI (PLYTA 12)", formatki_plyta_12
-                )
-            if formatki_other:
-                self._add_parts_section(doc, "FORMATKI", formatki_other)
-            self._add_parts_sections_grouped_by_color(doc, "FRONTY", fronty)
-            if witryny:
-                self._add_parts_section(doc, "WITRYNY", witryny)
             if polki_szklane:
-                self._add_parts_section(doc, "PÓŁKI SZKLANE", polki_szklane)
+                self._add_parts_section(
+                    doc,
+                    "PÓŁKI SZKLANE",
+                    polki_szklane,
+                    show_color_column=False,
+                    show_notes_column=False,
+                )
             self._add_parts_section(doc, "HDF", hdf)
             self._add_parts_section(doc, "AKCESORIA", akcesoria, accessory=True)
 
@@ -198,6 +191,152 @@ class ReportGenerator:
             items,
             key=lambda item: (
                 item.sequence,
+                (getattr(item, "color", "") or "").strip().lower(),
+                getattr(item, "name", "") or "",
+            ),
+        )
+
+    def _add_grouped_primary_sections(
+        self,
+        doc: DocxDocument,
+        formatki: List[SimpleNamespace],
+        fronty: List[SimpleNamespace],
+    ) -> None:
+        """
+        Keep matching FORMATKI and FRONTY blocks adjacent for the same cabinet bundle.
+
+        A bundle is defined by the body/front colors copied from the originating
+        cabinet, which lets us keep related sections together without guessing from
+        the rendered document layout alone.
+        """
+        bundles: Dict[Tuple[str, str], Dict[str, Any]] = {}
+
+        for part in formatki:
+            bundle = self._get_or_create_primary_bundle(bundles, part)
+            material = (getattr(part, "material", "") or "").strip().upper()
+            if material == "PLYTA 18":
+                bundle["formatki_plyta_18"].append(part)
+            elif material == "PLYTA 12":
+                bundle["formatki_plyta_12"].append(part)
+            elif material == "PLYTA 16":
+                bundle["formatki_plyta_16"].append(part)
+            else:
+                bundle["formatki_other"].append(part)
+
+        for part in fronty:
+            bundle = self._get_or_create_primary_bundle(bundles, part)
+            bundle["fronty"].append(part)
+
+        ordered_bundles = sorted(
+            bundles.values(),
+            key=lambda bundle: (
+                bundle["first_sequence"],
+                bundle["body_color_label"].lower(),
+                bundle["front_color_label"].lower(),
+            ),
+        )
+        plyta_16_bundle_count = sum(
+            1 for bundle in ordered_bundles if bundle["formatki_plyta_16"]
+        )
+
+        for bundle in ordered_bundles:
+            body_color_label = bundle["body_color_label"]
+            front_color_label = bundle["front_color_label"]
+
+            formatki_plyta_18 = self._sort_parts_for_section(
+                bundle["formatki_plyta_18"]
+            )
+            if formatki_plyta_18:
+                self._add_parts_section(
+                    doc,
+                    f"FORMATKI (PLYTA 18) - {body_color_label}",
+                    formatki_plyta_18,
+                )
+
+            formatki_plyta_12 = self._sort_parts_for_section(
+                bundle["formatki_plyta_12"]
+            )
+            if formatki_plyta_12:
+                self._add_parts_section(
+                    doc,
+                    f"FORMATKI (PLYTA 12) - {body_color_label}",
+                    formatki_plyta_12,
+                )
+
+            formatki_other = self._sort_parts_for_section(bundle["formatki_other"])
+            if formatki_other:
+                self._add_parts_section(
+                    doc,
+                    f"FORMATKI - {body_color_label}",
+                    formatki_other,
+                )
+
+            grouped_fronty = self._sort_parts_for_section(bundle["fronty"])
+            if grouped_fronty:
+                self._add_parts_section(
+                    doc,
+                    f"FRONTY - {front_color_label}",
+                    grouped_fronty,
+                    show_notes_column=False,
+                )
+
+            formatki_plyta_16 = self._sort_parts_for_section(
+                bundle["formatki_plyta_16"]
+            )
+            if formatki_plyta_16:
+                plyta_16_title = "FORMATKI (PLYTA 16)"
+                if plyta_16_bundle_count > 1:
+                    plyta_16_title = f"{plyta_16_title} - {body_color_label}"
+                self._add_parts_section(
+                    doc,
+                    plyta_16_title,
+                    formatki_plyta_16,
+                    hide_color_values=True,
+                )
+
+    def _get_or_create_primary_bundle(
+        self,
+        bundles: Dict[Tuple[str, str], Dict[str, Any]],
+        part: SimpleNamespace,
+    ) -> Dict[str, Any]:
+        body_color_key, body_color_label = self._get_bundle_color(part, "body")
+        front_color_key, front_color_label = self._get_bundle_color(part, "front")
+        bundle_key = (body_color_key, front_color_key)
+
+        if bundle_key not in bundles:
+            bundles[bundle_key] = {
+                "first_sequence": getattr(part, "sequence", 0),
+                "body_color_label": body_color_label,
+                "front_color_label": front_color_label,
+                "formatki_plyta_18": [],
+                "formatki_plyta_12": [],
+                "formatki_plyta_16": [],
+                "formatki_other": [],
+                "fronty": [],
+            }
+        else:
+            bundles[bundle_key]["first_sequence"] = min(
+                int(bundles[bundle_key]["first_sequence"]),
+                getattr(part, "sequence", 0),
+            )
+
+        return bundles[bundle_key]
+
+    def _get_bundle_color(
+        self, part: SimpleNamespace, color_role: str
+    ) -> Tuple[str, str]:
+        raw_color = getattr(part, f"{color_role}_color", None)
+        if raw_color is None:
+            raw_color = getattr(part, "color", "")
+
+        label = (raw_color or "").strip() or "BRAK KOLORU"
+        return label.lower(), label
+
+    def _sort_parts_for_section(self, parts: List[Any]) -> List[Any]:
+        return sorted(
+            parts,
+            key=lambda item: (
+                getattr(item, "sequence", 0),
                 (getattr(item, "color", "") or "").strip().lower(),
                 getattr(item, "name", "") or "",
             ),
@@ -337,9 +476,7 @@ class ReportGenerator:
         """Process a cabinet (catalog or custom) and add its parts to the appropriate lists"""
         # Get the sequence number for this cabinet
         seq_num = getattr(cab, "sequence_number", 0)
-        from src.services.project_service import get_circled_number
-
-        seq_symbol = get_circled_number(seq_num)
+        seq_symbol = str(seq_num)
 
         # Determine parts source based on cabinet type
         ct = cab.cabinet_type
@@ -383,6 +520,8 @@ class ReportGenerator:
                     SimpleNamespace(
                         seq=seq_symbol,
                         sequence=seq_num,
+                        body_color=cab.body_color,
+                        front_color=cab.front_color,
                         name=part.part_name,
                         quantity=part_qty,
                         width=part.width_mm,
@@ -397,6 +536,8 @@ class ReportGenerator:
                     SimpleNamespace(
                         seq=seq_symbol,
                         sequence=seq_num,
+                        body_color=cab.body_color,
+                        front_color=cab.front_color,
                         name=part.part_name,
                         quantity=part_qty,
                         width=part.width_mm,
@@ -411,6 +552,8 @@ class ReportGenerator:
                     SimpleNamespace(
                         seq=seq_symbol,
                         sequence=seq_num,
+                        body_color=cab.body_color,
+                        front_color=cab.front_color,
                         name=part.part_name,
                         quantity=part_qty,
                         width=part.width_mm,
@@ -425,6 +568,8 @@ class ReportGenerator:
                     SimpleNamespace(
                         seq=seq_symbol,
                         sequence=seq_num,
+                        body_color=cab.body_color,
+                        front_color=cab.front_color,
                         name=part.part_name,
                         quantity=part_qty,
                         width=part.width_mm,
@@ -440,6 +585,8 @@ class ReportGenerator:
                     SimpleNamespace(
                         seq=seq_symbol,
                         sequence=seq_num,
+                        body_color=cab.body_color,
+                        front_color=cab.front_color,
                         name=part.part_name,
                         quantity=part_qty,
                         width=part.width_mm,
@@ -464,6 +611,187 @@ class ReportGenerator:
                     notes="",
                 )
             )
+
+    def _get_numeric_setting(
+        self, key: str, default: int, minimum: int, maximum: int
+    ) -> int:
+        """Return a clamped integer setting, tolerating string/float storage."""
+        if not self.settings_service:
+            return default
+
+        try:
+            raw_value = self.settings_service.get_setting_value(key, default)
+            if raw_value in (None, ""):
+                return default
+            numeric_value = int(round(float(raw_value)))
+        except (TypeError, ValueError) as exc:
+            logger.warning("Failed to read numeric setting '%s': %s", key, exc)
+            return default
+
+        return max(minimum, min(maximum, numeric_value))
+
+    def _get_float_setting(
+        self, key: str, default: float, minimum: float, maximum: float
+    ) -> float:
+        """Return a clamped float setting, tolerating string/int storage."""
+        if not self.settings_service:
+            return default
+
+        try:
+            raw_value = self.settings_service.get_setting_value(key, default)
+            if raw_value in (None, ""):
+                return default
+            numeric_value = float(raw_value)
+        except (TypeError, ValueError) as exc:
+            logger.warning("Failed to read float setting '%s': %s", key, exc)
+            return default
+
+        return max(minimum, min(maximum, numeric_value))
+
+    def _get_report_left_margin_mm(self) -> int:
+        """Get the configured left page margin for generated reports."""
+        return self._get_numeric_setting(
+            "report_left_margin_mm",
+            REPORT_LEFT_MARGIN_MM_DEFAULT,
+            REPORT_MARGIN_MM_MIN,
+            REPORT_MARGIN_MM_MAX,
+        )
+
+    def _get_report_right_margin_mm(self) -> int:
+        """Get the configured right page margin for generated reports."""
+        return self._get_numeric_setting(
+            "report_right_margin_mm",
+            REPORT_RIGHT_MARGIN_MM_DEFAULT,
+            REPORT_MARGIN_MM_MIN,
+            REPORT_MARGIN_MM_MAX,
+        )
+
+    def _get_report_notes_column_width_percent(self) -> int:
+        """Get the configured width share of the common 'Uwagi' column."""
+        return self._get_numeric_setting(
+            "report_notes_column_width_percent",
+            REPORT_NOTES_COLUMN_WIDTH_PERCENT_DEFAULT,
+            REPORT_NOTES_COLUMN_WIDTH_PERCENT_MIN,
+            REPORT_NOTES_COLUMN_WIDTH_PERCENT_MAX,
+        )
+
+    def _get_report_column_gap_mm(self) -> float:
+        """Get the configured fixed gap between report table columns."""
+        return self._get_float_setting(
+            "report_column_gap_mm",
+            REPORT_COLUMN_GAP_MM_DEFAULT,
+            REPORT_COLUMN_GAP_MM_MIN,
+            REPORT_COLUMN_GAP_MM_MAX,
+        )
+
+    def _get_report_row_spacing_pt(self) -> int:
+        """Get the configured extra spacing after each table row paragraph."""
+        return self._get_numeric_setting(
+            "report_row_spacing_pt",
+            REPORT_ROW_SPACING_PT_DEFAULT,
+            REPORT_ROW_SPACING_PT_MIN,
+            REPORT_ROW_SPACING_PT_MAX,
+        )
+
+    def _apply_page_layout(self, section: Section) -> None:
+        """Apply page layout settings before adding report content."""
+        section.left_margin = Mm(self._get_report_left_margin_mm())
+        section.right_margin = Mm(self._get_report_right_margin_mm())
+
+    def _scale_column_widths(
+        self, total_width: int, fixed_weights: List[int], notes_percent: int
+    ) -> List[int]:
+        """Convert relative weights into table column widths."""
+        notes_ratio = notes_percent / 100
+        remaining_ratio = 1 - notes_ratio
+        fixed_total = sum(fixed_weights)
+        ratios = [(weight / fixed_total) * remaining_ratio for weight in fixed_weights]
+        ratios.append(notes_ratio)
+
+        widths = [int(total_width * ratio) for ratio in ratios]
+        widths[-1] += total_width - sum(widths)
+        return widths
+
+    def _scale_fixed_column_widths(
+        self, total_width: int, weights: List[int]
+    ) -> List[int]:
+        """Convert fixed relative weights into table column widths."""
+        total_weight = sum(weights)
+        widths = [int(total_width * (weight / total_weight)) for weight in weights]
+        widths[-1] += total_width - sum(widths)
+        return widths
+
+    def _get_parts_table_column_widths(
+        self,
+        doc: DocxDocument,
+        accessory: bool = False,
+        show_color_column: bool = True,
+        show_notes_column: bool = True,
+    ) -> List[int]:
+        """Calculate fixed widths for report body tables."""
+        section = doc.sections[-1]
+        column_gap = int(Mm(self._get_report_column_gap_mm()))
+        notes_percent = self._get_report_notes_column_width_percent()
+
+        if accessory:
+            usable_width = int(
+                section.page_width
+                - section.left_margin
+                - section.right_margin
+                - (3 * column_gap)
+            )
+            return self._scale_column_widths(usable_width, [10, 64, 10], notes_percent)
+
+        # Keep shared columns aligned across sections, even when some trailing
+        # columns are omitted. This avoids visually larger "gaps" in shorter tables.
+        full_usable_width = int(
+            section.page_width
+            - section.left_margin
+            - section.right_margin
+            - (6 * column_gap)
+        )
+        full_widths = self._scale_column_widths(
+            full_usable_width, [7, 32, 20, 10, 13, 12], notes_percent
+        )
+        visible_indices = [0, 1, 2, 3, 4]
+
+        if show_color_column:
+            visible_indices.append(5)
+        if show_notes_column:
+            visible_indices.append(6)
+
+        return [full_widths[index] for index in visible_indices]
+
+    def _apply_table_column_widths(self, table: Table, widths: List[int]) -> None:
+        """Lock report table columns so the notes column stays readable."""
+        table.autofit = False
+        for column_index, width in enumerate(widths):
+            table.columns[column_index].width = width
+            for cell in table.columns[column_index].cells:
+                cell.width = width
+
+    def _apply_table_column_gap(self, table: Table) -> None:
+        """Apply a fixed spacing between table columns."""
+        tbl_pr = table._tbl.tblPr
+        tbl_cell_spacing = tbl_pr.find(qn("w:tblCellSpacing"))
+        if tbl_cell_spacing is None:
+            tbl_cell_spacing = OxmlElement("w:tblCellSpacing")
+            tbl_pr.append(tbl_cell_spacing)
+
+        tbl_cell_spacing.set(
+            qn("w:w"), str(int(Mm(self._get_report_column_gap_mm()).twips))
+        )
+        tbl_cell_spacing.set(qn("w:type"), "dxa")
+
+    def _apply_table_row_spacing(self, table: Table) -> None:
+        """Apply compact paragraph spacing so report rows stay user-configurable."""
+        row_spacing = Pt(self._get_report_row_spacing_pt())
+        for row in table.rows:
+            for cell in row.cells:
+                for paragraph in cell.paragraphs:
+                    paragraph.paragraph_format.space_before = Pt(0)
+                    paragraph.paragraph_format.space_after = row_spacing
+                    paragraph.paragraph_format.line_spacing = 1.0
 
     def _get_report_logo_variant(self) -> str:
         """
@@ -629,6 +957,8 @@ class ReportGenerator:
         parts: List[Any],
         accessory: bool = False,
         hide_color_values: bool = False,
+        show_color_column: bool = True,
+        show_notes_column: bool = True,
     ) -> None:
         # Check if we need a page break before adding section
         if parts and self._should_break_page_for_section(doc, len(parts)):
@@ -644,15 +974,7 @@ class ReportGenerator:
         cols = (
             ["Poz.", "Nazwa akcesorium", "Ilość", "Uwagi"]
             if accessory
-            else [
-                "Lp.",
-                "Nazwa",
-                "Wymiary (mm)",
-                "Ilość",
-                "Okleina",
-                "Kolor",
-                "Uwagi",
-            ]
+            else self._get_parts_table_headers(show_color_column, show_notes_column)
         )
         table = doc.add_table(rows=1, cols=len(cols))
         hdr = table.rows[0].cells
@@ -660,6 +982,7 @@ class ReportGenerator:
             hdr[i].text = col
         qty_col_idx = 2 if accessory else 3
         hdr[qty_col_idx].paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
+        seen_sequences = set()
 
         for row_index, part in enumerate(parts, start=1):
             cells = table.add_row().cells
@@ -672,17 +995,53 @@ class ReportGenerator:
                 cells[2].paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
                 cells[3].text = getattr(part, "notes", "") or ""
             else:
+                sequence = getattr(part, "sequence", None)
+                seq_value = getattr(part, "seq", "")
+                if sequence in seen_sequences:
+                    seq_value = ""
+                elif sequence is not None:
+                    seen_sequences.add(sequence)
+
                 # Parts keep cabinet sequence marker.
-                cells[0].text = getattr(part, "seq", "")
-                cells[1].text = part.name
-                cells[2].text = f"{part.width} x {part.height}"
-                cells[3].text = str(part.quantity)
+                row_values = [
+                    seq_value,
+                    part.name,
+                    f"{part.width} x {part.height}",
+                    str(part.quantity),
+                    getattr(part, "wrapping", "") or "",
+                ]
+                if show_color_column:
+                    row_values.append(
+                        "" if hide_color_values else getattr(part, "color", "") or ""
+                    )
+                if show_notes_column:
+                    row_values.append(getattr(part, "notes", "") or "")
+
+                for index, value in enumerate(row_values):
+                    cells[index].text = value
                 cells[3].paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
-                cells[4].text = getattr(part, "wrapping", "") or ""
-                cells[5].text = (
-                    "" if hide_color_values else getattr(part, "color", "") or ""
-                )
-                cells[6].text = getattr(part, "notes", "") or ""
+
+        self._apply_table_column_widths(
+            table,
+            self._get_parts_table_column_widths(
+                doc,
+                accessory=accessory,
+                show_color_column=show_color_column,
+                show_notes_column=show_notes_column,
+            ),
+        )
+        self._apply_table_column_gap(table)
+        self._apply_table_row_spacing(table)
+
+    def _get_parts_table_headers(
+        self, show_color_column: bool, show_notes_column: bool
+    ) -> List[str]:
+        headers = ["Lp.", "Nazwa", "Wymiary (mm)", "Ilość", "Okleina"]
+        if show_color_column:
+            headers.append("Kolor")
+        if show_notes_column:
+            headers.append("Uwagi")
+        return headers
 
     def _add_notes(self, doc: DocxDocument, project: Project) -> None:
         if getattr(project, "blaty_note", None):

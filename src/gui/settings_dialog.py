@@ -21,6 +21,8 @@ from PySide6.QtWidgets import (
     QGroupBox,
     QDialogButtonBox,
     QMessageBox,
+    QDoubleSpinBox,
+    QSpinBox,
     QToolButton,
 )
 from PySide6.QtCore import Qt, Signal
@@ -28,6 +30,21 @@ from PySide6.QtGui import QPixmap
 
 from sqlalchemy.orm import Session
 
+from src.constants import (
+    REPORT_COLUMN_GAP_MM_DEFAULT,
+    REPORT_COLUMN_GAP_MM_MAX,
+    REPORT_COLUMN_GAP_MM_MIN,
+    REPORT_LEFT_MARGIN_MM_DEFAULT,
+    REPORT_MARGIN_MM_MAX,
+    REPORT_MARGIN_MM_MIN,
+    REPORT_NOTES_COLUMN_WIDTH_PERCENT_DEFAULT,
+    REPORT_NOTES_COLUMN_WIDTH_PERCENT_MAX,
+    REPORT_NOTES_COLUMN_WIDTH_PERCENT_MIN,
+    REPORT_ROW_SPACING_PT_DEFAULT,
+    REPORT_ROW_SPACING_PT_MAX,
+    REPORT_ROW_SPACING_PT_MIN,
+    REPORT_RIGHT_MARGIN_MM_DEFAULT,
+)
 from src.services.settings_service import SettingsService
 from src.services.updater_service import UpdaterService
 from src.gui.update_dialog import UpdateDialog
@@ -180,8 +197,8 @@ class SettingsDialog(QDialog):
 
         layout.addWidget(defaults_group)
 
-        # Report pagination settings group
-        report_group = QGroupBox("Zawijanie strony w raporcie")
+        # Report settings group
+        report_group = QGroupBox("Raport")
         report_layout = QFormLayout(report_group)
 
         # Report page break strictness
@@ -240,6 +257,64 @@ class SettingsDialog(QDialog):
             "Wybierz wariant logo Cabplanner widoczny w nagłówku raportu."
         )
         report_layout.addRow("Logo Cabplanner:", self.report_program_logo_variant)
+
+        self.report_left_margin_mm = QSpinBox()
+        self.report_left_margin_mm.setRange(REPORT_MARGIN_MM_MIN, REPORT_MARGIN_MM_MAX)
+        self.report_left_margin_mm.setSuffix(" mm")
+        self.report_left_margin_mm.setValue(REPORT_LEFT_MARGIN_MM_DEFAULT)
+        self.report_left_margin_mm.setToolTip(
+            "Lewy margines strony raportu. Mniejsza wartość daje więcej miejsca na tabelę."
+        )
+        report_layout.addRow("Lewy margines:", self.report_left_margin_mm)
+
+        self.report_right_margin_mm = QSpinBox()
+        self.report_right_margin_mm.setRange(REPORT_MARGIN_MM_MIN, REPORT_MARGIN_MM_MAX)
+        self.report_right_margin_mm.setSuffix(" mm")
+        self.report_right_margin_mm.setValue(REPORT_RIGHT_MARGIN_MM_DEFAULT)
+        self.report_right_margin_mm.setToolTip(
+            "Prawy margines strony raportu. Możesz dopasować go niezależnie od lewego."
+        )
+        report_layout.addRow("Prawy margines:", self.report_right_margin_mm)
+
+        self.report_notes_column_width_percent = QSpinBox()
+        self.report_notes_column_width_percent.setRange(
+            REPORT_NOTES_COLUMN_WIDTH_PERCENT_MIN,
+            REPORT_NOTES_COLUMN_WIDTH_PERCENT_MAX,
+        )
+        self.report_notes_column_width_percent.setSuffix(" %")
+        self.report_notes_column_width_percent.setValue(
+            REPORT_NOTES_COLUMN_WIDTH_PERCENT_DEFAULT
+        )
+        self.report_notes_column_width_percent.setToolTip(
+            "Udział szerokości kolumny 'Uwagi' w tabelach raportu."
+        )
+        report_layout.addRow(
+            "Szerokość kolumny Uwagi:", self.report_notes_column_width_percent
+        )
+
+        self.report_column_gap_mm = QDoubleSpinBox()
+        self.report_column_gap_mm.setRange(
+            REPORT_COLUMN_GAP_MM_MIN, REPORT_COLUMN_GAP_MM_MAX
+        )
+        self.report_column_gap_mm.setDecimals(1)
+        self.report_column_gap_mm.setSingleStep(0.1)
+        self.report_column_gap_mm.setSuffix(" mm")
+        self.report_column_gap_mm.setValue(REPORT_COLUMN_GAP_MM_DEFAULT)
+        self.report_column_gap_mm.setToolTip(
+            "Stała przerwa między kolumnami tabel raportu, niezależna od liczby kolumn."
+        )
+        report_layout.addRow("Przerwa między kolumnami:", self.report_column_gap_mm)
+
+        self.report_row_spacing_pt = QSpinBox()
+        self.report_row_spacing_pt.setRange(
+            REPORT_ROW_SPACING_PT_MIN, REPORT_ROW_SPACING_PT_MAX
+        )
+        self.report_row_spacing_pt.setSuffix(" pt")
+        self.report_row_spacing_pt.setValue(REPORT_ROW_SPACING_PT_DEFAULT)
+        self.report_row_spacing_pt.setToolTip(
+            "Dodatkowy odstęp po każdym wierszu tabeli w raporcie."
+        )
+        report_layout.addRow("Przerwa między wierszami:", self.report_row_spacing_pt)
 
         layout.addWidget(report_group)
 
@@ -442,6 +517,43 @@ class SettingsDialog(QDialog):
             else:
                 self.report_program_logo_variant.setCurrentIndex(0)
 
+            self.report_left_margin_mm.setValue(
+                int(
+                    self.settings_service.get_setting_value(
+                        "report_left_margin_mm", REPORT_LEFT_MARGIN_MM_DEFAULT
+                    )
+                )
+            )
+            self.report_right_margin_mm.setValue(
+                int(
+                    self.settings_service.get_setting_value(
+                        "report_right_margin_mm", REPORT_RIGHT_MARGIN_MM_DEFAULT
+                    )
+                )
+            )
+            self.report_notes_column_width_percent.setValue(
+                int(
+                    self.settings_service.get_setting_value(
+                        "report_notes_column_width_percent",
+                        REPORT_NOTES_COLUMN_WIDTH_PERCENT_DEFAULT,
+                    )
+                )
+            )
+            self.report_column_gap_mm.setValue(
+                float(
+                    self.settings_service.get_setting_value(
+                        "report_column_gap_mm", REPORT_COLUMN_GAP_MM_DEFAULT
+                    )
+                )
+            )
+            self.report_row_spacing_pt.setValue(
+                int(
+                    self.settings_service.get_setting_value(
+                        "report_row_spacing_pt", REPORT_ROW_SPACING_PT_DEFAULT
+                    )
+                )
+            )
+
             # Appearance settings
             self.dark_mode_check.setChecked(
                 self.settings_service.get_setting_value("dark_mode", False)
@@ -531,6 +643,22 @@ class SettingsDialog(QDialog):
             self.settings_service.set_setting(
                 "report_program_logo_variant",
                 self.report_program_logo_variant.currentText(),
+            )
+            self.settings_service.set_setting(
+                "report_left_margin_mm", self.report_left_margin_mm.value()
+            )
+            self.settings_service.set_setting(
+                "report_right_margin_mm", self.report_right_margin_mm.value()
+            )
+            self.settings_service.set_setting(
+                "report_notes_column_width_percent",
+                self.report_notes_column_width_percent.value(),
+            )
+            self.settings_service.set_setting(
+                "report_column_gap_mm", self.report_column_gap_mm.value()
+            )
+            self.settings_service.set_setting(
+                "report_row_spacing_pt", self.report_row_spacing_pt.value()
             )
 
             # Appearance settings
@@ -720,6 +848,11 @@ class SettingsDialog(QDialog):
                 ),
                 "report_page_break_strictness": "Standardowa",
                 "report_program_logo_variant": "Czarno-białe",
+                "report_left_margin_mm": REPORT_LEFT_MARGIN_MM_DEFAULT,
+                "report_right_margin_mm": REPORT_RIGHT_MARGIN_MM_DEFAULT,
+                "report_notes_column_width_percent": REPORT_NOTES_COLUMN_WIDTH_PERCENT_DEFAULT,
+                "report_column_gap_mm": REPORT_COLUMN_GAP_MM_DEFAULT,
+                "report_row_spacing_pt": REPORT_ROW_SPACING_PT_DEFAULT,
                 "dark_mode": False,
                 "company_logo_path": "",
             }

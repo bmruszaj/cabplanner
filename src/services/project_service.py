@@ -17,12 +17,6 @@ from src.db_schema.orm_models import (
 logger = logging.getLogger(__name__)
 
 
-def get_circled_number(n: int) -> str:
-    if 1 <= n <= 20:
-        return chr(9311 + n)
-    return f"({n})"
-
-
 class ProjectService:
     def __init__(self, db_session: Session):
         self.db = db_session
@@ -838,14 +832,12 @@ class ProjectService:
         for cab in project.cabinets:
             qty = cab.quantity
             seq = cab.sequence_number
-            seq_symbol = get_circled_number(seq)
 
             # Process all parts from snapshot (works for both standard and custom)
             self._process_cabinet_parts_snapshot(
                 cab,
                 qty,
                 seq,
-                seq_symbol,
                 formatki,
                 fronty,
                 hdf,
@@ -870,7 +862,6 @@ class ProjectService:
         cab,
         qty,
         seq,
-        seq_symbol,
         formatki,
         fronty,
         hdf,
@@ -904,8 +895,10 @@ class ProjectService:
             ):
                 polki_szklane.append(
                     {
-                        "seq": seq_symbol,
+                        "seq": str(seq),
                         "sequence": seq,
+                        "body_color": cab.body_color,
+                        "front_color": cab.front_color,
                         "name": part.part_name,
                         "quantity": part_qty,
                         "width": part.width_mm,
@@ -918,8 +911,10 @@ class ProjectService:
             elif material_upper.startswith("WITRYNA"):
                 witryny.append(
                     {
-                        "seq": seq_symbol,
+                        "seq": str(seq),
                         "sequence": seq,
+                        "body_color": cab.body_color,
+                        "front_color": cab.front_color,
                         "name": part.part_name,
                         "quantity": part_qty,
                         "width": part.width_mm,
@@ -932,8 +927,10 @@ class ProjectService:
             elif material_upper.startswith("FRONT"):
                 fronty.append(
                     {
-                        "seq": seq_symbol,
+                        "seq": str(seq),
                         "sequence": seq,
+                        "body_color": cab.body_color,
+                        "front_color": cab.front_color,
                         "name": part.part_name,
                         "quantity": part_qty,
                         "width": part.width_mm,
@@ -946,8 +943,10 @@ class ProjectService:
             elif material_upper.startswith("HDF"):
                 hdf.append(
                     {
-                        "seq": seq_symbol,
+                        "seq": str(seq),
                         "sequence": seq,
+                        "body_color": cab.body_color,
+                        "front_color": cab.front_color,
                         "name": part.part_name,
                         "quantity": part_qty,
                         "width": part.width_mm,
@@ -961,8 +960,10 @@ class ProjectService:
                 # Default to formatki (panels)
                 formatki.append(
                     {
-                        "seq": seq_symbol,
+                        "seq": str(seq),
                         "sequence": seq,
+                        "body_color": cab.body_color,
+                        "front_color": cab.front_color,
                         "name": part.part_name,
                         "quantity": part_qty,
                         "width": part.width_mm,

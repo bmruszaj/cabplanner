@@ -3,8 +3,9 @@ from pathlib import Path
 import pytest
 from datetime import date
 from docx import Document
+from docx.oxml.shared import qn
+from docx.shared import Mm
 from src.services.report_generator import ReportGenerator
-from src.services.project_service import get_circled_number
 from src.db_schema.orm_models import (
     Project,
     CabinetTemplate,
@@ -209,7 +210,7 @@ def test_body_tables_count_and_headers(tmp_path, sample_project_orm):
 
     expected_hdr = [
         ["Lp.", "Nazwa", "Wymiary (mm)", "Ilość", "Okleina", "Kolor", "Uwagi"],
-        ["Lp.", "Nazwa", "Wymiary (mm)", "Ilość", "Okleina", "Kolor", "Uwagi"],
+        ["Lp.", "Nazwa", "Wymiary (mm)", "Ilość", "Okleina", "Kolor"],
         ["Lp.", "Nazwa", "Wymiary (mm)", "Ilość", "Okleina", "Kolor", "Uwagi"],
         ["Poz.", "Nazwa akcesorium", "Ilość", "Uwagi"],
     ]
@@ -234,6 +235,9 @@ def test_derived_formatki_quantities(tmp_path, sample_project_orm):
 
     # Header + 3 data rows (bok, wieniec, polka)
     assert len(fmt_table.rows) == 4
+
+    numbers = [row.cells[0].text.strip() for row in fmt_table.rows[1:]]
+    assert numbers == ["1", "", ""]
 
     # Quantity is now in cell index 3 (after "Lp.", "Nazwa" and "Wymiary")
     quantities = [int(row.cells[3].text) for row in fmt_table.rows[1:]]
@@ -328,11 +332,11 @@ def test_plyta_16_hides_color_values_but_keeps_column(tmp_path):
     assert plyta_18_row.cells[5].text.strip() == "White"
 
 
-def test_color_grouped_sections_for_selected_sections(tmp_path):
+def test_primary_sections_stay_grouped_by_cabinet_bundle(tmp_path):
     """
-    Given: FRONTY, PLYTA 12 and PLYTA 18 with multiple colors
+    Given: one cabinet bundle with matching FORMATKI/FRONTY and another with extra PLYTA 16
     When: generating report
-    Then: each color is rendered in a separate section and rows are sorted by LP in each group
+    Then: related FORMATKI and FRONTY stay adjacent, and unrelated PLYTA 16 no longer splits them
     """
     project = Project(
         name="Color Grouping Project",
@@ -344,8 +348,10 @@ def test_color_grouped_sections_for_selected_sections(tmp_path):
         client_email="client@example.com",
     )
 
-    ct = CabinetTemplate(kitchen_type="LOFT", name="Color Group Template")
-    ct.parts = [
+    white_bundle_template = CabinetTemplate(
+        kitchen_type="LOFT", name="White Bundle Template"
+    )
+    white_bundle_template.parts = [
         CabinetPart(
             part_name="Panel 18",
             height_mm=720,
@@ -360,6 +366,44 @@ def test_color_grouped_sections_for_selected_sections(tmp_path):
             width_mm=500,
             pieces=1,
             material="PLYTA 12",
+            wrapping="D",
+        ),
+        CabinetPart(
+            part_name="Front drzwi",
+            height_mm=700,
+            width_mm=500,
+            pieces=1,
+            material="FRONT 18",
+            wrapping="DD",
+        ),
+    ]
+
+    gray_bundle_template = CabinetTemplate(
+        kitchen_type="LOFT", name="Gray Bundle Template"
+    )
+    gray_bundle_template.parts = [
+        CabinetPart(
+            part_name="Panel 18",
+            height_mm=720,
+            width_mm=500,
+            pieces=1,
+            material="PLYTA 18",
+            wrapping="D",
+        ),
+        CabinetPart(
+            part_name="Panel 12",
+            height_mm=300,
+            width_mm=500,
+            pieces=1,
+            material="PLYTA 12",
+            wrapping="D",
+        ),
+        CabinetPart(
+            part_name="Panel 16",
+            height_mm=280,
+            width_mm=500,
+            pieces=1,
+            material="PLYTA 16",
             wrapping="D",
         ),
         CabinetPart(
@@ -395,7 +439,9 @@ def test_color_grouped_sections_for_selected_sections(tmp_path):
     )
     for cab in (cab_1, cab_2, cab_3):
         cab.project = project
-        cab.cabinet_type = ct
+    cab_1.cabinet_type = white_bundle_template
+    cab_2.cabinet_type = gray_bundle_template
+    cab_3.cabinet_type = white_bundle_template
     project.cabinets = [cab_1, cab_2, cab_3]
 
     rg = ReportGenerator()
@@ -407,61 +453,36 @@ def test_color_grouped_sections_for_selected_sections(tmp_path):
     body_tables = [t for t in doc.tables if t not in header_tables + footer_tables]
 
     headings = [p.text for p in doc.paragraphs if p.style.name == "Heading 2"]
-    assert "FORMATKI (PLYTA 18) - Gray" in headings
-    assert "FORMATKI (PLYTA 18) - White" in headings
-    assert "FORMATKI (PLYTA 12) - Gray" in headings
-    assert "FORMATKI (PLYTA 12) - White" in headings
-    assert "FRONTY - Black" in headings
-    assert "FRONTY - Maple" in headings
+    expected_primary_headings = [
+        "FORMATKI (PLYTA 18) - White",
+        "FORMATKI (PLYTA 12) - White",
+        "FRONTY - Maple",
+        "FORMATKI (PLYTA 18) - Gray",
+        "FORMATKI (PLYTA 12) - Gray",
+        "FRONTY - Black",
+        "FORMATKI (PLYTA 16)",
+    ]
+    assert headings[: len(expected_primary_headings)] == expected_primary_headings
 
-    def find_tables_with_name(name: str):
-        return [
-            table
-            for table in body_tables
-            if any(row.cells[1].text.strip() == name for row in table.rows[1:])
-        ]
+    tables_by_heading = dict(zip(expected_primary_headings, body_tables))
 
-    plyta_18_tables = find_tables_with_name("Panel 18")
-    plyta_12_tables = find_tables_with_name("Panel 12")
-    fronty_tables = find_tables_with_name("Front drzwi")
+    white_plyta_18 = tables_by_heading["FORMATKI (PLYTA 18) - White"]
+    gray_plyta_18 = tables_by_heading["FORMATKI (PLYTA 18) - Gray"]
+    assert [r.cells[0].text.strip() for r in gray_plyta_18.rows[1:]] == ["2"]
+    assert [r.cells[0].text.strip() for r in white_plyta_18.rows[1:]] == ["1", "3"]
 
-    assert len(plyta_18_tables) == 2
-    assert len(plyta_12_tables) == 2
-    assert len(fronty_tables) == 2
+    white_plyta_12 = tables_by_heading["FORMATKI (PLYTA 12) - White"]
+    gray_plyta_12 = tables_by_heading["FORMATKI (PLYTA 12) - Gray"]
+    assert [r.cells[0].text.strip() for r in gray_plyta_12.rows[1:]] == ["2"]
+    assert [r.cells[0].text.strip() for r in white_plyta_12.rows[1:]] == ["1", "3"]
 
-    seq1 = get_circled_number(1)
-    seq2 = get_circled_number(2)
-    seq3 = get_circled_number(3)
+    maple_fronty = tables_by_heading["FRONTY - Maple"]
+    black_fronty = tables_by_heading["FRONTY - Black"]
+    assert [r.cells[0].text.strip() for r in black_fronty.rows[1:]] == ["2"]
+    assert [r.cells[0].text.strip() for r in maple_fronty.rows[1:]] == ["1", "3"]
 
-    # PLYTA 18: Gray group has seq2; White group has seq1 then seq3
-    gray_plyta_18 = next(
-        t for t in plyta_18_tables if t.rows[1].cells[5].text.strip() == "Gray"
-    )
-    white_plyta_18 = next(
-        t for t in plyta_18_tables if t.rows[1].cells[5].text.strip() == "White"
-    )
-    assert [r.cells[0].text.strip() for r in gray_plyta_18.rows[1:]] == [seq2]
-    assert [r.cells[0].text.strip() for r in white_plyta_18.rows[1:]] == [seq1, seq3]
-
-    # PLYTA 12: Gray group has seq2; White group has seq1 then seq3
-    gray_plyta_12 = next(
-        t for t in plyta_12_tables if t.rows[1].cells[5].text.strip() == "Gray"
-    )
-    white_plyta_12 = next(
-        t for t in plyta_12_tables if t.rows[1].cells[5].text.strip() == "White"
-    )
-    assert [r.cells[0].text.strip() for r in gray_plyta_12.rows[1:]] == [seq2]
-    assert [r.cells[0].text.strip() for r in white_plyta_12.rows[1:]] == [seq1, seq3]
-
-    # FRONTY: Black group has seq2; Maple group has seq1 then seq3
-    black_fronty = next(
-        t for t in fronty_tables if t.rows[1].cells[5].text.strip() == "Black"
-    )
-    maple_fronty = next(
-        t for t in fronty_tables if t.rows[1].cells[5].text.strip() == "Maple"
-    )
-    assert [r.cells[0].text.strip() for r in black_fronty.rows[1:]] == [seq2]
-    assert [r.cells[0].text.strip() for r in maple_fronty.rows[1:]] == [seq1, seq3]
+    plyta_16 = tables_by_heading["FORMATKI (PLYTA 16)"]
+    assert [r.cells[0].text.strip() for r in plyta_16.rows[1:]] == ["2"]
 
 
 def test_accessories_section(tmp_path, sample_project_orm):
@@ -597,11 +618,163 @@ def test_program_logo_uses_color_variant_from_settings():
     assert Path(logo_path).exists()
 
 
+def test_report_applies_page_margin_settings(tmp_path, sample_project_orm):
+    """
+    Given: custom report margin settings
+    When: generating the report
+    Then: the document section uses those margins
+    """
+
+    class _FakeSettingsService:
+        def get_setting_value(self, key: str, default=None):
+            values = {
+                "report_left_margin_mm": 3,
+                "report_right_margin_mm": 11,
+            }
+            return values.get(key, default)
+
+    rg = ReportGenerator()
+    rg.settings_service = _FakeSettingsService()
+
+    output = rg.generate(sample_project_orm, output_dir=str(tmp_path), auto_open=False)
+    doc = Document(output)
+    section = doc.sections[0]
+
+    assert round(section.left_margin.mm) == 3
+    assert round(section.right_margin.mm) == 11
+
+
+def test_report_notes_column_width_respects_setting(tmp_path, sample_project_orm):
+    """
+    Given: different 'Uwagi' width settings
+    When: generating the report
+    Then: the notes column width changes accordingly
+    """
+
+    class _FakeSettingsService:
+        def __init__(self, notes_width_percent: int):
+            self.notes_width_percent = notes_width_percent
+
+        def get_setting_value(self, key: str, default=None):
+            if key == "report_notes_column_width_percent":
+                return self.notes_width_percent
+            return default
+
+    def _body_tables(doc):
+        header_tables = doc.sections[0].header.tables
+        footer_tables = doc.sections[0].footer.tables
+        return [t for t in doc.tables if t not in header_tables + footer_tables]
+
+    def _cell_width(cell):
+        return int(cell._tc.tcPr.tcW.w)
+
+    rg_narrow = ReportGenerator()
+    rg_narrow.settings_service = _FakeSettingsService(18)
+    narrow_output = rg_narrow.generate(
+        sample_project_orm, output_dir=str(tmp_path), auto_open=False
+    )
+    narrow_doc = Document(narrow_output)
+    narrow_width = _cell_width(_body_tables(narrow_doc)[0].rows[0].cells[6])
+
+    rg_wide = ReportGenerator()
+    rg_wide.settings_service = _FakeSettingsService(40)
+    wide_output = rg_wide.generate(
+        sample_project_orm, output_dir=str(tmp_path), auto_open=False
+    )
+    wide_doc = Document(wide_output)
+    wide_width = _cell_width(_body_tables(wide_doc)[0].rows[0].cells[6])
+
+    assert wide_width > narrow_width
+
+
+def test_report_column_gap_is_constant_across_sections(tmp_path, sample_project_orm):
+    """
+    Given: a custom fixed column gap
+    When: generating sections with different numbers of columns
+    Then: all report tables use the same column gap
+    """
+
+    class _FakeSettingsService:
+        def get_setting_value(self, key: str, default=None):
+            if key == "report_column_gap_mm":
+                return 0.5
+            return default
+
+    def _body_tables(doc):
+        header_tables = doc.sections[0].header.tables
+        footer_tables = doc.sections[0].footer.tables
+        return [t for t in doc.tables if t not in header_tables + footer_tables]
+
+    def _table_gap_twips(table):
+        element = table._tbl.tblPr.find(qn("w:tblCellSpacing"))
+        assert element is not None
+        return int(element.get(qn("w:w")))
+
+    rg = ReportGenerator()
+    rg.settings_service = _FakeSettingsService()
+
+    output = rg.generate(sample_project_orm, output_dir=str(tmp_path), auto_open=False)
+    doc = Document(output)
+    body_tables = _body_tables(doc)
+
+    expected_gap = int(Mm(0.5).twips)
+    assert _table_gap_twips(body_tables[0]) == expected_gap
+    assert _table_gap_twips(body_tables[-1]) == expected_gap
+
+
+def test_shorter_sections_keep_same_shared_column_widths():
+    """
+    Given: a full section and a shorter section without trailing columns
+    When: computing report column widths
+    Then: shared columns keep identical widths instead of stretching
+    """
+
+    rg = ReportGenerator()
+    doc = Document()
+
+    full_widths = rg._get_parts_table_column_widths(
+        doc, accessory=False, show_color_column=True, show_notes_column=True
+    )
+    short_widths = rg._get_parts_table_column_widths(
+        doc, accessory=False, show_color_column=False, show_notes_column=False
+    )
+
+    assert short_widths == full_widths[:5]
+
+
+def test_report_row_spacing_respects_setting(tmp_path, sample_project_orm):
+    """
+    Given: custom row spacing setting
+    When: generating the report
+    Then: table paragraphs use the configured spacing
+    """
+
+    class _FakeSettingsService:
+        def get_setting_value(self, key: str, default=None):
+            if key == "report_row_spacing_pt":
+                return 1
+            return default
+
+    rg = ReportGenerator()
+    rg.settings_service = _FakeSettingsService()
+
+    output = rg.generate(sample_project_orm, output_dir=str(tmp_path), auto_open=False)
+    doc = Document(output)
+
+    header_tables = doc.sections[0].header.tables
+    footer_tables = doc.sections[0].footer.tables
+    body_tables = [t for t in doc.tables if t not in header_tables + footer_tables]
+    spacing = body_tables[0].rows[1].cells[0].paragraphs[0].paragraph_format.space_after
+
+    assert spacing is not None
+    assert spacing.pt == 1
+
+
 def test_report_contains_glass_shelves_section(tmp_path):
     """
     Given: a cabinet that contains a glass shelf part
     When: generating the report
-    Then: the report has a dedicated "PÓŁKI SZKLANE" section and row
+    Then: the report has a dedicated "PÓŁKI SZKLANE" section with shortened columns
     """
     project = Project(
         name="Glass Shelf Project",
@@ -661,8 +834,92 @@ def test_report_contains_glass_shelves_section(tmp_path):
 
     assert glass_table is not None
     assert len(glass_table.rows) == 2
+    assert [cell.text for cell in glass_table.rows[0].cells] == [
+        "Lp.",
+        "Nazwa",
+        "Wymiary (mm)",
+        "Ilość",
+        "Okleina",
+    ]
     row = glass_table.rows[1].cells
     assert row[1].text == "półka szklana"
+    assert row[3].text == "2"
+
+
+def test_report_contains_witryny_section_without_color_and_notes(tmp_path):
+    """
+    Given: a cabinet that contains a witryna part
+    When: generating the report
+    Then: the "WITRYNY" section omits the "Kolor" and "Uwagi" columns
+    """
+    project = Project(
+        name="Witryna Project",
+        kitchen_type="LOFT",
+        order_number="WITRYNA-001",
+        client_name="Witryna Client",
+        client_address="Witryna Street 1",
+        client_phone="555-WITRYNA",
+        client_email="witryna@example.com",
+    )
+
+    ct = CabinetTemplate(kitchen_type="LOFT", name="Witryna Template")
+    ct.parts = [
+        CabinetPart(
+            part_name="front witryna",
+            height_mm=700,
+            width_mm=400,
+            pieces=1,
+            material="WITRYNA",
+            wrapping="DD",
+        ),
+        CabinetPart(
+            part_name="front",
+            height_mm=700,
+            width_mm=596,
+            pieces=1,
+            material="FRONT 16",
+        ),
+    ]
+
+    cab = ProjectCabinet(
+        sequence_number=1,
+        body_color="Oak",
+        front_color="Black",
+        handle_type="KROMA",
+        quantity=2,
+    )
+    cab.project = project
+    cab.cabinet_type = ct
+    project.cabinets = [cab]
+
+    rg = ReportGenerator()
+    output = rg.generate(project, output_dir=str(tmp_path), auto_open=False)
+    doc = Document(output)
+
+    headings = [p.text for p in doc.paragraphs if p.style.name == "Heading 2"]
+    assert "WITRYNY" in headings
+
+    header_tables = doc.sections[0].header.tables
+    footer_tables = doc.sections[0].footer.tables
+    body_tables = [t for t in doc.tables if t not in header_tables + footer_tables]
+
+    witryny_table = None
+    for idx, heading in enumerate(headings):
+        if heading == "WITRYNY":
+            witryny_table = body_tables[idx]
+            break
+
+    assert witryny_table is not None
+    assert len(witryny_table.rows) == 2
+    assert [cell.text for cell in witryny_table.rows[0].cells] == [
+        "Lp.",
+        "Nazwa",
+        "Wymiary (mm)",
+        "Ilość",
+        "Okleina",
+    ]
+    row = witryny_table.rows[1].cells
+    assert row[1].text == "front witryna"
     assert row[3].text == "2"
 
 
@@ -873,9 +1130,6 @@ def test_custom_cabinets_in_report(tmp_path, project_with_custom_cabinets):
     assert "HDF" in headings
     assert "AKCESORIA" in headings
 
-    seq1 = get_circled_number(1)
-    seq2 = get_circled_number(2)
-
     def find_row_cells(part_name: str):
         for table in body_tables:
             for row in table.rows[1:]:
@@ -887,25 +1141,25 @@ def test_custom_cabinets_in_report(tmp_path, project_with_custom_cabinets):
     custom_panel = find_row_cells("Custom Side Panel")
     assert catalog_panel is not None, "Catalog panel not found in FORMATKI"
     assert custom_panel is not None, "Custom side panel not found in FORMATKI"
-    assert catalog_panel[0].text.strip() == seq1
+    assert catalog_panel[0].text.strip() == "1"
     assert catalog_panel[3].text.strip() == "2"
-    assert custom_panel[0].text.strip() == seq2
+    assert custom_panel[0].text.strip() == "2"
     assert custom_panel[3].text.strip() == "4"
 
     catalog_front = find_row_cells("Catalog Front")
     custom_front = find_row_cells("Custom Front Door")
     assert catalog_front is not None, "Catalog front not found in FRONTY"
     assert custom_front is not None, "Custom front door not found in FRONTY"
-    assert catalog_front[0].text.strip() == seq1
+    assert catalog_front[0].text.strip() == "1"
     assert catalog_front[3].text.strip() == "1"
     assert catalog_front[5].text.strip() == "Oak"
-    assert custom_front[0].text.strip() == seq2
+    assert custom_front[0].text.strip() == "2"
     assert custom_front[3].text.strip() == "2"
     assert custom_front[5].text.strip() == "Black"
 
     custom_hdf = find_row_cells("Custom Back Panel")
     assert custom_hdf is not None, "Custom HDF back panel not found in HDF section"
-    assert custom_hdf[0].text.strip() == seq2
+    assert custom_hdf[0].text.strip() == "2"
     assert custom_hdf[3].text.strip() == "2"
 
 
@@ -913,7 +1167,7 @@ def test_custom_cabinet_sequence_numbers(tmp_path, project_with_custom_cabinets)
     """
     Given: a project with custom cabinets having sequence numbers
     When: generating a report
-    Then: custom cabinet parts have correct sequence number symbols
+    Then: custom cabinet parts have correct sequence numbers
     """
     project = project_with_custom_cabinets
     rg = ReportGenerator()
@@ -925,8 +1179,6 @@ def test_custom_cabinet_sequence_numbers(tmp_path, project_with_custom_cabinets)
     footer_tables = doc.sections[0].footer.tables
     body_tables = [t for t in doc.tables if t not in header_tables + footer_tables]
 
-    seq1 = get_circled_number(1)
-    seq2 = get_circled_number(2)
     found_sequences = set()
 
     for table in body_tables:
@@ -935,7 +1187,5 @@ def test_custom_cabinet_sequence_numbers(tmp_path, project_with_custom_cabinets)
             if name in ("Catalog Panel", "Custom Side Panel"):
                 found_sequences.add(row.cells[0].text.strip())
 
-    assert seq1 in found_sequences, (
-        f"Sequence number {seq1} not found (catalog cabinet)"
-    )
-    assert seq2 in found_sequences, f"Sequence number {seq2} not found (custom cabinet)"
+    assert "1" in found_sequences, "Sequence number 1 not found (catalog cabinet)"
+    assert "2" in found_sequences, "Sequence number 2 not found (custom cabinet)"

@@ -99,7 +99,7 @@ class TestReportGeneratorCustomCabinets:
         assert panel_part.width == 560
         assert panel_part.height == 720
         assert panel_part.color == "Biały"  # body_color
-        assert panel_part.seq == "①"  # sequence number 1
+        assert panel_part.seq == "1"  # sequence number 1
         assert "Panel boczny" in panel_part.notes
 
         # Verify FRONTY (fronts) - should have "Front główny"
@@ -112,7 +112,7 @@ class TestReportGeneratorCustomCabinets:
         assert front_part.width == 596
         assert front_part.height == 718
         assert front_part.color == "Szary"  # front_color
-        assert front_part.seq == "①"  # sequence number 1
+        assert front_part.seq == "1"  # sequence number 1
         assert "Handle: Nowoczesny" in front_part.notes
 
         # Verify HDF - should have "Tył HDF"
@@ -125,7 +125,7 @@ class TestReportGeneratorCustomCabinets:
         assert hdf_part.width == 592
         assert hdf_part.height == 712
         assert hdf_part.color == ""  # HDF has no color
-        assert hdf_part.seq == "①"  # sequence number 1
+        assert hdf_part.seq == "1"  # sequence number 1
         assert "Tył płyta HDF" in hdf_part.notes
 
         # No accessories should be present since we didn't add any
@@ -196,7 +196,7 @@ class TestReportGeneratorCustomCabinets:
         )
 
         # Should have parts from custom cabinet
-        custom_parts = [part for part in formatki if part.seq == "②"]  # sequence 2
+        custom_parts = [part for part in formatki if part.seq == "2"]  # sequence 2
         assert len(custom_parts) >= 1
 
         custom_part_found = next(
