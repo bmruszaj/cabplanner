@@ -53,11 +53,25 @@ class _RuntimeKillSwitchHandler(QObject):
 def _enforce_startup_kill_switch(
     log, kill_switch_service, updater_service: UpdaterService
 ) -> None:
-    """Block application startup and offer an update when kill switch is active."""
-    decision = kill_switch_service.evaluate_current_version(
+    """Block startup when cache and remote policy agree the version is disabled."""
+    cached_decision = kill_switch_service.evaluate_current_version(
         VERSION, prefer_remote=False
     )
+    if not cached_decision.is_blocked:
+        return
+
+    log.warning(
+        "Startup cache blocks version=%s; rechecking remote kill switch",
+        VERSION,
+    )
+
+    decision = kill_switch_service.evaluate_current_version(
+        VERSION,
+        prefer_remote=True,
+        use_service_timeout=False,
+    )
     if not decision.is_blocked:
+        log.info("Remote kill switch recheck cleared cached startup block")
         return
 
     log.warning(

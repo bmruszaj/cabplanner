@@ -65,7 +65,7 @@ class TestKillSwitchService:
         }
         notifications = []
 
-        service._fetch_remote_payload = lambda: payload
+        service._fetch_remote_payload = lambda **_kwargs: payload
         service._notify_remote_block = lambda decision: notifications.append(decision)
         decision = service.refresh_current_version("1.9.9")
 

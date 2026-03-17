@@ -84,13 +84,17 @@ class KillSwitchService(QObject):
         self,
         current_version: str = VERSION,
         prefer_remote: bool = True,
+        use_service_timeout: bool = True,
     ) -> KillSwitchDecision:
         """Evaluate the current version against remote policy or cached fallback."""
         if os.environ.get("CABPLANNER_KILL_SWITCH_BYPASS") == "1":
             logger.warning("Kill switch bypassed via CABPLANNER_KILL_SWITCH_BYPASS=1")
             return KillSwitchDecision(is_blocked=False, source="bypass")
 
-        payload, source = self._load_payload(prefer_remote=prefer_remote)
+        payload, source = self._load_payload(
+            prefer_remote=prefer_remote,
+            use_service_timeout=use_service_timeout,
+        )
         return self._build_decision(payload, source, current_version)
 
     def refresh_current_version_async(self, current_version: str = VERSION) -> None:
@@ -117,6 +121,7 @@ class KillSwitchService(QObject):
         decision = self.evaluate_current_version(
             current_version=current_version,
             prefer_remote=True,
+            use_service_timeout=True,
         )
         if decision.is_blocked and decision.source == "remote":
             logger.error(
@@ -127,11 +132,17 @@ class KillSwitchService(QObject):
             self._notify_remote_block(decision)
         return decision
 
-    def _load_payload(self, prefer_remote: bool) -> tuple[dict[str, Any] | None, str]:
+    def _load_payload(
+        self,
+        prefer_remote: bool,
+        use_service_timeout: bool,
+    ) -> tuple[dict[str, Any] | None, str]:
         """Load policy from cache, optionally refreshing from remote first."""
         if prefer_remote:
             try:
-                payload = self._fetch_remote_payload()
+                payload = self._fetch_remote_payload(
+                    use_service_timeout=use_service_timeout
+                )
                 self._cache_payload(payload)
                 return payload, "remote"
             except Exception as exc:
@@ -144,10 +155,10 @@ class KillSwitchService(QObject):
 
         return None, "none"
 
-    def _fetch_remote_payload(self) -> dict[str, Any]:
+    def _fetch_remote_payload(self, use_service_timeout: bool = True) -> dict[str, Any]:
         """Fetch kill switch config from GitHub."""
         client = self.client_factory(self.repo)
-        if hasattr(client, "timeout"):
+        if use_service_timeout and hasattr(client, "timeout"):
             client.timeout = self.remote_timeout_seconds
         payload = client.get_repo_json(self.config_path)
         if not isinstance(payload, dict):

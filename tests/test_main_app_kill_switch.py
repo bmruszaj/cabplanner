@@ -66,8 +66,20 @@ def test_main_checks_cached_kill_switch_before_db_mutations(monkeypatch):
             calls.append(("kill_switch_init", base_path))
             self.remote_block_detected = _FakeSignal()
 
-        def evaluate_current_version(self, version, prefer_remote=True):
-            calls.append(("evaluate_current_version", version, prefer_remote))
+        def evaluate_current_version(
+            self,
+            version,
+            prefer_remote=True,
+            use_service_timeout=True,
+        ):
+            calls.append(
+                (
+                    "evaluate_current_version",
+                    version,
+                    prefer_remote,
+                    use_service_timeout,
+                )
+            )
             return KillSwitchDecision(is_blocked=False, source="none")
 
         def refresh_current_version_async(self, version):
@@ -131,7 +143,7 @@ def test_main_checks_cached_kill_switch_before_db_mutations(monkeypatch):
 
     assert exc_info.value.code == 0
     assert calls.index(
-        ("evaluate_current_version", main_app.VERSION, False)
+        ("evaluate_current_version", main_app.VERSION, False, True)
     ) < calls.index(("ensure_db_and_migrate", Path("BASE")))
     assert ("create_services_updater", fake_updater) in calls
     assert "backup_start" in calls
@@ -148,12 +160,25 @@ def test_main_aborts_before_db_when_cached_kill_switch_blocks(monkeypatch):
             self.base_path = base_path
             self.remote_block_detected = _FakeSignal()
 
-        def evaluate_current_version(self, version, prefer_remote=True):
+        def evaluate_current_version(
+            self,
+            version,
+            prefer_remote=True,
+            use_service_timeout=True,
+        ):
+            if not prefer_remote:
+                return KillSwitchDecision(
+                    is_blocked=True,
+                    title="Blocked",
+                    message="Stop now",
+                    source="cache",
+                    reason="block_all",
+                )
             return KillSwitchDecision(
                 is_blocked=True,
                 title="Blocked",
                 message="Stop now",
-                source="cache",
+                source="remote",
                 reason="block_all",
             )
 
@@ -188,6 +213,94 @@ def test_main_aborts_before_db_when_cached_kill_switch_blocks(monkeypatch):
         main_app.main()
 
     assert forced_update_calls == [(None, fake_updater, "Blocked", "Stop now")]
+
+
+def test_main_allows_start_when_remote_recheck_clears_cached_block(monkeypatch):
+    calls = []
+    fake_log = _FakeLog()
+    fake_updater = object()
+
+    class _FakeKillSwitchService:
+        def __init__(self, base_path):
+            self.base_path = base_path
+            self.remote_block_detected = _FakeSignal()
+
+        def evaluate_current_version(
+            self,
+            version,
+            prefer_remote=True,
+            use_service_timeout=True,
+        ):
+            calls.append(
+                (
+                    "evaluate_current_version",
+                    version,
+                    prefer_remote,
+                    use_service_timeout,
+                )
+            )
+            if not prefer_remote:
+                return KillSwitchDecision(
+                    is_blocked=True,
+                    title="Blocked",
+                    message="Stop now",
+                    source="cache",
+                    reason="block_all",
+                )
+            return KillSwitchDecision(is_blocked=False, source="remote")
+
+        def refresh_current_version_async(self, version):
+            calls.append(("refresh_current_version_async", version))
+
+    monkeypatch.setattr(
+        main_app, "configure_logging", lambda *_args, **_kwargs: fake_log
+    )
+    monkeypatch.setattr(main_app, "enforce_single_instance", lambda *_args: None)
+    monkeypatch.setattr(main_app, "create_qt_app", lambda: _FakeApp())
+    monkeypatch.setattr(main_app, "set_app_icon", lambda *_args: None)
+    monkeypatch.setattr(main_app, "get_base_path", lambda: Path("BASE"))
+    monkeypatch.setattr(main_app, "UpdaterService", lambda: fake_updater)
+    monkeypatch.setattr(main_app, "KillSwitchService", _FakeKillSwitchService)
+    monkeypatch.setattr(
+        main_app,
+        "ensure_db_and_migrate",
+        lambda base: calls.append(("ensure_db_and_migrate", base))
+        or ("db.sqlite", False),
+    )
+    monkeypatch.setattr(main_app, "create_session", lambda *_args: _FakeSession())
+    monkeypatch.setattr(
+        main_app,
+        "seed_cabinet_templates_if_first_run",
+        lambda *_args: calls.append("seed"),
+    )
+    monkeypatch.setattr(
+        main_app,
+        "create_services",
+        lambda *_args, **kwargs: {
+            "backup": _FakeBackupService(calls),
+            "settings": "SETTINGS",
+            "updater": kwargs["updater_service"],
+            "kill_switch": "KILL_SWITCH",
+        },
+    )
+    monkeypatch.setattr(main_app, "apply_theme", lambda *_args: None)
+    monkeypatch.setattr(main_app, "create_main_window", lambda *_args: _FakeWindow())
+    monkeypatch.setattr(main_app, "wire_startup_update_check", lambda *_args: None)
+    monkeypatch.setattr(
+        main_app.sys, "exit", lambda code: (_ for _ in ()).throw(SystemExit(code))
+    )
+
+    with pytest.raises(SystemExit) as exc_info:
+        main_app.main()
+
+    assert exc_info.value.code == 0
+    assert (
+        "evaluate_current_version",
+        main_app.VERSION,
+        True,
+        False,
+    ) in calls
+    assert ("ensure_db_and_migrate", Path("BASE")) in calls
 
 
 def test_runtime_handler_runs_forced_update_and_quits(monkeypatch):
