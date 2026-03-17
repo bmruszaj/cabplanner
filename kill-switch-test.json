@@ -1,0 +1,8 @@
+{
+  "enabled": true,
+  "block_all": true,
+  "blocked_versions": [],
+  "min_allowed_version": "",
+  "title": "Test kill switch",
+  "message": "Ta wersja jest zablokowana testowo."
+}
