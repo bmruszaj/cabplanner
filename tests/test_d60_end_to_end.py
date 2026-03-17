@@ -37,7 +37,7 @@ class TestCustomCabinetD60EndToEnd:
         session.add(catalog_d60)
         session.commit()
 
-        print(f"✅ Created catalog template D60 with ID: {catalog_d60.id}")
+        print(f"Created catalog template D60 with ID: {catalog_d60.id}")
 
         # Step 2: Create controller and add custom cabinet D60
         project_service = ProjectService(session)
@@ -102,9 +102,7 @@ class TestCustomCabinetD60EndToEnd:
         # Step 3: Add custom cabinet - this should NOT fail despite name collision
         try:
             custom_cabinet = controller.add_cabinet(project.id, **custom_d60_data)
-            print(
-                f"✅ Successfully added custom D60 cabinet with ID: {custom_cabinet.id}"
-            )
+            print(f"Successfully added custom D60 cabinet with ID: {custom_cabinet.id}")
         except Exception as e:
             pytest.fail(f"Failed to add custom D60 cabinet: {str(e)}")
 
@@ -129,7 +127,7 @@ class TestCustomCabinetD60EndToEnd:
         assert "Custom Front D60" in part_names
         assert "Custom Tył D60" in part_names
 
-        print(f"✅ Created {len(custom_parts)} custom parts")
+        print(f"Created {len(custom_parts)} custom parts")
 
         # Step 6: Verify catalog template still exists unchanged
         catalog_templates = (
@@ -138,7 +136,7 @@ class TestCustomCabinetD60EndToEnd:
         assert len(catalog_templates) == 1  # Only original catalog template
         assert catalog_templates[0].id == catalog_d60.id
 
-        print("✅ Catalog template D60 unaffected")
+        print("Catalog template D60 unaffected")
 
         # Step 7: Load project with relationships for report generation
         session.refresh(project)
@@ -150,7 +148,7 @@ class TestCustomCabinetD60EndToEnd:
             formatki, fronty, hdf, akcesoria = (
                 report_generator._extract_elements_directly(project)
             )
-            print("✅ Report generation successful")
+            print("Report generation successful")
         except Exception as e:
             pytest.fail(f"Report generation failed: {str(e)}")
 
@@ -169,9 +167,9 @@ class TestCustomCabinetD60EndToEnd:
         assert left_panel.quantity == 2  # 1 piece * 2 cabinet quantity
         assert left_panel.width == 560
         assert left_panel.height == 720
-        assert left_panel.seq == "①"
+        assert left_panel.seq == "1"
 
-        print(f"✅ Found {len(formatki)} formatki parts in report")
+        print(f"Found {len(formatki)} formatki parts in report")
 
         # Check FRONTY (fronts)
         fronty_names = [part.name for part in fronty]
@@ -182,7 +180,7 @@ class TestCustomCabinetD60EndToEnd:
         assert front_part.color == "#2c3e50"  # front_color
         assert "Handle: Push-to-open" in front_part.notes
 
-        print(f"✅ Found {len(fronty)} fronty parts in report")
+        print(f"Found {len(fronty)} fronty parts in report")
 
         # Check HDF
         hdf_names = [part.name for part in hdf]
@@ -193,7 +191,7 @@ class TestCustomCabinetD60EndToEnd:
         assert hdf_part.width == 592
         assert hdf_part.height == 712
 
-        print(f"✅ Found {len(hdf)} HDF parts in report")
+        print(f"Found {len(hdf)} HDF parts in report")
 
         # Step 10: Final verification - ensure we can distinguish between catalog and custom D60
 
@@ -224,14 +222,14 @@ class TestCustomCabinetD60EndToEnd:
         assert len(custom_cabs) == 1
         assert len(catalog_cabs) == 1
 
-        print("✅ Successfully demonstrated custom and catalog D60 coexistence")
+        print("Successfully demonstrated custom and catalog D60 coexistence")
 
         # Final success message
-        print("\n🎉 COMPLETE SUCCESS: Custom cabinet D60 workflow fully functional!")
-        print("   ✓ No name conflicts with existing catalog templates")
-        print("   ✓ Custom parts stored separately in ProjectCabinetCustomPart")
-        print("   ✓ Report generation includes custom cabinet parts")
-        print("   ✓ Both custom and catalog D60 cabinets can coexist")
+        print("\nCOMPLETE SUCCESS: Custom cabinet D60 workflow fully functional!")
+        print("   - No name conflicts with existing catalog templates")
+        print("   - Custom parts stored separately in ProjectCabinetCustomPart")
+        print("   - Report generation includes custom cabinet parts")
+        print("   - Both custom and catalog D60 cabinets can coexist")
 
 
 if __name__ == "__main__":
