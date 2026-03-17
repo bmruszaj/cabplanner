@@ -56,18 +56,9 @@ class _FakeLog:
         """Ignore exception logs in tests."""
 
 
-class _FakeTimer:
-    calls = []
-
-    @staticmethod
-    def singleShot(delay, callback):
-        _FakeTimer.calls.append((delay, callback))
-
-
 def test_main_checks_cached_kill_switch_before_db_mutations(monkeypatch):
     calls = []
     fake_log = _FakeLog()
-    _FakeTimer.calls = []
 
     class _FakeKillSwitchService:
         def __init__(self, base_path):
@@ -95,7 +86,6 @@ def test_main_checks_cached_kill_switch_before_db_mutations(monkeypatch):
     )
     monkeypatch.setattr(main_app, "get_base_path", lambda: Path("BASE"))
     monkeypatch.setattr(main_app, "KillSwitchService", _FakeKillSwitchService)
-    monkeypatch.setattr(main_app, "QTimer", _FakeTimer)
     monkeypatch.setattr(
         main_app,
         "ensure_db_and_migrate",
@@ -139,8 +129,7 @@ def test_main_checks_cached_kill_switch_before_db_mutations(monkeypatch):
         ("evaluate_current_version", main_app.VERSION, False)
     ) < calls.index(("ensure_db_and_migrate", Path("BASE")))
     assert "backup_start" in calls
-    assert _FakeTimer.calls
-    assert _FakeTimer.calls[0][0] == 0
+    assert ("refresh_current_version_async", main_app.VERSION) in calls
 
 
 def test_main_aborts_before_db_when_cached_kill_switch_blocks(monkeypatch):

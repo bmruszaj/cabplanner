@@ -1,6 +1,6 @@
 import sys
 
-from PySide6.QtCore import QCoreApplication, QObject, QTimer, Slot
+from PySide6.QtCore import QCoreApplication, QObject, Slot
 from PySide6.QtWidgets import QMessageBox
 
 from src.app.logging_config import configure_logging
@@ -102,9 +102,7 @@ def main():
     kill_switch_service.remote_block_detected.connect(
         runtime_kill_switch_handler.on_remote_block_detected
     )
-    QTimer.singleShot(
-        0, lambda: kill_switch_service.refresh_current_version_async(VERSION)
-    )
+    kill_switch_service.refresh_current_version_async(VERSION)
 
     try:
         log.info("Starting Cabplanner application")
