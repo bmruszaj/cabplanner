@@ -22,6 +22,7 @@ from src.constants import (
     REPORT_COLUMN_GAP_MM_DEFAULT,
     REPORT_COLUMN_GAP_MM_MAX,
     REPORT_COLUMN_GAP_MM_MIN,
+    REPORT_BOTTOM_MARGIN_MM_DEFAULT,
     REPORT_LEFT_MARGIN_MM_DEFAULT,
     REPORT_MARGIN_MM_MAX,
     REPORT_MARGIN_MM_MIN,
@@ -32,6 +33,7 @@ from src.constants import (
     REPORT_ROW_SPACING_PT_MAX,
     REPORT_ROW_SPACING_PT_MIN,
     REPORT_RIGHT_MARGIN_MM_DEFAULT,
+    REPORT_TOP_MARGIN_MM_DEFAULT,
 )
 from src.db_schema.orm_models import Project
 from src.services.project_service import ProjectService
@@ -102,10 +104,10 @@ class ReportGenerator:
             )
             doc = Document()
             section = doc.sections[0]
-            section.different_first_page_header_footer = False
+            section.different_first_page_header_footer = True
             self._apply_page_layout(section)
 
-            # Header and footer on every page
+            # Header only on the first page; footer on every page.
             self._add_header(section, project)
             self._add_footer(section)
 
@@ -203,90 +205,95 @@ class ReportGenerator:
         fronty: List[SimpleNamespace],
     ) -> None:
         """
-        Keep matching FORMATKI and FRONTY blocks adjacent for the same cabinet bundle.
+        Keep matching FORMATKI and FRONTY blocks adjacent for the same color.
 
-        A bundle is defined by the body/front colors copied from the originating
-        cabinet, which lets us keep related sections together without guessing from
-        the rendered document layout alone.
+        This follows the production expectation from the client: if FORMATKI and
+        FRONTY share the same color label, they should be rendered one under the
+        other as a single color block instead of being scattered across the report.
         """
-        bundles: Dict[Tuple[str, str], Dict[str, Any]] = {}
+        color_groups: Dict[str, Dict[str, Any]] = {}
 
         for part in formatki:
-            bundle = self._get_or_create_primary_bundle(bundles, part)
+            color_key, color_label = self._get_primary_section_color(part)
+            group = self._get_or_create_primary_color_group(
+                color_groups, color_key, color_label, part
+            )
             material = (getattr(part, "material", "") or "").strip().upper()
             if material == "PLYTA 18":
-                bundle["formatki_plyta_18"].append(part)
+                group["formatki_plyta_18"].append(part)
             elif material == "PLYTA 12":
-                bundle["formatki_plyta_12"].append(part)
+                group["formatki_plyta_12"].append(part)
             elif material == "PLYTA 16":
-                bundle["formatki_plyta_16"].append(part)
+                group["formatki_plyta_16"].append(part)
             else:
-                bundle["formatki_other"].append(part)
+                group["formatki_other"].append(part)
 
         for part in fronty:
-            bundle = self._get_or_create_primary_bundle(bundles, part)
-            bundle["fronty"].append(part)
+            color_key, color_label = self._get_primary_section_color(part)
+            group = self._get_or_create_primary_color_group(
+                color_groups, color_key, color_label, part
+            )
+            group["fronty"].append(part)
 
-        ordered_bundles = sorted(
-            bundles.values(),
-            key=lambda bundle: (
-                bundle["first_sequence"],
-                bundle["body_color_label"].lower(),
-                bundle["front_color_label"].lower(),
+        ordered_groups = sorted(
+            color_groups.values(),
+            key=lambda group: (
+                group["first_sequence"],
+                0 if self._color_group_has_formatki(group) else 1,
+                group["color_label"].lower(),
             ),
         )
         plyta_16_bundle_count = sum(
-            1 for bundle in ordered_bundles if bundle["formatki_plyta_16"]
+            1 for group in ordered_groups if group["formatki_plyta_16"]
         )
 
-        for bundle in ordered_bundles:
-            body_color_label = bundle["body_color_label"]
-            front_color_label = bundle["front_color_label"]
+        for group in ordered_groups:
+            color_label = group["color_label"]
 
             formatki_plyta_18 = self._sort_parts_for_section(
-                bundle["formatki_plyta_18"]
+                group["formatki_plyta_18"]
             )
             if formatki_plyta_18:
                 self._add_parts_section(
                     doc,
-                    f"FORMATKI (PLYTA 18) - {body_color_label}",
+                    f"FORMATKI (PLYTA 18) - {color_label}",
                     formatki_plyta_18,
                 )
 
             formatki_plyta_12 = self._sort_parts_for_section(
-                bundle["formatki_plyta_12"]
+                group["formatki_plyta_12"]
             )
             if formatki_plyta_12:
                 self._add_parts_section(
                     doc,
-                    f"FORMATKI (PLYTA 12) - {body_color_label}",
+                    f"FORMATKI (PLYTA 12) - {color_label}",
                     formatki_plyta_12,
                 )
 
-            formatki_other = self._sort_parts_for_section(bundle["formatki_other"])
+            formatki_other = self._sort_parts_for_section(group["formatki_other"])
             if formatki_other:
                 self._add_parts_section(
                     doc,
-                    f"FORMATKI - {body_color_label}",
+                    f"FORMATKI - {color_label}",
                     formatki_other,
                 )
 
-            grouped_fronty = self._sort_parts_for_section(bundle["fronty"])
+            grouped_fronty = self._sort_parts_for_section(group["fronty"])
             if grouped_fronty:
                 self._add_parts_section(
                     doc,
-                    f"FRONTY - {front_color_label}",
+                    f"FRONTY - {color_label}",
                     grouped_fronty,
                     show_notes_column=False,
                 )
 
             formatki_plyta_16 = self._sort_parts_for_section(
-                bundle["formatki_plyta_16"]
+                group["formatki_plyta_16"]
             )
             if formatki_plyta_16:
                 plyta_16_title = "FORMATKI (PLYTA 16)"
                 if plyta_16_bundle_count > 1:
-                    plyta_16_title = f"{plyta_16_title} - {body_color_label}"
+                    plyta_16_title = f"{plyta_16_title} - {color_label}"
                 self._add_parts_section(
                     doc,
                     plyta_16_title,
@@ -294,20 +301,17 @@ class ReportGenerator:
                     hide_color_values=True,
                 )
 
-    def _get_or_create_primary_bundle(
+    def _get_or_create_primary_color_group(
         self,
-        bundles: Dict[Tuple[str, str], Dict[str, Any]],
+        color_groups: Dict[str, Dict[str, Any]],
+        color_key: str,
+        color_label: str,
         part: SimpleNamespace,
     ) -> Dict[str, Any]:
-        body_color_key, body_color_label = self._get_bundle_color(part, "body")
-        front_color_key, front_color_label = self._get_bundle_color(part, "front")
-        bundle_key = (body_color_key, front_color_key)
-
-        if bundle_key not in bundles:
-            bundles[bundle_key] = {
+        if color_key not in color_groups:
+            color_groups[color_key] = {
                 "first_sequence": getattr(part, "sequence", 0),
-                "body_color_label": body_color_label,
-                "front_color_label": front_color_label,
+                "color_label": color_label,
                 "formatki_plyta_18": [],
                 "formatki_plyta_12": [],
                 "formatki_plyta_16": [],
@@ -315,20 +319,15 @@ class ReportGenerator:
                 "fronty": [],
             }
         else:
-            bundles[bundle_key]["first_sequence"] = min(
-                int(bundles[bundle_key]["first_sequence"]),
+            color_groups[color_key]["first_sequence"] = min(
+                int(color_groups[color_key]["first_sequence"]),
                 getattr(part, "sequence", 0),
             )
 
-        return bundles[bundle_key]
+        return color_groups[color_key]
 
-    def _get_bundle_color(
-        self, part: SimpleNamespace, color_role: str
-    ) -> Tuple[str, str]:
-        raw_color = getattr(part, f"{color_role}_color", None)
-        if raw_color is None:
-            raw_color = getattr(part, "color", "")
-
+    def _get_primary_section_color(self, part: SimpleNamespace) -> Tuple[str, str]:
+        raw_color = getattr(part, "color", "")
         label = (raw_color or "").strip() or "BRAK KOLORU"
         return label.lower(), label
 
@@ -340,6 +339,17 @@ class ReportGenerator:
                 (getattr(item, "color", "") or "").strip().lower(),
                 getattr(item, "name", "") or "",
             ),
+        )
+
+    def _color_group_has_formatki(self, group: Dict[str, Any]) -> bool:
+        return any(
+            group[key]
+            for key in (
+                "formatki_plyta_18",
+                "formatki_plyta_12",
+                "formatki_plyta_16",
+                "formatki_other",
+            )
         )
 
     def _add_parts_sections_grouped_by_color(
@@ -666,6 +676,24 @@ class ReportGenerator:
             REPORT_MARGIN_MM_MAX,
         )
 
+    def _get_report_top_margin_mm(self) -> int:
+        """Get the configured top page margin for generated reports."""
+        return self._get_numeric_setting(
+            "report_top_margin_mm",
+            REPORT_TOP_MARGIN_MM_DEFAULT,
+            REPORT_MARGIN_MM_MIN,
+            REPORT_MARGIN_MM_MAX,
+        )
+
+    def _get_report_bottom_margin_mm(self) -> int:
+        """Get the configured bottom page margin for generated reports."""
+        return self._get_numeric_setting(
+            "report_bottom_margin_mm",
+            REPORT_BOTTOM_MARGIN_MM_DEFAULT,
+            REPORT_MARGIN_MM_MIN,
+            REPORT_MARGIN_MM_MAX,
+        )
+
     def _get_report_notes_column_width_percent(self) -> int:
         """Get the configured width share of the common 'Uwagi' column."""
         return self._get_numeric_setting(
@@ -697,6 +725,8 @@ class ReportGenerator:
         """Apply page layout settings before adding report content."""
         section.left_margin = Mm(self._get_report_left_margin_mm())
         section.right_margin = Mm(self._get_report_right_margin_mm())
+        section.top_margin = Mm(self._get_report_top_margin_mm())
+        section.bottom_margin = Mm(self._get_report_bottom_margin_mm())
 
     def _scale_column_widths(
         self, total_width: int, fixed_weights: List[int], notes_percent: int
@@ -886,7 +916,7 @@ class ReportGenerator:
             return None
 
     def _add_header(self, section: Section, project: Project) -> None:
-        header = section.header
+        header = section.first_page_header
         usable_width = section.page_width - section.left_margin - section.right_margin
         table = header.add_table(1, 2, usable_width)
         table.autofit = True

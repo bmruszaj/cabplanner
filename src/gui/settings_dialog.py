@@ -34,6 +34,7 @@ from src.constants import (
     REPORT_COLUMN_GAP_MM_DEFAULT,
     REPORT_COLUMN_GAP_MM_MAX,
     REPORT_COLUMN_GAP_MM_MIN,
+    REPORT_BOTTOM_MARGIN_MM_DEFAULT,
     REPORT_LEFT_MARGIN_MM_DEFAULT,
     REPORT_MARGIN_MM_MAX,
     REPORT_MARGIN_MM_MIN,
@@ -44,6 +45,7 @@ from src.constants import (
     REPORT_ROW_SPACING_PT_MAX,
     REPORT_ROW_SPACING_PT_MIN,
     REPORT_RIGHT_MARGIN_MM_DEFAULT,
+    REPORT_TOP_MARGIN_MM_DEFAULT,
 )
 from src.services.settings_service import SettingsService
 from src.services.updater_service import UpdaterService
@@ -275,6 +277,26 @@ class SettingsDialog(QDialog):
             "Prawy margines strony raportu. Możesz dopasować go niezależnie od lewego."
         )
         report_layout.addRow("Prawy margines:", self.report_right_margin_mm)
+
+        self.report_top_margin_mm = QSpinBox()
+        self.report_top_margin_mm.setRange(REPORT_MARGIN_MM_MIN, REPORT_MARGIN_MM_MAX)
+        self.report_top_margin_mm.setSuffix(" mm")
+        self.report_top_margin_mm.setValue(REPORT_TOP_MARGIN_MM_DEFAULT)
+        self.report_top_margin_mm.setToolTip(
+            "Górny margines strony raportu. Mniejsza wartość daje więcej miejsca na treść."
+        )
+        report_layout.addRow("Górny margines:", self.report_top_margin_mm)
+
+        self.report_bottom_margin_mm = QSpinBox()
+        self.report_bottom_margin_mm.setRange(
+            REPORT_MARGIN_MM_MIN, REPORT_MARGIN_MM_MAX
+        )
+        self.report_bottom_margin_mm.setSuffix(" mm")
+        self.report_bottom_margin_mm.setValue(REPORT_BOTTOM_MARGIN_MM_DEFAULT)
+        self.report_bottom_margin_mm.setToolTip(
+            "Dolny margines strony raportu. Możesz zmniejszyć go, aby zmieścić więcej treści."
+        )
+        report_layout.addRow("Dolny margines:", self.report_bottom_margin_mm)
 
         self.report_notes_column_width_percent = QSpinBox()
         self.report_notes_column_width_percent.setRange(
@@ -531,6 +553,20 @@ class SettingsDialog(QDialog):
                     )
                 )
             )
+            self.report_top_margin_mm.setValue(
+                int(
+                    self.settings_service.get_setting_value(
+                        "report_top_margin_mm", REPORT_TOP_MARGIN_MM_DEFAULT
+                    )
+                )
+            )
+            self.report_bottom_margin_mm.setValue(
+                int(
+                    self.settings_service.get_setting_value(
+                        "report_bottom_margin_mm", REPORT_BOTTOM_MARGIN_MM_DEFAULT
+                    )
+                )
+            )
             self.report_notes_column_width_percent.setValue(
                 int(
                     self.settings_service.get_setting_value(
@@ -649,6 +685,12 @@ class SettingsDialog(QDialog):
             )
             self.settings_service.set_setting(
                 "report_right_margin_mm", self.report_right_margin_mm.value()
+            )
+            self.settings_service.set_setting(
+                "report_top_margin_mm", self.report_top_margin_mm.value()
+            )
+            self.settings_service.set_setting(
+                "report_bottom_margin_mm", self.report_bottom_margin_mm.value()
             )
             self.settings_service.set_setting(
                 "report_notes_column_width_percent",
@@ -850,6 +892,8 @@ class SettingsDialog(QDialog):
                 "report_program_logo_variant": "Czarno-białe",
                 "report_left_margin_mm": REPORT_LEFT_MARGIN_MM_DEFAULT,
                 "report_right_margin_mm": REPORT_RIGHT_MARGIN_MM_DEFAULT,
+                "report_top_margin_mm": REPORT_TOP_MARGIN_MM_DEFAULT,
+                "report_bottom_margin_mm": REPORT_BOTTOM_MARGIN_MM_DEFAULT,
                 "report_notes_column_width_percent": REPORT_NOTES_COLUMN_WIDTH_PERCENT_DEFAULT,
                 "report_column_gap_mm": REPORT_COLUMN_GAP_MM_DEFAULT,
                 "report_row_spacing_pt": REPORT_ROW_SPACING_PT_DEFAULT,

@@ -17,6 +17,16 @@ from src.db_schema.orm_models import (
 )
 
 
+def _header_tables(doc):
+    section = doc.sections[0]
+    return list(section.first_page_header.tables) + list(section.header.tables)
+
+
+def _body_tables(doc):
+    footer_tables = doc.sections[0].footer.tables
+    return [t for t in doc.tables if t not in _header_tables(doc) + list(footer_tables)]
+
+
 @pytest.fixture
 def sample_project_orm():
     """
@@ -175,11 +185,22 @@ def test_header_contains_orm_metadata(tmp_path, sample_project_orm):
     rg = ReportGenerator()
     output = rg.generate(sample_project_orm, output_dir=str(tmp_path), auto_open=False)
     doc = Document(output)
-    header = doc.sections[0].header
+    header = doc.sections[0].first_page_header
     text = header.tables[0].cell(0, 0).text
     assert "Klient: ORM Client" in text  # Polish localization
     assert "Nr zamówienia: ORM001" in text  # Polish localization
     assert date.today().isoformat() in text
+
+
+def test_header_is_rendered_only_on_first_page(tmp_path, sample_project_orm):
+    rg = ReportGenerator()
+    output = rg.generate(sample_project_orm, output_dir=str(tmp_path), auto_open=False)
+    doc = Document(output)
+
+    section = doc.sections[0]
+    assert section.different_first_page_header_footer is True
+    assert len(section.first_page_header.tables) == 1
+    assert len(section.header.tables) == 0
 
 
 def test_body_tables_count_and_headers(tmp_path, sample_project_orm):
@@ -204,9 +225,7 @@ def test_body_tables_count_and_headers(tmp_path, sample_project_orm):
     ]
 
     # And: the four body tables have the correct column headers
-    header_tables = doc.sections[0].header.tables
-    footer_tables = doc.sections[0].footer.tables
-    body_tables = [t for t in doc.tables if t not in header_tables + footer_tables]
+    body_tables = _body_tables(doc)
 
     expected_hdr = [
         ["Lp.", "Nazwa", "Wymiary (mm)", "Ilość", "Okleina", "Kolor", "Uwagi"],
@@ -228,9 +247,7 @@ def test_derived_formatki_quantities(tmp_path, sample_project_orm):
     output = rg.generate(sample_project_orm, output_dir=str(tmp_path), auto_open=False)
     doc = Document(output)
 
-    header_tables = doc.sections[0].header.tables
-    footer_tables = doc.sections[0].footer.tables
-    body_tables = [t for t in doc.tables if t not in header_tables + footer_tables]
+    body_tables = _body_tables(doc)
     fmt_table = body_tables[0]
 
     # Header + 3 data rows (bok, wieniec, polka)
@@ -295,9 +312,7 @@ def test_plyta_16_hides_color_values_but_keeps_column(tmp_path):
     output = rg.generate(project, output_dir=str(tmp_path), auto_open=False)
     doc = Document(output)
 
-    header_tables = doc.sections[0].header.tables
-    footer_tables = doc.sections[0].footer.tables
-    body_tables = [t for t in doc.tables if t not in header_tables + footer_tables]
+    body_tables = _body_tables(doc)
 
     plyta_16_table = None
     plyta_18_table = None
@@ -332,11 +347,11 @@ def test_plyta_16_hides_color_values_but_keeps_column(tmp_path):
     assert plyta_18_row.cells[5].text.strip() == "White"
 
 
-def test_primary_sections_stay_grouped_by_cabinet_bundle(tmp_path):
+def test_primary_sections_stay_grouped_by_shared_color(tmp_path):
     """
-    Given: one cabinet bundle with matching FORMATKI/FRONTY and another with extra PLYTA 16
+    Given: FORMATKI and FRONTY sharing one color plus unrelated PLYTA 16 in another color
     When: generating report
-    Then: related FORMATKI and FRONTY stay adjacent, and unrelated PLYTA 16 no longer splits them
+    Then: the shared color is rendered as one continuous block and unrelated sections stay separate
     """
     project = Project(
         name="Color Grouping Project",
@@ -348,10 +363,10 @@ def test_primary_sections_stay_grouped_by_cabinet_bundle(tmp_path):
         client_email="client@example.com",
     )
 
-    white_bundle_template = CabinetTemplate(
-        kitchen_type="LOFT", name="White Bundle Template"
+    oak_template = CabinetTemplate(
+        kitchen_type="LOFT", name="Oak Template"
     )
-    white_bundle_template.parts = [
+    oak_template.parts = [
         CabinetPart(
             part_name="Panel 18",
             height_mm=720,
@@ -378,26 +393,10 @@ def test_primary_sections_stay_grouped_by_cabinet_bundle(tmp_path):
         ),
     ]
 
-    gray_bundle_template = CabinetTemplate(
-        kitchen_type="LOFT", name="Gray Bundle Template"
+    white_template = CabinetTemplate(
+        kitchen_type="LOFT", name="White Template"
     )
-    gray_bundle_template.parts = [
-        CabinetPart(
-            part_name="Panel 18",
-            height_mm=720,
-            width_mm=500,
-            pieces=1,
-            material="PLYTA 18",
-            wrapping="D",
-        ),
-        CabinetPart(
-            part_name="Panel 12",
-            height_mm=300,
-            width_mm=500,
-            pieces=1,
-            material="PLYTA 12",
-            wrapping="D",
-        ),
+    white_template.parts = [
         CabinetPart(
             part_name="Panel 16",
             height_mm=280,
@@ -406,80 +405,61 @@ def test_primary_sections_stay_grouped_by_cabinet_bundle(tmp_path):
             material="PLYTA 16",
             wrapping="D",
         ),
-        CabinetPart(
-            part_name="Front drzwi",
-            height_mm=700,
-            width_mm=500,
-            pieces=1,
-            material="FRONT 18",
-            wrapping="DD",
-        ),
     ]
 
     cab_1 = ProjectCabinet(
         sequence_number=1,
-        body_color="White",
-        front_color="Maple",
+        body_color="Oak",
+        front_color="Oak",
         handle_type="A",
         quantity=1,
     )
     cab_2 = ProjectCabinet(
         sequence_number=2,
-        body_color="Gray",
-        front_color="Black",
+        body_color="White",
+        front_color="White",
         handle_type="B",
         quantity=1,
     )
     cab_3 = ProjectCabinet(
         sequence_number=3,
-        body_color="White",
-        front_color="Maple",
+        body_color="Oak",
+        front_color="Oak",
         handle_type="C",
         quantity=1,
     )
     for cab in (cab_1, cab_2, cab_3):
         cab.project = project
-    cab_1.cabinet_type = white_bundle_template
-    cab_2.cabinet_type = gray_bundle_template
-    cab_3.cabinet_type = white_bundle_template
+    cab_1.cabinet_type = oak_template
+    cab_2.cabinet_type = white_template
+    cab_3.cabinet_type = oak_template
     project.cabinets = [cab_1, cab_2, cab_3]
 
     rg = ReportGenerator()
     output = rg.generate(project, output_dir=str(tmp_path), auto_open=False)
     doc = Document(output)
 
-    header_tables = doc.sections[0].header.tables
-    footer_tables = doc.sections[0].footer.tables
-    body_tables = [t for t in doc.tables if t not in header_tables + footer_tables]
+    body_tables = _body_tables(doc)
 
     headings = [p.text for p in doc.paragraphs if p.style.name == "Heading 2"]
     expected_primary_headings = [
-        "FORMATKI (PLYTA 18) - White",
-        "FORMATKI (PLYTA 12) - White",
-        "FRONTY - Maple",
-        "FORMATKI (PLYTA 18) - Gray",
-        "FORMATKI (PLYTA 12) - Gray",
-        "FRONTY - Black",
+        "FORMATKI (PLYTA 18) - Oak",
+        "FORMATKI (PLYTA 12) - Oak",
+        "FRONTY - Oak",
         "FORMATKI (PLYTA 16)",
     ]
     assert headings[: len(expected_primary_headings)] == expected_primary_headings
 
     tables_by_heading = dict(zip(expected_primary_headings, body_tables))
 
-    white_plyta_18 = tables_by_heading["FORMATKI (PLYTA 18) - White"]
-    gray_plyta_18 = tables_by_heading["FORMATKI (PLYTA 18) - Gray"]
-    assert [r.cells[0].text.strip() for r in gray_plyta_18.rows[1:]] == ["2"]
-    assert [r.cells[0].text.strip() for r in white_plyta_18.rows[1:]] == ["1", "3"]
+    oak_plyta_18 = tables_by_heading["FORMATKI (PLYTA 18) - Oak"]
+    assert [r.cells[0].text.strip() for r in oak_plyta_18.rows[1:]] == ["1", "3"]
 
-    white_plyta_12 = tables_by_heading["FORMATKI (PLYTA 12) - White"]
-    gray_plyta_12 = tables_by_heading["FORMATKI (PLYTA 12) - Gray"]
-    assert [r.cells[0].text.strip() for r in gray_plyta_12.rows[1:]] == ["2"]
-    assert [r.cells[0].text.strip() for r in white_plyta_12.rows[1:]] == ["1", "3"]
+    oak_plyta_12 = tables_by_heading["FORMATKI (PLYTA 12) - Oak"]
+    assert [r.cells[0].text.strip() for r in oak_plyta_12.rows[1:]] == ["1", "3"]
 
-    maple_fronty = tables_by_heading["FRONTY - Maple"]
-    black_fronty = tables_by_heading["FRONTY - Black"]
-    assert [r.cells[0].text.strip() for r in black_fronty.rows[1:]] == ["2"]
-    assert [r.cells[0].text.strip() for r in maple_fronty.rows[1:]] == ["1", "3"]
+    oak_fronty = tables_by_heading["FRONTY - Oak"]
+    assert [r.cells[0].text.strip() for r in oak_fronty.rows[1:]] == ["1", "3"]
 
     plyta_16 = tables_by_heading["FORMATKI (PLYTA 16)"]
     assert [r.cells[0].text.strip() for r in plyta_16.rows[1:]] == ["2"]
@@ -494,9 +474,7 @@ def test_accessories_section(tmp_path, sample_project_orm):
     rg = ReportGenerator()
     output = rg.generate(sample_project_orm, output_dir=str(tmp_path), auto_open=False)
     doc = Document(output)
-    header_tables = doc.sections[0].header.tables
-    footer_tables = doc.sections[0].footer.tables
-    body_tables = [t for t in doc.tables if t not in header_tables + footer_tables]
+    body_tables = _body_tables(doc)
     acc_table = body_tables[3]
     assert len(acc_table.rows) == 2
     cells = acc_table.rows[1].cells
@@ -630,6 +608,8 @@ def test_report_applies_page_margin_settings(tmp_path, sample_project_orm):
             values = {
                 "report_left_margin_mm": 3,
                 "report_right_margin_mm": 11,
+                "report_top_margin_mm": 4,
+                "report_bottom_margin_mm": 6,
             }
             return values.get(key, default)
 
@@ -642,6 +622,8 @@ def test_report_applies_page_margin_settings(tmp_path, sample_project_orm):
 
     assert round(section.left_margin.mm) == 3
     assert round(section.right_margin.mm) == 11
+    assert round(section.top_margin.mm) == 4
+    assert round(section.bottom_margin.mm) == 6
 
 
 def test_report_notes_column_width_respects_setting(tmp_path, sample_project_orm):
@@ -659,11 +641,6 @@ def test_report_notes_column_width_respects_setting(tmp_path, sample_project_orm
             if key == "report_notes_column_width_percent":
                 return self.notes_width_percent
             return default
-
-    def _body_tables(doc):
-        header_tables = doc.sections[0].header.tables
-        footer_tables = doc.sections[0].footer.tables
-        return [t for t in doc.tables if t not in header_tables + footer_tables]
 
     def _cell_width(cell):
         return int(cell._tc.tcPr.tcW.w)
@@ -699,11 +676,6 @@ def test_report_column_gap_is_constant_across_sections(tmp_path, sample_project_
             if key == "report_column_gap_mm":
                 return 0.5
             return default
-
-    def _body_tables(doc):
-        header_tables = doc.sections[0].header.tables
-        footer_tables = doc.sections[0].footer.tables
-        return [t for t in doc.tables if t not in header_tables + footer_tables]
 
     def _table_gap_twips(table):
         element = table._tbl.tblPr.find(qn("w:tblCellSpacing"))
@@ -761,9 +733,7 @@ def test_report_row_spacing_respects_setting(tmp_path, sample_project_orm):
     output = rg.generate(sample_project_orm, output_dir=str(tmp_path), auto_open=False)
     doc = Document(output)
 
-    header_tables = doc.sections[0].header.tables
-    footer_tables = doc.sections[0].footer.tables
-    body_tables = [t for t in doc.tables if t not in header_tables + footer_tables]
+    body_tables = _body_tables(doc)
     spacing = body_tables[0].rows[1].cells[0].paragraphs[0].paragraph_format.space_after
 
     assert spacing is not None
@@ -822,9 +792,7 @@ def test_report_contains_glass_shelves_section(tmp_path):
     headings = [p.text for p in doc.paragraphs if p.style.name == "Heading 2"]
     assert "PÓŁKI SZKLANE" in headings
 
-    header_tables = doc.sections[0].header.tables
-    footer_tables = doc.sections[0].footer.tables
-    body_tables = [t for t in doc.tables if t not in header_tables + footer_tables]
+    body_tables = _body_tables(doc)
 
     glass_table = None
     for idx, heading in enumerate(headings):
@@ -899,9 +867,7 @@ def test_report_contains_witryny_section_without_color_and_notes(tmp_path):
     headings = [p.text for p in doc.paragraphs if p.style.name == "Heading 2"]
     assert "WITRYNY" in headings
 
-    header_tables = doc.sections[0].header.tables
-    footer_tables = doc.sections[0].footer.tables
-    body_tables = [t for t in doc.tables if t not in header_tables + footer_tables]
+    body_tables = _body_tables(doc)
 
     witryny_table = None
     for idx, heading in enumerate(headings):
@@ -974,9 +940,7 @@ def test_accessories_are_aggregated_without_sequence(tmp_path):
     rg = ReportGenerator()
     output = rg.generate(project, output_dir=str(tmp_path), auto_open=False)
     doc = Document(output)
-    header_tables = doc.sections[0].header.tables
-    footer_tables = doc.sections[0].footer.tables
-    body_tables = [t for t in doc.tables if t not in header_tables + footer_tables]
+    body_tables = _body_tables(doc)
     acc_table = body_tables[0]
 
     assert len(acc_table.rows) == 2
@@ -1116,9 +1080,7 @@ def test_custom_cabinets_in_report(tmp_path, project_with_custom_cabinets):
     doc = Document(output)
 
     # Get body tables (excluding header/footer)
-    header_tables = doc.sections[0].header.tables
-    footer_tables = doc.sections[0].footer.tables
-    body_tables = [t for t in doc.tables if t not in header_tables + footer_tables]
+    body_tables = _body_tables(doc)
 
     # With color grouping we expect multiple FORMATKI/FRONTY sections plus HDF.
     assert len(body_tables) >= 5
@@ -1175,9 +1137,7 @@ def test_custom_cabinet_sequence_numbers(tmp_path, project_with_custom_cabinets)
     doc = Document(output)
 
     # Get body tables
-    header_tables = doc.sections[0].header.tables
-    footer_tables = doc.sections[0].footer.tables
-    body_tables = [t for t in doc.tables if t not in header_tables + footer_tables]
+    body_tables = _body_tables(doc)
 
     found_sequences = set()
 
