@@ -2,6 +2,7 @@ import sys
 from PySide6.QtWidgets import QApplication
 from sqlalchemy.orm import Session
 from src.gui.main_window import MainWindow
+from src.services.kill_switch_service import KillSwitchService
 from src.services.settings_service import SettingsService
 from src.services.updater_service import UpdaterService
 
@@ -14,15 +15,22 @@ def create_qt_app() -> QApplication:
     return app
 
 
-def create_services(session: Session) -> dict:
+def create_services(
+    session: Session, kill_switch_service: KillSwitchService | None = None
+) -> dict:
     """Create application services and return them in a dictionary."""
     settings_service = SettingsService(session)
     updater_service = UpdaterService()
+    kill_switch_service = kill_switch_service or KillSwitchService()
 
     # Create shortcut on first run
     updater_service.create_shortcut_on_first_run()
 
-    return {"settings": settings_service, "updater": updater_service}
+    return {
+        "settings": settings_service,
+        "updater": updater_service,
+        "kill_switch": kill_switch_service,
+    }
 
 
 def create_main_window(session: Session) -> MainWindow:

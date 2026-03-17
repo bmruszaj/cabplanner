@@ -1,9 +1,12 @@
 """GitHub API client for release information."""
 
-import os
+import base64
+import json
 import logging
+import os
 from dataclasses import dataclass
 from typing import Optional, List
+
 import requests
 
 logger = logging.getLogger(__name__)
@@ -82,4 +85,37 @@ class GitHubClient:
             raise
         except KeyError as e:
             logger.error("Invalid response format: missing key %s", e)
+            raise
+
+    def get_repo_json(self, path: str) -> dict:
+        """Get a JSON file from the repository default branch via the contents API."""
+        url = f"https://api.github.com/repos/{self.repo}/contents/{path}"
+        logger.debug("Fetching repository JSON from: %s", url)
+
+        try:
+            response = requests.get(
+                url, headers=self._get_headers(), timeout=self.timeout
+            )
+            response.raise_for_status()
+            data = response.json()
+
+            if data.get("type") != "file":
+                raise KeyError(f"Repository path is not a file: {path}")
+
+            encoded_content = data.get("content")
+            encoding = data.get("encoding")
+            if not encoded_content or encoding != "base64":
+                raise KeyError(f"Missing base64 content for repository file: {path}")
+
+            raw_text = base64.b64decode(encoded_content).decode("utf-8")
+            return json.loads(raw_text)
+
+        except requests.exceptions.Timeout:
+            logger.error("Timeout while fetching repository JSON: %s", path)
+            raise
+        except requests.exceptions.RequestException as e:
+            logger.error("Network error while fetching repository JSON %s: %s", path, e)
+            raise
+        except (ValueError, KeyError) as e:
+            logger.error("Invalid repository JSON response for %s: %s", path, e)
             raise
