@@ -59,6 +59,8 @@ jobs:
       - name: Run PyInstaller build script
         shell: pwsh
         run: ./scripts/build.ps1
+        env:
+          CABPLANNER_BACKUP_TOKEN: ${{ secrets.CABPLANNER_BACKUP_TOKEN }}
 
       - name: Create ZIP with cabplanner folder
         run: |

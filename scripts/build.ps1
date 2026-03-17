@@ -9,6 +9,8 @@ Push-Location ..
 
 Write-Host "Building Cabplanner with PyInstaller…"
 
+$backupRuntimeHook = $null
+
 # Build arguments
 $piArgs = @(
   '--clean'
@@ -49,8 +51,31 @@ $piArgs = @(
   'src/main_app.py'
 )
 
-# Run PyInstaller
-& pyinstaller @piArgs
+if ($env:CABPLANNER_BACKUP_TOKEN) {
+    $backupRuntimeHook = Join-Path $env:TEMP 'cabplanner_backup_runtime_hook.py'
+    $backupTokenLiteral = $env:CABPLANNER_BACKUP_TOKEN | ConvertTo-Json -Compress
+    @"
+import os
+
+os.environ.setdefault("CABPLANNER_BACKUP_TOKEN", $backupTokenLiteral)
+"@ | Set-Content -Path $backupRuntimeHook -Encoding UTF8
+
+    $piArgs += @('--runtime-hook', $backupRuntimeHook)
+    Write-Host "Embedding backup token runtime hook into build."
+}
+else {
+    Write-Host "CABPLANNER_BACKUP_TOKEN not set. Build will not embed backup uploads."
+}
+
+try {
+    # Run PyInstaller
+    & pyinstaller @piArgs
+}
+finally {
+    if ($backupRuntimeHook -and (Test-Path $backupRuntimeHook)) {
+        Remove-Item $backupRuntimeHook -Force -ErrorAction SilentlyContinue
+    }
+}
 
 if ($LASTEXITCODE -ne 0) {
     Write-Error "Build failed with exit code $LASTEXITCODE"
