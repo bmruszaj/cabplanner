@@ -29,6 +29,10 @@ from src.services.catalog_service import CatalogService, CatalogCabinetType
 
 logger = logging.getLogger(__name__)
 
+DIMENSIONS_COLUMN = 3
+DIMENSIONS_SAMPLE_TEXT = "9999x9999x9999 mm"
+DIMENSIONS_COLUMN_PADDING = 24
+
 
 class CatalogTableModel(QAbstractTableModel):
     """Table model for catalog items."""
@@ -134,6 +138,7 @@ class CatalogBrowserWidget(QWidget):
         )
         self.table_view.setAlternatingRowColors(True)
         self.table_view.setSortingEnabled(True)
+        self.table_view.setWordWrap(False)
 
         # Setup model
         self.model = CatalogTableModel()
@@ -144,13 +149,14 @@ class CatalogBrowserWidget(QWidget):
 
         # Configure headers
         header = self.table_view.horizontalHeader()
+        header.setStretchLastSection(False)
         header.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)  # Name
         header.setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)  # SKU
         header.setSectionResizeMode(
             2, QHeaderView.ResizeMode.ResizeToContents
         )  # Kitchen Type
         header.setSectionResizeMode(
-            3, QHeaderView.ResizeMode.ResizeToContents
+            DIMENSIONS_COLUMN, QHeaderView.ResizeMode.Interactive
         )  # Dimensions
         header.setSectionResizeMode(4, QHeaderView.ResizeMode.Stretch)  # Description
 
@@ -247,6 +253,8 @@ class CatalogBrowserWidget(QWidget):
                 query=self._current_query, filters=self._current_filters
             )
             self.model.set_items(items)
+            self.table_view.resizeColumnsToContents()
+            self._ensure_dimensions_column_width()
 
             # Update results label
             count = len(items)
@@ -259,6 +267,18 @@ class CatalogBrowserWidget(QWidget):
             logger.exception("Error refreshing catalog browser: %s", e)
             self.model.set_items([])
             self.results_label.setText("Błąd ładowania elementów")
+
+    def _ensure_dimensions_column_width(self) -> None:
+        """Keep the dimensions column wide enough for a single-line value."""
+        min_width = (
+            self.table_view.fontMetrics().horizontalAdvance(DIMENSIONS_SAMPLE_TEXT)
+            + DIMENSIONS_COLUMN_PADDING
+        )
+        content_width = max(self.table_view.sizeHintForColumn(DIMENSIONS_COLUMN), 0)
+        self.table_view.setColumnWidth(
+            DIMENSIONS_COLUMN,
+            max(min_width, content_width),
+        )
 
     def current_item_id(self) -> int | None:
         """Get current selected item ID."""

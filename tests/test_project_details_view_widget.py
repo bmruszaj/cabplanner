@@ -136,6 +136,24 @@ def test_table_refreshes_when_data_changes_in_table_mode(project_details_view):
     assert model.data(model.index(0, 5)) == 3
 
 
+def test_table_dimensions_column_stays_wide_enough_for_single_line(
+    project_details_view, qapp
+):
+    view = project_details_view
+    view._on_view_mode_changed(VIEW_MODE_TABLE)
+
+    cabinets = [_make_cabinet(21, parts=[_make_part(width_mm=1234, height_mm=2345)])]
+    view.apply_card_order(cabinets)
+    qapp.processEvents()
+
+    min_expected_width = view.table_view.fontMetrics().horizontalAdvance(
+        "9999x9999x9999 mm"
+    )
+
+    assert view.table_view.wordWrap() is False
+    assert view.table_view.columnWidth(2) >= min_expected_width
+
+
 def test_cabinet_table_model_uses_custom_name_and_real_dimensions():
     parts = [
         _make_part(

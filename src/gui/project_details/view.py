@@ -18,6 +18,7 @@ from PySide6.QtWidgets import (
     QDialogButtonBox,
     QLabel,
     QPushButton,
+    QHeaderView,
 )
 from PySide6.QtCore import Signal, Qt, QTimer, QSettings
 from PySide6.QtGui import QFont
@@ -42,6 +43,10 @@ from .models import CabinetTableModel
 from .widgets import HeaderBar, Toolbar, BannerManager, CabinetCard
 
 logger = logging.getLogger(__name__)
+
+TABLE_DIMENSIONS_COLUMN = 2
+TABLE_DIMENSIONS_SAMPLE_TEXT = "9999x9999x9999 mm"
+TABLE_DIMENSIONS_COLUMN_PADDING = 24
 
 
 class UiState:
@@ -377,7 +382,18 @@ class ProjectDetailsView(QDialog):
         # Table view with proper setup
         self.table_view = QTableView()
         self.table_view.setAlternatingRowColors(True)
-        self.table_view.horizontalHeader().setStretchLastSection(True)
+        self.table_view.setWordWrap(False)
+        self.table_view.verticalHeader().setVisible(False)
+        table_header = self.table_view.horizontalHeader()
+        table_header.setStretchLastSection(False)
+        table_header.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
+        table_header.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
+        table_header.setSectionResizeMode(
+            TABLE_DIMENSIONS_COLUMN, QHeaderView.ResizeMode.Interactive
+        )
+        table_header.setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
+        table_header.setSectionResizeMode(4, QHeaderView.ResizeMode.ResizeToContents)
+        table_header.setSectionResizeMode(5, QHeaderView.ResizeMode.ResizeToContents)
         self.stacked_widget.addWidget(self.table_view)
         central_layout.addWidget(self.stacked_widget)
 
@@ -1080,10 +1096,32 @@ class ProjectDetailsView(QDialog):
 
             # Resize columns to content
             self.table_view.resizeColumnsToContents()
+            self._ensure_dimensions_column_width()
 
         except Exception as e:
             logger.exception("Error populating table view")
             self._show_error(f"Błąd podczas ładowania tabeli: {e}")
+
+    def _ensure_dimensions_column_width(self) -> None:
+        """Keep the dimensions column wide enough for a single-line value."""
+        model = self.table_view.model()
+        if model is None or model.columnCount() <= TABLE_DIMENSIONS_COLUMN:
+            return
+
+        min_width = (
+            self.table_view.fontMetrics().horizontalAdvance(
+                TABLE_DIMENSIONS_SAMPLE_TEXT
+            )
+            + TABLE_DIMENSIONS_COLUMN_PADDING
+        )
+        content_width = max(
+            self.table_view.sizeHintForColumn(TABLE_DIMENSIONS_COLUMN),
+            0,
+        )
+        self.table_view.setColumnWidth(
+            TABLE_DIMENSIONS_COLUMN,
+            max(min_width, content_width),
+        )
 
     def show_dialog(self) -> None:
         """Show the dialog in the appropriate mode."""

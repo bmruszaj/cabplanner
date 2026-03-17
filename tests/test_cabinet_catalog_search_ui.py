@@ -64,6 +64,25 @@ def test_browser_widget_uses_external_search_input_only(qapp):
     qapp.processEvents()
 
 
+def test_browser_widget_keeps_dimensions_on_one_line(qapp):
+    service = _FakeCatalogService()
+    widget = CatalogBrowserWidget(service)
+    widget.resize(900, 500)
+    widget.show()
+    qapp.processEvents()
+
+    min_expected_width = widget.table_view.fontMetrics().horizontalAdvance(
+        "9999x9999x9999 mm"
+    )
+
+    assert widget.table_view.wordWrap() is False
+    assert widget.table_view.columnWidth(3) >= min_expected_width
+
+    widget.close()
+    widget.deleteLater()
+    qapp.processEvents()
+
+
 def test_catalog_window_search_is_debounced(qapp):
     service = _FakeCatalogService()
     window = CatalogWindow(catalog_service=service)
