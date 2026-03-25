@@ -35,6 +35,7 @@ from src.constants import (
     REPORT_COLUMN_GAP_MM_MAX,
     REPORT_COLUMN_GAP_MM_MIN,
     REPORT_BOTTOM_MARGIN_MM_DEFAULT,
+    REPORT_HEADER_BLANK_ROW_DEFAULT,
     REPORT_LEFT_MARGIN_MM_DEFAULT,
     REPORT_MARGIN_MM_MAX,
     REPORT_MARGIN_MM_MIN,
@@ -327,16 +328,32 @@ class SettingsDialog(QDialog):
         )
         report_layout.addRow("Przerwa między kolumnami:", self.report_column_gap_mm)
 
-        self.report_row_spacing_pt = QSpinBox()
+        self.report_row_spacing_pt = QDoubleSpinBox()
         self.report_row_spacing_pt.setRange(
             REPORT_ROW_SPACING_PT_MIN, REPORT_ROW_SPACING_PT_MAX
         )
+        self.report_row_spacing_pt.setDecimals(1)
+        self.report_row_spacing_pt.setSingleStep(0.1)
         self.report_row_spacing_pt.setSuffix(" pt")
         self.report_row_spacing_pt.setValue(REPORT_ROW_SPACING_PT_DEFAULT)
         self.report_row_spacing_pt.setToolTip(
             "Dodatkowy odstęp po każdym wierszu tabeli w raporcie."
         )
         report_layout.addRow("Przerwa między wierszami:", self.report_row_spacing_pt)
+
+        self.report_row_spacing_pt.setToolTip(
+            "Dodatkowy odst\u0119p po ka\u017cdym wierszu tabeli w raporcie. "
+            "Mo\u017cesz ustawi\u0107 warto\u015b\u0107 co 0.1 pt."
+        )
+
+        self.report_header_blank_row = QCheckBox(
+            "Dodaj pusty wiersz po nag\u0142\u00f3wku tabeli"
+        )
+        self.report_header_blank_row.setChecked(REPORT_HEADER_BLANK_ROW_DEFAULT)
+        self.report_header_blank_row.setToolTip(
+            "Wstawia jeden pusty wiersz mi\u0119dzy nazwami kolumn a pierwszym rekordem."
+        )
+        report_layout.addRow("", self.report_header_blank_row)
 
         layout.addWidget(report_group)
 
@@ -583,9 +600,16 @@ class SettingsDialog(QDialog):
                 )
             )
             self.report_row_spacing_pt.setValue(
-                int(
+                float(
                     self.settings_service.get_setting_value(
                         "report_row_spacing_pt", REPORT_ROW_SPACING_PT_DEFAULT
+                    )
+                )
+            )
+            self.report_header_blank_row.setChecked(
+                self._coerce_bool_setting(
+                    self.settings_service.get_setting_value(
+                        "report_header_blank_row", REPORT_HEADER_BLANK_ROW_DEFAULT
                     )
                 )
             )
@@ -702,6 +726,9 @@ class SettingsDialog(QDialog):
             self.settings_service.set_setting(
                 "report_row_spacing_pt", self.report_row_spacing_pt.value()
             )
+            self.settings_service.set_setting(
+                "report_header_blank_row", self.report_header_blank_row.isChecked()
+            )
 
             # Appearance settings
             self.settings_service.set_setting(
@@ -806,6 +833,22 @@ class SettingsDialog(QDialog):
         self.logo_preview.setPixmap(QPixmap())
         self.settings_service.set_setting("company_logo_path", "")
 
+    def _coerce_bool_setting(self, value, default: bool = False) -> bool:
+        """Normalize bool-like values loaded from settings storage."""
+        if value in (None, ""):
+            return default
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, (int, float)):
+            return bool(value)
+
+        normalized = str(value).strip().lower()
+        if normalized in {"1", "true", "yes", "on"}:
+            return True
+        if normalized in {"0", "false", "no", "off"}:
+            return False
+        return default
+
     def validate_settings(self):
         """Validate all settings before saving"""
         # Validate database path
@@ -897,6 +940,7 @@ class SettingsDialog(QDialog):
                 "report_notes_column_width_percent": REPORT_NOTES_COLUMN_WIDTH_PERCENT_DEFAULT,
                 "report_column_gap_mm": REPORT_COLUMN_GAP_MM_DEFAULT,
                 "report_row_spacing_pt": REPORT_ROW_SPACING_PT_DEFAULT,
+                "report_header_blank_row": REPORT_HEADER_BLANK_ROW_DEFAULT,
                 "dark_mode": False,
                 "company_logo_path": "",
             }

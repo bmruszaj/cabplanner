@@ -19,7 +19,8 @@ def test_settings_dialog_loads_report_layout_settings(qapp, session, settings_se
     settings_service.set_setting("report_right_margin_mm", 12)
     settings_service.set_setting("report_notes_column_width_percent", 34)
     settings_service.set_setting("report_column_gap_mm", 0.5)
-    settings_service.set_setting("report_row_spacing_pt", 3)
+    settings_service.set_setting("report_row_spacing_pt", 3.2)
+    settings_service.set_setting("report_header_blank_row", True)
 
     dialog = SettingsDialog(session)
 
@@ -27,7 +28,8 @@ def test_settings_dialog_loads_report_layout_settings(qapp, session, settings_se
     assert dialog.report_right_margin_mm.value() == 12
     assert dialog.report_notes_column_width_percent.value() == 34
     assert dialog.report_column_gap_mm.value() == pytest.approx(0.5)
-    assert dialog.report_row_spacing_pt.value() == 3
+    assert dialog.report_row_spacing_pt.value() == pytest.approx(3.2)
+    assert dialog.report_header_blank_row.isChecked() is True
 
     dialog.reject()
     dialog.deleteLater()
@@ -41,7 +43,8 @@ def test_settings_dialog_saves_report_layout_settings(qapp, session, tmp_path):
     dialog.report_right_margin_mm.setValue(9)
     dialog.report_notes_column_width_percent.setValue(36)
     dialog.report_column_gap_mm.setValue(0.4)
-    dialog.report_row_spacing_pt.setValue(1)
+    dialog.report_row_spacing_pt.setValue(1.1)
+    dialog.report_header_blank_row.setChecked(True)
 
     dialog.save_settings()
 
@@ -52,7 +55,10 @@ def test_settings_dialog_saves_report_layout_settings(qapp, session, tmp_path):
     assert settings_service.get_setting_value("report_column_gap_mm") == pytest.approx(
         0.4
     )
-    assert settings_service.get_setting_value("report_row_spacing_pt") == 1
+    assert settings_service.get_setting_value("report_row_spacing_pt") == pytest.approx(
+        1.1
+    )
+    assert settings_service.get_setting_value("report_header_blank_row") is True
 
     dialog.deleteLater()
     qapp.processEvents()
