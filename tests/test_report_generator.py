@@ -3,6 +3,7 @@ from pathlib import Path
 import pytest
 from datetime import date
 from docx import Document
+from docx.enum.text import WD_LINE_SPACING
 from docx.oxml.shared import qn
 from docx.shared import Mm
 from src.services.report_generator import ReportGenerator
@@ -347,6 +348,34 @@ def test_plyta_16_hides_color_values_but_keeps_column(tmp_path):
     assert plyta_18_row.cells[5].text.strip() == "White"
 
 
+def test_multiword_color_cells_stay_nonbreaking(tmp_path, sample_project_orm):
+    """
+    Given: a multi-word color value in report rows
+    When: generating the report
+    Then: the color cell keeps the value as non-breaking text
+    """
+
+    cabinet = sample_project_orm.cabinets[0]
+    cabinet.body_color = "DĄB LANCELOT"
+    cabinet.front_color = "DĄB LANCELOT"
+
+    rg = ReportGenerator()
+    output = rg.generate(sample_project_orm, output_dir=str(tmp_path), auto_open=False)
+    doc = Document(output)
+
+    body_tables = _body_tables(doc)
+    formatki_color_cell = body_tables[0].rows[1].cells[5]
+    fronty_color_cell = body_tables[1].rows[1].cells[5]
+
+    assert formatki_color_cell.text == "DĄB\xa0LANCELOT"
+    assert fronty_color_cell.text == "DĄB\xa0LANCELOT"
+    assert formatki_color_cell._tc.tcPr.find(qn("w:noWrap")) is not None
+    assert fronty_color_cell._tc.tcPr.find(qn("w:noWrap")) is not None
+    assert int(formatki_color_cell._tc.tcPr.tcW.w) > int(
+        body_tables[0].rows[0].cells[4]._tc.tcPr.tcW.w
+    )
+
+
 def test_primary_sections_stay_grouped_by_shared_color(tmp_path):
     """
     Given: FORMATKI and FRONTY sharing one color plus unrelated PLYTA 16 in another color
@@ -363,9 +392,7 @@ def test_primary_sections_stay_grouped_by_shared_color(tmp_path):
         client_email="client@example.com",
     )
 
-    oak_template = CabinetTemplate(
-        kitchen_type="LOFT", name="Oak Template"
-    )
+    oak_template = CabinetTemplate(kitchen_type="LOFT", name="Oak Template")
     oak_template.parts = [
         CabinetPart(
             part_name="Panel 18",
@@ -393,9 +420,7 @@ def test_primary_sections_stay_grouped_by_shared_color(tmp_path):
         ),
     ]
 
-    white_template = CabinetTemplate(
-        kitchen_type="LOFT", name="White Template"
-    )
+    white_template = CabinetTemplate(kitchen_type="LOFT", name="White Template")
     white_template.parts = [
         CabinetPart(
             part_name="Panel 16",
@@ -694,6 +719,36 @@ def test_report_column_gap_is_constant_across_sections(tmp_path, sample_project_
     assert _table_gap_twips(body_tables[-1]) == expected_gap
 
 
+def test_report_zero_column_gap_removes_horizontal_cell_padding(
+    tmp_path, sample_project_orm
+):
+    """
+    Given: zero column gap in settings
+    When: generating the report
+    Then: table cells do not keep extra left/right padding
+    """
+
+    class _FakeSettingsService:
+        def get_setting_value(self, key: str, default=None):
+            if key == "report_column_gap_mm":
+                return 0
+            return default
+
+    rg = ReportGenerator()
+    rg.settings_service = _FakeSettingsService()
+
+    output = rg.generate(sample_project_orm, output_dir=str(tmp_path), auto_open=False)
+    doc = Document(output)
+    body_tables = _body_tables(doc)
+
+    cell = body_tables[0].rows[1].cells[0]
+    tc_mar = cell._tc.tcPr.find(qn("w:tcMar"))
+
+    assert tc_mar is not None
+    assert tc_mar.find(qn("w:left")).get(qn("w:w")) == "0"
+    assert tc_mar.find(qn("w:right")).get(qn("w:w")) == "0"
+
+
 def test_shorter_sections_keep_same_shared_column_widths():
     """
     Given: a full section and a shorter section without trailing columns
@@ -714,6 +769,48 @@ def test_shorter_sections_keep_same_shared_column_widths():
     assert short_widths == full_widths[:5]
 
 
+def test_parts_table_allocates_more_space_to_dimensions_and_color_columns():
+    """
+    Given: the default parts table layout
+    When: computing report column widths
+    Then: dimensions and color columns keep enough width for compact labels
+    """
+
+    rg = ReportGenerator()
+    doc = Document()
+
+    widths = rg._get_parts_table_column_widths(
+        doc, accessory=False, show_color_column=True, show_notes_column=True
+    )
+
+    assert widths[2] > widths[4]
+    assert widths[5] > widths[4]
+    assert widths[4] > widths[3]
+
+
+def test_parts_table_marks_dimensions_okleina_and_color_as_non_wrapping(
+    tmp_path, sample_project_orm
+):
+    """
+    Given: a regular parts section
+    When: generating the report
+    Then: compact header and data columns are marked as non-wrapping
+    """
+
+    rg = ReportGenerator()
+    output = rg.generate(sample_project_orm, output_dir=str(tmp_path), auto_open=False)
+    doc = Document(output)
+    table = _body_tables(doc)[0]
+
+    for column_index in (2, 4, 5):
+        assert (
+            table.rows[0].cells[column_index]._tc.tcPr.find(qn("w:noWrap")) is not None
+        )
+        assert (
+            table.rows[1].cells[column_index]._tc.tcPr.find(qn("w:noWrap")) is not None
+        )
+
+
 def test_report_row_spacing_respects_setting(tmp_path, sample_project_orm):
     """
     Given: custom row spacing setting
@@ -724,7 +821,7 @@ def test_report_row_spacing_respects_setting(tmp_path, sample_project_orm):
     class _FakeSettingsService:
         def get_setting_value(self, key: str, default=None):
             if key == "report_row_spacing_pt":
-                return 1
+                return 1.1
             return default
 
     rg = ReportGenerator()
@@ -737,7 +834,72 @@ def test_report_row_spacing_respects_setting(tmp_path, sample_project_orm):
     spacing = body_tables[0].rows[1].cells[0].paragraphs[0].paragraph_format.space_after
 
     assert spacing is not None
-    assert spacing.pt == 1
+    assert spacing.pt == pytest.approx(1.1)
+
+
+def test_report_zero_row_spacing_uses_compact_table_layout(
+    tmp_path, sample_project_orm
+):
+    """
+    Given: zero extra row spacing in settings
+    When: generating the report
+    Then: table paragraphs use the most compact supported layout
+    """
+
+    class _FakeSettingsService:
+        def get_setting_value(self, key: str, default=None):
+            if key == "report_row_spacing_pt":
+                return 0
+            return default
+
+    rg = ReportGenerator()
+    rg.settings_service = _FakeSettingsService()
+
+    output = rg.generate(sample_project_orm, output_dir=str(tmp_path), auto_open=False)
+    doc = Document(output)
+
+    body_tables = _body_tables(doc)
+    paragraph = body_tables[0].rows[1].cells[0].paragraphs[0]
+
+    assert paragraph.paragraph_format.space_after is not None
+    assert paragraph.paragraph_format.space_after.pt == 0
+    assert paragraph.paragraph_format.line_spacing is not None
+    assert paragraph.paragraph_format.line_spacing.pt == 11
+    assert paragraph.paragraph_format.line_spacing_rule == WD_LINE_SPACING.EXACTLY
+
+    tc_mar = body_tables[0].rows[1].cells[0]._tc.tcPr.find(qn("w:tcMar"))
+    assert tc_mar is not None
+    assert tc_mar.find(qn("w:top")).get(qn("w:w")) == "0"
+    assert tc_mar.find(qn("w:bottom")).get(qn("w:w")) == "0"
+    assert tc_mar.find(qn("w:left")).get(qn("w:w")) == "0"
+    assert tc_mar.find(qn("w:right")).get(qn("w:w")) == "0"
+
+
+def test_report_can_insert_blank_row_after_table_header(tmp_path, sample_project_orm):
+    """
+    Given: the header spacer row setting enabled
+    When: generating the report
+    Then: each report table inserts one blank row between the header and records
+    """
+
+    class _FakeSettingsService:
+        def get_setting_value(self, key: str, default=None):
+            if key == "report_header_blank_row":
+                return True
+            return default
+
+    rg = ReportGenerator()
+    rg.settings_service = _FakeSettingsService()
+
+    output = rg.generate(sample_project_orm, output_dir=str(tmp_path), auto_open=False)
+    doc = Document(output)
+
+    body_tables = _body_tables(doc)
+    spacer_row = body_tables[0].rows[1]
+    first_data_row = body_tables[0].rows[2]
+
+    assert all(cell.text == "" for cell in spacer_row.cells)
+    assert first_data_row.cells[1].text.strip() != ""
 
 
 def test_report_contains_glass_shelves_section(tmp_path):

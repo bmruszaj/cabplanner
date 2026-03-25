@@ -13,7 +13,7 @@ from docx.document import Document as DocxDocument
 from docx.section import Section
 from docx.shared import Pt, Inches, Mm
 from docx.table import Table
-from docx.enum.text import WD_ALIGN_PARAGRAPH
+from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_LINE_SPACING
 from docx.oxml import OxmlElement
 from docx.oxml.shared import qn
 
@@ -23,6 +23,7 @@ from src.constants import (
     REPORT_COLUMN_GAP_MM_MAX,
     REPORT_COLUMN_GAP_MM_MIN,
     REPORT_BOTTOM_MARGIN_MM_DEFAULT,
+    REPORT_HEADER_BLANK_ROW_DEFAULT,
     REPORT_LEFT_MARGIN_MM_DEFAULT,
     REPORT_MARGIN_MM_MAX,
     REPORT_MARGIN_MM_MIN,
@@ -42,6 +43,9 @@ from sqlalchemy.orm import Session
 
 # Configure logging
 logger = logging.getLogger(__name__)
+
+REPORT_TABLE_LINE_HEIGHT_PT = 11
+REPORT_PARTS_TABLE_FIXED_WEIGHTS = [7, 23, 24, 10, 13, 23]
 
 
 class ReportGenerator:
@@ -250,9 +254,7 @@ class ReportGenerator:
         for group in ordered_groups:
             color_label = group["color_label"]
 
-            formatki_plyta_18 = self._sort_parts_for_section(
-                group["formatki_plyta_18"]
-            )
+            formatki_plyta_18 = self._sort_parts_for_section(group["formatki_plyta_18"])
             if formatki_plyta_18:
                 self._add_parts_section(
                     doc,
@@ -260,9 +262,7 @@ class ReportGenerator:
                     formatki_plyta_18,
                 )
 
-            formatki_plyta_12 = self._sort_parts_for_section(
-                group["formatki_plyta_12"]
-            )
+            formatki_plyta_12 = self._sort_parts_for_section(group["formatki_plyta_12"])
             if formatki_plyta_12:
                 self._add_parts_section(
                     doc,
@@ -287,9 +287,7 @@ class ReportGenerator:
                     show_notes_column=False,
                 )
 
-            formatki_plyta_16 = self._sort_parts_for_section(
-                group["formatki_plyta_16"]
-            )
+            formatki_plyta_16 = self._sort_parts_for_section(group["formatki_plyta_16"])
             if formatki_plyta_16:
                 plyta_16_title = "FORMATKI (PLYTA 16)"
                 if plyta_16_bundle_count > 1:
@@ -658,6 +656,32 @@ class ReportGenerator:
 
         return max(minimum, min(maximum, numeric_value))
 
+    def _get_bool_setting(self, key: str, default: bool) -> bool:
+        """Return a boolean setting, tolerating bool/string/int storage."""
+        if not self.settings_service:
+            return default
+
+        try:
+            raw_value = self.settings_service.get_setting_value(key, default)
+            if raw_value in (None, ""):
+                return default
+            if isinstance(raw_value, bool):
+                return raw_value
+            if isinstance(raw_value, (int, float)):
+                return bool(raw_value)
+
+            normalized = str(raw_value).strip().lower()
+            if normalized in {"1", "true", "yes", "on"}:
+                return True
+            if normalized in {"0", "false", "no", "off"}:
+                return False
+        except (TypeError, ValueError) as exc:
+            logger.warning("Failed to read bool setting '%s': %s", key, exc)
+            return default
+
+        logger.warning("Unexpected bool setting '%s' value: %r", key, raw_value)
+        return default
+
     def _get_report_left_margin_mm(self) -> int:
         """Get the configured left page margin for generated reports."""
         return self._get_numeric_setting(
@@ -712,13 +736,19 @@ class ReportGenerator:
             REPORT_COLUMN_GAP_MM_MAX,
         )
 
-    def _get_report_row_spacing_pt(self) -> int:
+    def _get_report_row_spacing_pt(self) -> float:
         """Get the configured extra spacing after each table row paragraph."""
-        return self._get_numeric_setting(
+        return self._get_float_setting(
             "report_row_spacing_pt",
             REPORT_ROW_SPACING_PT_DEFAULT,
             REPORT_ROW_SPACING_PT_MIN,
             REPORT_ROW_SPACING_PT_MAX,
+        )
+
+    def _get_report_header_blank_row_enabled(self) -> bool:
+        """Get whether report tables should insert one blank row after the header."""
+        return self._get_bool_setting(
+            "report_header_blank_row", REPORT_HEADER_BLANK_ROW_DEFAULT
         )
 
     def _apply_page_layout(self, section: Section) -> None:
@@ -781,7 +811,7 @@ class ReportGenerator:
             - (6 * column_gap)
         )
         full_widths = self._scale_column_widths(
-            full_usable_width, [7, 32, 20, 10, 13, 12], notes_percent
+            full_usable_width, REPORT_PARTS_TABLE_FIXED_WEIGHTS, notes_percent
         )
         visible_indices = [0, 1, 2, 3, 4]
 
@@ -813,15 +843,59 @@ class ReportGenerator:
         )
         tbl_cell_spacing.set(qn("w:type"), "dxa")
 
+    def _apply_table_cell_padding(self, cell, padding_twips: int = 0) -> None:
+        """Remove cell padding so row and column gaps stay fully configurable."""
+        tc_pr = cell._tc.get_or_add_tcPr()
+        tc_mar = tc_pr.find(qn("w:tcMar"))
+        if tc_mar is None:
+            tc_mar = OxmlElement("w:tcMar")
+            tc_pr.append(tc_mar)
+
+        for edge in ("top", "bottom", "left", "right"):
+            margin = tc_mar.find(qn(f"w:{edge}"))
+            if margin is None:
+                margin = OxmlElement(f"w:{edge}")
+                tc_mar.append(margin)
+            margin.set(qn("w:w"), str(padding_twips))
+            margin.set(qn("w:type"), "dxa")
+
+    def _apply_table_cell_no_wrap(self, cell) -> None:
+        """Prevent Word from splitting compact cell values across multiple lines."""
+        tc_pr = cell._tc.get_or_add_tcPr()
+        if tc_pr.find(qn("w:noWrap")) is None:
+            tc_pr.append(OxmlElement("w:noWrap"))
+
+    def _as_nonbreaking_text(self, value: str) -> str:
+        """Replace regular spaces with non-breaking spaces for compact columns."""
+        return value.replace(" ", "\u00a0")
+
+    def _get_non_wrapping_column_indices(
+        self, accessory: bool, show_color_column: bool
+    ) -> List[int]:
+        """Return indices of compact columns that should stay on one line."""
+        if accessory:
+            return []
+
+        indices = [2, 4]
+        if show_color_column:
+            indices.append(5)
+        return indices
+
     def _apply_table_row_spacing(self, table: Table) -> None:
         """Apply compact paragraph spacing so report rows stay user-configurable."""
         row_spacing = Pt(self._get_report_row_spacing_pt())
+        compact_line_height = Pt(REPORT_TABLE_LINE_HEIGHT_PT)
         for row in table.rows:
             for cell in row.cells:
+                self._apply_table_cell_padding(cell)
                 for paragraph in cell.paragraphs:
                     paragraph.paragraph_format.space_before = Pt(0)
                     paragraph.paragraph_format.space_after = row_spacing
-                    paragraph.paragraph_format.line_spacing = 1.0
+                    # Use exact line height to avoid Word's default extra leading.
+                    paragraph.paragraph_format.line_spacing = compact_line_height
+                    paragraph.paragraph_format.line_spacing_rule = (
+                        WD_LINE_SPACING.EXACTLY
+                    )
 
     def _get_report_logo_variant(self) -> str:
         """
@@ -1011,7 +1085,14 @@ class ReportGenerator:
         for i, col in enumerate(cols):
             hdr[i].text = col
         qty_col_idx = 2 if accessory else 3
+        non_wrapping_col_indices = self._get_non_wrapping_column_indices(
+            accessory, show_color_column
+        )
         hdr[qty_col_idx].paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
+        for index in non_wrapping_col_indices:
+            self._apply_table_cell_no_wrap(hdr[index])
+        if self._get_report_header_blank_row_enabled():
+            table.add_row()
         seen_sequences = set()
 
         for row_index, part in enumerate(parts, start=1):
@@ -1042,7 +1123,9 @@ class ReportGenerator:
                 ]
                 if show_color_column:
                     row_values.append(
-                        "" if hide_color_values else getattr(part, "color", "") or ""
+                        ""
+                        if hide_color_values
+                        else self._as_nonbreaking_text(getattr(part, "color", "") or "")
                     )
                 if show_notes_column:
                     row_values.append(getattr(part, "notes", "") or "")
@@ -1050,6 +1133,8 @@ class ReportGenerator:
                 for index, value in enumerate(row_values):
                     cells[index].text = value
                 cells[3].paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
+                for index in non_wrapping_col_indices:
+                    self._apply_table_cell_no_wrap(cells[index])
 
         self._apply_table_column_widths(
             table,
@@ -1171,13 +1256,16 @@ class ReportGenerator:
         lines_remaining = lines_per_page - lines_used if lines_used else lines_per_page
 
         # Full section estimate: heading + table header + all rows + policy margin.
-        section_lines_needed = items_count + 3 + current_policy["section_margin"]
+        header_spacing_rows = 1 if self._get_report_header_blank_row_enabled() else 0
+        section_lines_needed = (
+            items_count + 3 + header_spacing_rows + current_policy["section_margin"]
+        )
         if section_lines_needed <= lines_per_page:
             return lines_remaining < section_lines_needed
 
         # Very large sections cannot fit entirely on one page.
         # In that case, require enough space for heading + table header + first rows.
-        return lines_remaining < current_policy["min_start_lines"]
+        return lines_remaining < current_policy["min_start_lines"] + header_spacing_rows
 
     def _open_file(self, path: Path) -> None:
         try:
